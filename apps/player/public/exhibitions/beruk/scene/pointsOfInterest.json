@@ -1,0 +1,737 @@
+{
+  "type": "Node3D",
+  "name": "pointsOfInterest",
+  "children": [
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-beruk-card",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "berukCard"
+      },
+      "transform": {
+        "position": [
+          -2.9009702710418472, 1.9502177899530062, 6.0767918796557145
+        ],
+        "rotation": [0, 0.011203438821452017, 0, 0.9999372395098475]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-north-02",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "standNorth02"
+      },
+      "transform": {
+        "position": [
+          -2.7029763298616873, 0.8942248332928538, 5.413990060262895
+        ],
+        "rotation": [0, -0.03478930541192613, 0, 0.9993946689016084]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-north-03",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "standNorth03"
+      },
+      "transform": {
+        "position": [
+          -3.2549763298616873, 0.8942248332928538, 5.413990060262895
+        ],
+        "rotation": [0, -0.03478930541192613, 0, 0.9993946689016084]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-northeast",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "standNorthEast"
+      },
+
+      "transform": {
+        "position": [-4.44686860810107, 0.8567335207845247, 4.647104836989249],
+        "rotation": [0, -0.36794343301911636, 0, 0.9298481758320049]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-photo-northeast",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "photoNortheast"
+      },
+      "transform": {
+        "position": [-4.622685892323305, 1.5005286153500699, 5.2960936286967],
+        "rotation": [0, -0.35582465642760436, 0, 0.9345527346694661]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-wall-quote-east-01",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "modalName": "quote01",
+        "visualise": false
+      },
+
+      "transform": {
+        "position": [
+          -5.765996824716556, 1.6964205726008046, 2.9721096646359815
+        ],
+        "rotation": [0, -0.6880484805723012, 0, 0.7256647217428636]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-east-01",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "standEast01"
+      },
+
+      "transform": {
+        "position": [-5.132104731075699, 0.8306590611998059, 2.951478417140203],
+        "rotation": [0, -0.729640663063695, 0, 0.6838307559652251]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-wall-quote-east-02",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "quote02"
+      },
+
+      "transform": {
+        "position": [
+          -5.499099493638507, 1.9148063598338714, -2.997428664635926
+        ],
+        "rotation": [0, -0.7199958415985811, 0, 0.6939783772429446]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-east-02",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "standEast02"
+      },
+
+      "transform": {
+        "position": [
+          -4.950448481720175, 0.8232356986205324, -2.8583478167374157
+        ],
+        "rotation": [0, -0.7061044345363194, 0, 0.7081077089879368]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-southeast-photo",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "photoSoutheast"
+      },
+
+      "transform": {
+        "position": [
+          -4.320753509268281, 1.3132392364281529, -5.212165527870307
+        ],
+        "rotation": [0, -0.9222251025060654, 0, 0.38665341109018736]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-southeast-stand",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "standSoutheast"
+      },
+
+      "transform": {
+        "position": [
+          -4.171914046964795, 0.8084250567338445, -4.695814939410894
+        ],
+        "rotation": [0, -0.9291036378039246, 0, 0.3698194562479289]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-south-wallquote",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "quote03"
+      },
+
+      "transform": {
+        "position": [3.632806508996868, 1.6204953921327334, -5.684844149888819],
+        "rotation": [0, 0.9942809595661196, 0, 0.10679594301412557]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-south-stand",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "standSouth"
+      },
+
+      "transform": {
+        "position": [3.399472324860202, 0.8158243242798493, -5.120377691655637],
+        "rotation": [0, 0.9999395006100393, 0, 0.010999778167996828]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-southwest-stand",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "standSouthwest"
+      },
+
+      "transform": {
+        "position": [4.99282925935494, 0.8269458887895713, -4.298225060422662],
+        "rotation": [0, 0.9191023971657789, 0, 0.3940187603707705]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-southwest-photo",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "photoSouthwest"
+      },
+
+      "transform": {
+        "position": [5.916364868620063, 1.4805324471954204, -4.243124282674161],
+        "rotation": [0, 0.9051771502382427, 0, 0.42503450058386244]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-west-painting-01",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "paintingWest01"
+      },
+
+      "transform": {
+        "position": [
+          6.245008016636646, 1.5045453135145233, -1.6943722747642753
+        ],
+        "rotation": [0, 0.6945515091246951, 0, 0.7194429797924284]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-west-stand-01",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "standWest01"
+      },
+
+      "transform": {
+        "position": [5.702386214183116, 0.8269458887895835, -2.150557096971612],
+        "rotation": [0, 0.7066810904097707, 0, 0.7075322158440969]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-west-wallquote",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "quote04"
+      },
+
+      "transform": {
+        "position": [6.229038691825585, 1.5165073170465366, 0.3193377918674213],
+        "rotation": [0, 0.6792911740051778, 0, 0.7338688581202143]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-west-cabinet",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "cabinetWest"
+      },
+
+      "transform": {
+        "position": [
+          5.347379614887889, 0.8006330782484814, 0.35984842413379436
+        ],
+        "rotation": [0, 0.688773801148889, 0, 0.7249763105446348]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-central-cabinet-01-01",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "boomerang"
+      },
+
+      "transform": {
+        "position": [0.8253614558325371, 0.8529998894275385, 2.451094509207434],
+        "rotation": [0, 0.22037965051983918, 0, 0.97541417338316]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-central-cabinet-01-02",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "feather"
+      },
+
+      "transform": {
+        "position": [
+          0.14047171255261293, 0.8121231697536685, 2.5039938356545757
+        ],
+        "rotation": [0, -0.06874207155012343, 0, 0.9976344659237658]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-central-cabinet-01-03",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "throwingStick"
+      },
+
+      "transform": {
+        "position": [
+          0.19833740668587985, 0.8023959231990428, 2.076750551870596
+        ],
+        "rotation": [0, -0.03878659511326957, 0, 0.999247516904355]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-central-cabinet-01-04",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "spearthrower"
+      },
+
+      "transform": {
+        "position": [
+          -0.3989203152699905, 0.8942248331095001, 2.2954600356245836
+        ],
+        "rotation": [0, -0.171937701112102, 0, 0.9851078250304813]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-central-cabinet-02",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "shield"
+      },
+
+      "transform": {
+        "position": [
+          -2.207289001406551, 1.4366047864371039, -0.4135036789464117
+        ],
+        "rotation": [0, -0.7193015033391575, 0, 0.6946980259753355]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-central-cabinet-03-01",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "diggingStick"
+      },
+
+      "transform": {
+        "position": [1.184818693180625, 0.82694588878957, -2.3013476503028785],
+        "rotation": [0, 0.9383397937940201, 0, 0.345714378327827]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-central-cabinet-03-02",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "feather"
+      },
+
+      "transform": {
+        "position": [1.463006184972838, 0.8269458887895106, -2.025965763713522],
+        "rotation": [0, 0.9383397937940204, 0, 0.3457143783278262]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-central-cabinet-03-03",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "possumSkin"
+      },
+
+      "transform": {
+        "position": [
+          1.7592551901648752, 0.9357780487316527, -2.1446871537457834
+        ],
+        "rotation": [0, 0.9305076219123198, 0, 0.3662725290860336]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-central-cabinet-03-04",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "necklace"
+      },
+
+      "transform": {
+        "position": [
+          2.000522290332206, 0.8158243242797821, -1.7385747482348997
+        ],
+        "rotation": [0, 0.932327345606039, 0, 0.36161543196495033]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-central-cabinet-03-05",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "shieldProtect"
+      },
+
+      "transform": {
+        "position": [
+          2.2549278639440673, 0.8084250567337681, -1.4807876873905825
+        ],
+        "rotation": [0, 0.9297732163278871, 0, 0.3681328105443687]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-central-west-painting-02",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "paintingWest02"
+      },
+
+      "transform": {
+        "position": [6.090583915138962, 1.5405078263616916, 3.3758474332149024],
+        "rotation": [0, 0.6952706047088554, 0, 0.7187480686776017]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-central-west-stand-02",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "standWest02"
+      },
+
+      "transform": {
+        "position": [5.541802780466579, 0.8273491145753726, 2.9683082705426385],
+        "rotation": [0, 0.6844115714934819, 0, 0.7290958790212865]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-central-northwest-photo",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "photoNorthwest"
+      },
+
+      "transform": {
+        "position": [5.440719873458161, 1.540546171875234, 5.147732826252392],
+        "rotation": [0, 0.38184923976279195, 0, 0.9242246253441735]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-central-northwest-stand",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "standNorthWest"
+      },
+
+      "transform": {
+        "position": [4.710495992760712, 0.8343752009212604, 4.958159038414724],
+        "rotation": [0, 0.3511474644251149, 0, 0.9363201686537639]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-central-north-stand-01",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "standNorth01"
+      },
+
+      "transform": {
+        "position": [3.1776561838952717, 0.8306590611740292, 5.650420688708461],
+        "rotation": [0, -0.053178576764281935, 0, 0.9985850184001986]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "PointOfInterest",
+      "config": {
+        "name": "poi-stand-central-north-map",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false,
+        "modalName": "map"
+      },
+
+      "transform": {
+        "position": [3.0638165579807852, 1.52850354924743, 6.20165347426891],
+        "rotation": [0, -0.02520100495539647, 0, 0.9996824042410859]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    }
+  ]
+}

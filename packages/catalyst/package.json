@@ -1,0 +1,30 @@
+{
+  "name": "@vitrine/catalyst",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/catalyst/index.ts",
+    "./signals": "./src/catalyst/signals/index.ts",
+    "./shared": "./src/shared/index.ts",
+    "./helm": "./src/helm/index.ts",
+    "./helm/core/Helm": "./src/helm/core/Helm.ts",
+    "./helm/mapping/InputMapper": "./src/helm/mapping/InputMapper.ts",
+    "./velora/VeloraEnvironment": "./src/velora/VeloraEnvironment.ts",
+    "./velora/colliders/Collider": "./src/velora/colliders/Collider.ts",
+    "./velora/colliders/BoxCollider": "./src/velora/colliders/BoxCollider.ts",
+    "./velora/colliders/CapsuleCollider": "./src/velora/colliders/CapsuleCollider.ts",
+    "./velora/bodies/RigidBody": "./src/velora/bodies/RigidBody.ts",
+    "./velora/utils": "./src/velora/utils/index.ts",
+    "./slate": "./src/slate/index.ts",
+    "./requester": "./src/requester/index.ts",
+    "./vite": "./vite.js"
+  },
+  "dependencies": {
+    "@sparkjsdev/spark": "^0.1.10",
+    "@vitrine/debug": "*",
+    "@vitrine/stelligra": "*",
+    "axios": "^1.13.5",
+    "three": "^0.183.2"
+  }
+}

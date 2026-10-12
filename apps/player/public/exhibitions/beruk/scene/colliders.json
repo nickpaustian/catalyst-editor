@@ -1,0 +1,766 @@
+{
+  "type": "Node3D",
+  "name": "environmentColliders",
+  "children": [
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "south-door",
+        "width": 5.0,
+        "height": 2.0,
+        "depth": 0.5,
+        "visualise": false
+      },
+      "transform": {
+        "position": [0.504296488641988, 1.0, -6.32268715490216],
+        "rotation": [0, 0.999902001600656, 0, 0.01399954267115199]
+      },
+      "properties": {
+        "tags": ["door"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "south-wall-01",
+        "width": 2.5,
+        "height": 2.0,
+        "depth": 0.5,
+        "visualise": false
+      },
+      "transform": {
+        "position": [-2.449286196094264, 1.0, -6.101732181069604],
+        "rotation": [0, 0.9999395006100391, 0, 0.010999778168014873]
+      },
+      "properties": {
+        "tags": ["wall"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "south-wall-02",
+        "width": 2.5,
+        "height": 2.0,
+        "depth": 0.5,
+        "visualise": false
+      },
+      "transform": {
+        "position": [3.4490881036227137, 1.0, -5.987558326903721],
+        "rotation": [0, 0.9997580097605092, 0, 0.02199822537627944]
+      },
+      "properties": {
+        "tags": ["wall"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "north-door",
+        "width": 2.7,
+        "height": 2.0,
+        "depth": 0.5,
+        "visualise": false
+      },
+      "transform": {
+        "position": [0.07192917123590972, 1, 7.175761878662737],
+        "rotation": [0, -0.014203195624832157, 0, 0.9998991295295956]
+      },
+      "properties": {
+        "tags": ["door"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "north-wall-01",
+        "width": 2.5,
+        "height": 2.0,
+        "depth": 0.75,
+        "visualise": false
+      },
+      "transform": {
+        "position": [2.5050482529987006, 1, 6.615209484261331],
+        "rotation": [0, 0.00320366772494513, 0, 0.9999948682433867]
+      },
+      "properties": {
+        "tags": ["wall"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "north-wall-02",
+        "width": 2.5,
+        "height": 2.0,
+        "depth": 0.75,
+        "visualise": false
+      },
+      "transform": {
+        "position": [-2.443276450644294, 1.0, 6.5271982640566115],
+        "rotation": [0, -0.022794352408771985, 0, 0.9997401749946155]
+      },
+      "properties": {
+        "tags": ["wall"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "east-door",
+        "width": 2.5,
+        "height": 2.0,
+        "depth": 0.75,
+        "visualise": false
+      },
+      "transform": {
+        "position": [-6.508166531390843, 1.0, -0.08368454969473522],
+        "rotation": [0, -0.7172141755330762, 0, 0.6968528011096821]
+      },
+      "properties": {
+        "tags": ["door"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "east-wall-01",
+        "width": 1.0,
+        "height": 2.0,
+        "depth": 0.75,
+        "visualise": false
+      },
+      "transform": {
+        "position": [-6.057968038229285, 1, 1.6146120880444477],
+        "rotation": [0, -0.7137209608867144, 0, 0.7004301464035834]
+      },
+      "properties": {
+        "tags": ["wall"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "east-wall-02",
+        "width": 1.0,
+        "height": 2.0,
+        "depth": 0.75,
+        "visualise": false
+      },
+      "transform": {
+        "position": [-5.947894569239657, 1, -1.7144631598089208],
+        "rotation": [0, -0.7199958417308177, 0, 0.6939783771057506]
+      },
+      "properties": {
+        "tags": ["wall"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "north-stand-01",
+        "width": 1.5,
+        "height": 0.8,
+        "depth": 0.6,
+        "visualise": false
+      },
+      "transform": {
+        "position": [3.1131501188228943, 0.4, 5.8114215910020075],
+        "rotation": [0, -0.02120208439389094, 0, 0.9997752105435275]
+      },
+      "properties": {
+        "tags": ["stand"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "north-stand-02",
+        "width": 1.5,
+        "height": 0.8,
+        "depth": 0.6,
+        "visualise": false
+      },
+      "transform": {
+        "position": [-2.913093913767601, 0.4, 5.591634159395143],
+        "rotation": [0, -0.008203581187207345, 0, 0.9999663500616932]
+      },
+      "properties": {
+        "tags": ["stand"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "northeast-stand",
+        "width": 2.0,
+        "height": 0.8,
+        "depth": 0.6,
+        "visualise": false
+      },
+      "transform": {
+        "position": [-4.5185986462758425, 0.4, 4.7572202821606595],
+        "rotation": [0, -0.3984225267805543, 0, 0.9172019898331003]
+      },
+      "properties": {
+        "tags": ["stand"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "east-stand-01",
+        "width": 2.5,
+        "height": 0.8,
+        "depth": 0.6,
+        "visualise": false
+      },
+      "transform": {
+        "position": [-5.265762538956818, 0.4, 2.605711683490357],
+        "rotation": [0, -0.7236384905142201, 0, 0.6901792050230876]
+      },
+      "properties": {
+        "tags": ["stand"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "east-stand-02",
+        "width": 2.2,
+        "height": 0.8,
+        "depth": 0.6,
+        "visualise": false
+      },
+      "transform": {
+        "position": [-5.081260688140074, 0.4, -2.7964112147356133],
+        "rotation": [0, -0.7144499308987513, 0, 0.6996865700002891]
+      },
+      "properties": {
+        "tags": ["stand"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "southeast-stand",
+        "width": 3.1,
+        "height": 0.8,
+        "depth": 0.6,
+        "visualise": false
+      },
+      "transform": {
+        "position": [-3.9277546508223584, 0.4, -5.017692394038396],
+        "rotation": [0, -0.9290350916605522, 0, 0.369991619450048]
+      },
+      "properties": {
+        "tags": ["stand"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "south-stand",
+        "width": 1.5,
+        "height": 0.8,
+        "depth": 0.6,
+        "visualise": false
+      },
+      "transform": {
+        "position": [3.43238884683672, 0.4, -5.2745566057080095],
+        "rotation": [0, 0.9998380043739528, 0, 0.017999028015745495]
+      },
+      "properties": {
+        "tags": ["stand"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "southwest-stand",
+        "width": 2.2,
+        "height": 0.8,
+        "depth": 0.6,
+        "visualise": false
+      },
+      "transform": {
+        "position": [5.099824821925606, 0.4, -4.41033032734268],
+        "rotation": [0, 0.9183125219662094, 0, 0.3958561759023852]
+      },
+      "properties": {
+        "tags": ["stand"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "west-stand-01",
+        "width": 3.2,
+        "height": 0.8,
+        "depth": 0.6,
+        "visualise": false
+      },
+      "transform": {
+        "position": [5.828705938135907, 0.4, -2.1396101524396665],
+        "rotation": [0, 0.6959890050218881, 0, 0.7180524388153292]
+      },
+      "properties": {
+        "tags": ["stand"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "west-stand-02",
+        "width": 3.2,
+        "height": 0.8,
+        "depth": 0.6,
+        "visualise": false
+      },
+      "transform": {
+        "position": [5.654904883430889, 0.4, 2.7874323140960717],
+        "rotation": [0, 0.6931573933124321, 0, 0.7207862568725312]
+      },
+      "properties": {
+        "tags": ["stand"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "northwest-stand",
+        "width": 2.5,
+        "height": 0.8,
+        "depth": 0.6,
+        "visualise": false
+      },
+      "transform": {
+        "position": [4.802685175583007, 0.4, 5.103960386869289],
+        "rotation": [0, 0.3688042849763849, 0, 0.9295070733367538]
+      },
+      "properties": {
+        "tags": ["stand"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "cabinet-01",
+        "width": 2.0,
+        "height": 0.8,
+        "depth": 0.6,
+        "visualise": false
+      },
+      "transform": {
+        "position": [1.7953339842032274, 0.4, -1.8562223083607936],
+        "rotation": [0, 0.9400566292602934, 0, 0.34101837748686664]
+      },
+      "properties": {
+        "tags": ["cabinet"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "cabinet-02",
+        "width": 1.9,
+        "height": 0.8,
+        "depth": 1.0,
+        "visualise": false
+      },
+      "transform": {
+        "position": [0.14194809333527283, 0.4, 2.4726437764144036],
+        "rotation": [0, -0.038766996396511134, 0, 0.9992482774518016]
+      },
+      "properties": {
+        "tags": ["cabinet"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "cabinet-03",
+        "width": 1.7,
+        "height": 0.8,
+        "depth": 1.0,
+        "visualise": false
+      },
+      "transform": {
+        "position": [5.470978052976495, 0.4, 0.3549576875532913],
+        "rotation": [0, 0.700284787327278, 0, 0.7138635840536965]
+      },
+      "properties": {
+        "tags": ["cabinet"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "cabinet-04",
+        "width": 0.45,
+        "height": 0.8,
+        "depth": 0.45,
+        "visualise": false
+      },
+      "transform": {
+        "position": [-2.2467648313471984, 0.4, -0.3893908877699789],
+        "rotation": [0, -0.7223915839822221, 0, 0.6914842003919222]
+      },
+      "properties": {
+        "tags": ["cabinet"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "north-divider-01",
+        "width": 1.0,
+        "height": 1.8,
+        "depth": 0.35,
+        "visualise": false
+      },
+      "transform": {
+        "position": [2.7343736028628305, 0.9, 2.2664847482388133],
+        "rotation": [0, 0.40703320665927256, 0, 0.9134133613412222]
+      },
+      "properties": {
+        "tags": ["cabinet"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "north-divider-02",
+        "width": 1.0,
+        "height": 1.8,
+        "depth": 0.35,
+        "visualise": false
+      },
+      "transform": {
+        "position": [2.0241404456915975, 0.9, 2.876320598160283],
+        "rotation": [0, -0.9550404913309904, 0, 0.2964753951313003]
+      },
+      "properties": {
+        "tags": ["cabinet"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "north-divider-03",
+        "width": 1.0,
+        "height": 1.8,
+        "depth": 0.35,
+        "visualise": false
+      },
+      "transform": {
+        "position": [1.2052146083032884, 0.9, 3.2299270383806493],
+        "rotation": [0, -0.9929278516369268, 0, 0.11871933896243353]
+      },
+      "properties": {
+        "tags": ["cabinet"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "north-divider-04",
+        "width": 1.0,
+        "height": 1.8,
+        "depth": 0.35,
+        "visualise": false
+      },
+      "transform": {
+        "position": [0.24277336721824075, 0.9, 3.3591742790912544],
+        "rotation": [0, 0.9998080701024835, 0, 0.019591400101760845]
+      },
+      "properties": {
+        "tags": ["cabinet"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "north-divider-05",
+        "width": 1.0,
+        "height": 1.8,
+        "depth": 0.35,
+        "visualise": false
+      },
+      "transform": {
+        "position": [-0.7067951551522229, 0.9, 3.202453184061048],
+        "rotation": [0, 0.9850727854956061, 0, 0.1721383376123039]
+      },
+      "properties": {
+        "tags": ["cabinet"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "north-divider-06",
+        "width": 1.3,
+        "height": 1.8,
+        "depth": 0.35,
+        "visualise": false
+      },
+      "transform": {
+        "position": [-1.6757734014470014, 0.9, 2.6827835077528555],
+        "rotation": [0, 0.9535461825191307, 0, 0.3012468718562777]
+      },
+      "properties": {
+        "tags": ["cabinet"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "southeast-divider-01",
+        "width": 1.3,
+        "height": 1.5,
+        "depth": 0.35,
+        "visualise": false
+      },
+      "transform": {
+        "position": [-2.6086050492965858, 0.75, -1.6096560070360377],
+        "rotation": [0, 0.5225135816101876, 0, 0.8526309618075654]
+      },
+      "properties": {
+        "tags": ["cabinet"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "southeast-divider-02",
+        "width": 1.3,
+        "height": 1.5,
+        "depth": 0.35,
+        "visualise": false
+      },
+      "transform": {
+        "position": [-1.582265518612966, 0.75, -2.7468870836092645],
+        "rotation": [0, -0.9605750932127627, 0, 0.2780206652378419]
+      },
+      "properties": {
+        "tags": ["cabinet"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "southeast-divider-03",
+        "width": 0.3,
+        "height": 1.5,
+        "depth": 0.35,
+        "visualise": false
+      },
+      "transform": {
+        "position": [-2.241771484773803, 0.75, -2.289806567001534],
+        "rotation": [0, 0.40416437860414695, 0, 0.914686369783394]
+      },
+      "properties": {
+        "tags": ["cabinet"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "southwest-divider-01",
+        "width": 0.6,
+        "height": 1.5,
+        "depth": 0.5,
+        "visualise": false
+      },
+      "transform": {
+        "position": [1.3974248299869507, 0.75, -3.0996549856068047],
+        "rotation": [0, 0.058762456087551984, 0, 0.9982719938746947]
+      },
+      "properties": {
+        "tags": ["cabinet"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "southwest-divider-02",
+        "width": 0.6,
+        "height": 1.5,
+        "depth": 0.5,
+        "visualise": false
+      },
+      "transform": {
+        "position": [1.876292301716803, 0.75, -3.061717141494465],
+        "rotation": [0, -0.16445323457027525, 0, 0.9863848810881957]
+      },
+      "properties": {
+        "tags": ["cabinet"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "southwest-divider-03",
+        "width": 0.6,
+        "height": 1.5,
+        "depth": 0.5,
+        "visualise": false
+      },
+      "transform": {
+        "position": [2.324737533917763, 0.75, -2.8210265238352408],
+        "rotation": [0, -0.3109606819388131, 0, 0.9504227766042586]
+      },
+      "properties": {
+        "tags": ["cabinet"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "southwest-divider-04",
+        "width": 0.6,
+        "height": 1.5,
+        "depth": 0.5,
+        "visualise": false
+      },
+      "transform": {
+        "position": [2.760250020630658, 0.75, -2.4555422705740666],
+        "rotation": [0, -0.3711096058210592, 0, 0.928589069754398]
+      },
+      "properties": {
+        "tags": ["cabinet"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "BoxCollider",
+      "config": {
+        "name": "southwest-divider-05",
+        "width": 0.6,
+        "height": 1.5,
+        "depth": 0.7,
+        "visualise": false
+      },
+      "transform": {
+        "position": [2.9811727969040853, 0.75, -1.9982663035019474],
+        "rotation": [0, -0.5056082712079036, 0, 0.8627631633804002]
+      },
+      "properties": {
+        "tags": ["cabinet"],
+        "isTrigger": false,
+        "layers": [1],
+        "collidesWith": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "name": "@vitrine/stelligra",
+  "private": true,
+  "version": "0.0.4",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./wasm": "./src/wasm.ts",
+    "./packing": "./src/classes/SplatMaterial/packing.ts"
+  },
+  "scripts": {
+    "build:wasm": "cd stelligra-wasm && wasm-pack build --target web --release"
+  },
+  "dependencies": {
+    "@vitrine/debug": "*",
+    "three": "^0.183.2"
+  }
+}

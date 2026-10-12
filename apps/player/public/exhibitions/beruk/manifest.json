@@ -1,0 +1,205 @@
+{
+  "version": 1,
+  "id": "beruk",
+  "title": "Beruk Virtual Exhibition - SLV",
+  "splat": {
+    "source": "https://d38p9xpr4rdpkc.cloudfront.net/v-exhibitions/media/3d-models/1774861440d47/beruk.vgs",
+    "partitions": [
+      "https://d38p9xpr4rdpkc.cloudfront.net/v-exhibitions/media/3d-models/177486228babf/beruk_s0.vgsp",
+      "https://d38p9xpr4rdpkc.cloudfront.net/v-exhibitions/media/3d-models/177668568d13f/beruk_s1.vgsp",
+      "https://d38p9xpr4rdpkc.cloudfront.net/v-exhibitions/media/3d-models/177668595797c/beruk_s2.vgsp",
+      "https://d38p9xpr4rdpkc.cloudfront.net/v-exhibitions/media/3d-models/17766860545b8/beruk_s3.vgsp",
+      "https://d38p9xpr4rdpkc.cloudfront.net/v-exhibitions/media/3d-models/177668618001a/beruk_s4.vgsp"
+    ],
+    "streaming": {
+      "splatBudget": 2000000,
+      "maxQualityDistance": 2,
+      "falloffDistance": 20,
+      "falloffStrength": 1.5,
+      "coveragePasses": 9,
+      "ndcRadiusFalloff": 0,
+      "frustumExpansion": 1.4,
+      "frustumSmear": 8.0,
+      "frustumSmearScale": 20,
+      "minContribution": 2
+    }
+  },
+  "scene": {
+    "colliders": "scene/colliders.json",
+    "focalPoints": "scene/focalPoints.json",
+    "focalPointTriggers": "scene/focalPointTriggers.json",
+    "pointsOfInterest": "scene/pointsOfInterest.json"
+  },
+  "camera": {
+    "initial": "guided",
+    "guided": {
+      "focalLength": 14,
+      "rail": {
+        "offset": [0, 1, 0],
+        "controlPoints": [
+          { "name": "intro-start", "point": [1.2561089082414048, 20, 40.891445860666842] },
+          { "name": "intro-start-2", "point": [1.2561089082414048, 10, 35.891445860666842] },
+          { "name": "intro-breach", "point": [1.9561089082414048, 3.080988553282094, 6.40417765713125] },
+          { "name": "intro-low", "point": [1.2561089082414048, 0.25, 5.545564694615288] },
+          { "name": "intro-end", "point": [0.06574956338385268, 0.7089953303180947, 5.4013441213406965] },
+          { "name": "northeast-01", "point": [-2.700668210448629, 0.5, 3.8386322768554306] },
+          { "name": "northeast-02", "point": [-2.692562759699458, 0.5, 2.6703342957491416] },
+          { "name": "northeast-03", "point": [-3.942996383970228, 0.5, 2.6985553015292347] },
+          { "name": "southeast-01", "point": [-3.7521489130405183, 0.5, -2.94514860855085] },
+          { "name": "southeast-02", "point": [-2.3973362758920658, 0.5, -3.187417718841771] },
+          { "name": "southwest-01", "point": [3.4204899867927474, 0.5, -3.75992263097243] },
+          { "name": "southeast-02", "point": [4.2465012969338, 0.5, -1.6195900488717334] },
+          { "name": "central-01", "point": [0.1247499802313797, 0.5, 1.810716791673545] },
+          { "name": "central-02", "point": [-1.9847976314463494, 0.5, 0.5021929294937523] },
+          { "name": "central-03", "point": [-1.4177965218652002, 0.5, -0.4099102341919348] },
+          { "name": "central-04", "point": [-1.5094463157948337, 0.5, -0.9495103234333145] },
+          { "name": "central-05", "point": [1.5476448532141607, 0.5, -1.4496651112843884] },
+          { "name": "west-01", "point": [2.986148089333608, 0.5, 0.2235641814531024] },
+          { "name": "west-02", "point": [4.811338479045745, 0.5, 0.3399479510233282] },
+          { "name": "west-03", "point": [4.305495601822647, 0.5, 2.8633894449330612] },
+          { "name": "northwest-01", "point": [3.064096909546586, 0.5, 4.347129399863154] },
+          { "name": "outro-high", "point": [-1.9561089082414048, 2.5, 5.545564694615288] }
+        ]
+      },
+      "bakedPath": "camera-path.json",
+      "scroll": {
+        "increment": 0.00001,
+        "speed": 6.0,
+        "speedSegments": [
+          { "segment": ["intro-start", "intro-breach"], "speed": 75.0 }
+        ]
+      },
+      "progressRemap": [[0.0, 0.0], [0.44, 0.05], [1.0, 1.0]],
+      "progressMarkersRevealAt": 10,
+      "progressMarkers": [
+        { "percentage": 10.5, "progress": 0.4743 },
+        { "percentage": 19.5, "progress": 0.5259 },
+        { "percentage": 35.0, "progress": 0.6175 },
+        { "percentage": 47.0, "progress": 0.6881 },
+        { "percentage": 60.0, "progress": 0.7723 },
+        { "percentage": 67.0, "progress": 0.8042 },
+        { "percentage": 73.0, "progress": 0.8436 },
+        { "percentage": 80.0, "progress": 0.8827 },
+        { "percentage": 90.0, "progress": 0.9411 }
+      ],
+      "activation": [
+        {
+          "focalPoint": "poi-origin",
+          "activeWhen": [
+            { "from": 0, "to": { "segment": ["intro-start", "intro-end"], "t": 0.9772 } },
+            { "from": 0.94 }
+          ]
+        },
+        { "triggerTag": "after-centre", "activeWhen": [{ "from": 0.85 }] },
+        { "triggerTag": "before-centre", "activeWhen": [{ "to": 0.85 }] }
+      ]
+    },
+    "firstPerson": {
+      "start": [0.06642421770312468, 0.85, 6.4472985311288555]
+    }
+  },
+  "content": {
+    "berukCard": { "type": "html", "src": "content/beruk-card.html" },
+    "quote01": { "type": "html", "src": "content/quote01.html" },
+    "quote02": { "type": "html", "src": "content/quote02.html" },
+    "quote03": { "type": "html", "src": "content/quote03.html" },
+    "quote04": { "type": "html", "src": "content/quote04.html" },
+    "standNorth01": { "type": "html", "src": "content/stand-north-01.html" },
+    "standNorth02": { "type": "html", "src": "content/stand-north02.html" },
+    "standNorth03": { "type": "html", "src": "content/stand-north03.html" },
+    "photoNortheast": { "type": "html", "src": "content/photo-northeast.html" },
+    "standNorthEast": { "type": "html", "src": "content/stand-northeast.html" },
+    "standEast01": { "type": "html", "src": "content/stand-east01.html" },
+    "standEast02": { "type": "html", "src": "content/stand-east02.html" },
+    "photoSoutheast": { "type": "html", "src": "content/photo-southeast.html" },
+    "standSoutheast": { "type": "html", "src": "content/stand-southeast.html" },
+    "standSouth": { "type": "html", "src": "content/stand-south.html" },
+    "standSouthwest": { "type": "html", "src": "content/stand-southwest.html" },
+    "photoSouthwest": { "type": "html", "src": "content/photo-southwest.html" },
+    "standWest01": { "type": "html", "src": "content/stand-west-01.html" },
+    "standWest02": { "type": "html", "src": "content/stand-west-02.html" },
+    "paintingWest01": { "type": "html", "src": "content/painting-west-01.html" },
+    "paintingWest02": { "type": "html", "src": "content/painting-west-02.html" },
+    "cabinetWest": { "type": "html", "src": "content/cabinet-west.html" },
+    "boomerang": { "type": "html", "src": "content/boomerang.html" },
+    "feather": { "type": "html", "src": "content/feather.html" },
+    "throwingStick": { "type": "html", "src": "content/throwing-stick.html" },
+    "spearthrower": { "type": "html", "src": "content/spearthrower.html" },
+    "shield": { "type": "html", "src": "content/shield.html" },
+    "shieldProtect": { "type": "html", "src": "content/shield-protect.html" },
+    "diggingStick": { "type": "html", "src": "content/digging-stick.html" },
+    "possumSkin": { "type": "html", "src": "content/possum-skin.html" },
+    "necklace": { "type": "html", "src": "content/necklace.html" },
+    "photoNorthwest": { "type": "html", "src": "content/photo-northwest.html" },
+    "standNorthWest": { "type": "html", "src": "content/stand-northwest.html" },
+    "map": { "type": "html", "src": "content/map.html" }
+  },
+  "assets": {
+    "audio": {
+      "ui-click": "https://d38p9xpr4rdpkc.cloudfront.net/slv-a-mouthful-of-dust/media/audio/17439929422d1/ui-click.mp3",
+      "ui-clack": "https://d38p9xpr4rdpkc.cloudfront.net/slv-a-mouthful-of-dust/media/audio/174399300cfd1/ui-clack.mp3"
+    }
+  },
+  "presentation": {
+    "menu": "content/pause.html",
+    "sounds": { "click": "ui-click", "clack": "ui-clack" },
+    "icons": {
+      "settings": "https://d2xkbpwjh6kvh9.cloudfront.net/v-exhibitions/media/images/177208325ff24/settings.svg",
+      "soundOn": "https://d2xkbpwjh6kvh9.cloudfront.net/v-exhibitions/media/images/177742801ae7e/speaker-active.svg",
+      "soundOff": "https://d2xkbpwjh6kvh9.cloudfront.net/v-exhibitions/media/images/177742801c5be/speak-inactive.svg",
+      "headphones": "https://d2xkbpwjh6kvh9.cloudfront.net/v-exhibitions/media/images/177208232b39c/headphones.svg",
+      "scrollArrow": "https://d2xkbpwjh6kvh9.cloudfront.net/v-exhibitions/media/images/177188949c776/chevron-down.svg"
+    },
+    "logos": [
+      { "id": "virc", "class": "virc-logo", "src": "https://d2xkbpwjh6kvh9.cloudfront.net/v-exhibitions/media/images/1777272499da6/virc-logo.svg" },
+      { "id": "ww", "class": "ww-logo", "src": "https://d2xkbpwjh6kvh9.cloudfront.net/v-exhibitions/media/images/1777874445153/logo-wurundjeriwoi-wurrung.svg" },
+      { "id": "hl", "class": "hl-logo", "src": "https://d2xkbpwjh6kvh9.cloudfront.net/v-exhibitions/media/images/1777874444593/logo-hansenlittlefoundation.png" },
+      { "id": "slv", "href": "https://www.slv.vic.gov.au/", "src": "https://d2xkbpwjh6kvh9.cloudfront.net/v-exhibitions/media/images/17772730665a6/slv-logo-rc.svg" },
+      { "id": "cv", "href": "https://creative.vic.gov.au/", "src": "https://d2xkbpwjh6kvh9.cloudfront.net/v-exhibitions/media/images/177727306e04d/cv-logo-rc.svg" }
+    ],
+    "landing": {
+      "logo": "https://d2xkbpwjh6kvh9.cloudfront.net/v-exhibitions/media/images/1772081988124/beruk-logo.svg",
+      "logoAlt": "Beruk logo",
+      "tagline": "Interactive Exhibition Archive",
+      "description": "Come explore and connect with an exhibition celebrating the life and legacy of William Barak.",
+      "headphonesNote": "Use headphones for the best experience",
+      "scrollPrompt": "Scroll to continue",
+      "segment": ["intro-start", "intro-end"],
+      "scrollOutAt": 0.216305,
+      "offsetVh": 150
+    },
+    "header": { "hideBelow": 0.1, "showAbove": 0.46 },
+    "hud": { "moveHint": "Scroll to move", "moveHintAfter": 0.1 },
+    "footer": {
+      "title": "Beruk",
+      "copy": "Fusce facilisis felis ipsum, quis vehicula ligula interdum sed. Integer felis enim, sollicitudin a nunc sit amet, mattis laoreet mi. Sed in ligula et ante dignissim pretium. Donec placerat lorem vel elit aliquet tincidunt. Nulla accumsan tortor vel lorem egestas auctor. Nullam rhoncus dolor eget libero sagittis, quis eleifend leo luctus. Vestibulum vehicula odio at ipsum sodales lacinia non vel orci. Curabitur ut nunc nisi. Mauris felis felis, venenatis eu dignissim sed, pharetra at tortor. Donec lacinia molestie purus vel luctus. Phasellus sagittis metus ac nunc sollicitudin rutrum. Nam pretium vulputate arcu, ut cursus neque pretium vitae. Maecenas sodales cursus justo quis scelerisque. Sed convallis feugiat ante a tincidunt. Vivamus dolor felis, mollis iaculis ante sed, bibendum egestas magna. Praesent quis congue nisi, bibendum vestibulum augue.",
+      "creditsTitle": "Project Credits",
+      "credits": [
+        "Fusce facilisis", "felis ipsum", "quis vehicula", "ligula interdum sed", "Integer felis enim",
+        "sollicitudin a nunc", "sit amet", "mattis laoreet mi", "Sed in ligula", "et ante dignissim",
+        "pretium Donec", "placerat lorem vel", "elit aliquet tincidunt", "Nulla accumsan", "tortor vel lorem",
+        "egestas auctor", "Nullam rhoncus dolor", "eget libero sagittis", "quis eleifend", "leo luctus",
+        "Vestibulum vehicula", "odio at ipsum", "sodales lacinia non", "vel orci", "Curabitur ut nunc nisi",
+        "Mauris felis felis", "venenatis eu dignissim", "sed pharetra at tortor", "Donec lacinia molestie",
+        "purus vel luctus", "Phasellus sagittis", "metus ac nunc", "sollicitudin rutrum", "Nam pretium vulputate",
+        "arcu ut cursus", "neque pretium vitae", "Maecenas sodales cursus", "justo quis scelerisque",
+        "Sed convallis", "feugiat ante a tincidunt", "Vivamus dolor felis", "mollis iaculis", "ante sed",
+        "bibendum egestas magna", "Praesent quis congue", "nisi bibendum", "vestibulum augue"
+      ],
+      "restartLabel": "Restart experience",
+      "reveal": { "from": 0.9787799999999988, "to": 1.0 },
+      "blur": { "range": { "from": 0.9887799999999988, "to": 1.0 }, "px": 20 },
+      "scrollFeel": 0.000005
+    }
+  },
+  "rendering": {
+    "targetFps": 30,
+    "resolution": {
+      "mode": "dynamic",
+      "maxPixelRatio": 2,
+      "minPixelRatio": 1,
+      "step": 0.25,
+      "settleMs": 250
+    }
+  }
+}

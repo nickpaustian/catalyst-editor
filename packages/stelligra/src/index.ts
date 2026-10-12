@@ -1,0 +1,8 @@
+export * from "./classes/Loader"
+export * from "./classes/SpatialIndex"
+export * from "./classes/SplatMaterial"
+export * from "./classes/SplatMesh"
+export * from "./classes/SplatRenderer"
+export * from "./types"
+export * from "./utils"
+export const version = "0.0.4"

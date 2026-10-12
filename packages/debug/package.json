@@ -1,0 +1,10 @@
+{
+  "name": "@vitrine/debug",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./vite": "./vite.js"
+  }
+}

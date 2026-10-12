@@ -1,0 +1,330 @@
+{
+  "type": "Node3D",
+  "name": "focalPoints",
+  "children": [
+    {
+      "type": "FocalPoint",
+      "config": {
+        "name": "poi-origin",
+        "visualise": false
+      },
+      "transform": {
+        "position": [0, 0.5, 0],
+        "rotation": [0, 0.999902001600656, 0, 0.01399954267115199]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": [],
+        "active": true
+      }
+    },
+    {
+      "type": "FocalPoint",
+      "config": {
+        "name": "poi-west-cabinet",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false
+      },
+      "transform": {
+        "position": [
+          5.4360087531140575, 0.8158243242798328, 0.3586749773084476
+        ],
+        "rotation": [0, 0.7002847660410333, 0, 0.7138636049350432]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPoint",
+      "config": {
+        "name": "poi-northeast-01",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false
+      },
+      "transform": {
+        "position": [-2.85477443332292, 1.376813580047632, 5.812677877913446],
+        "rotation": [0, -0.017795387432897505, 0, 0.9998416495556248]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPoint",
+      "config": {
+        "name": "poi-northeast-02",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false
+      },
+      "transform": {
+        "position": [-4.549860282671483, 1.8158951676250907, 4.687358745804783],
+        "rotation": [0, -0.3956691320384309, 0, 0.918393128214685]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPoint",
+      "config": {
+        "name": "poi-northeast-03",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false
+      },
+      "transform": {
+        "position": [
+          -5.579320321567498, 1.4286243837553523, 2.7708527495245976
+        ],
+        "rotation": [0, -0.7088005038109026, 0, 0.7054089918603323]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPoint",
+      "config": {
+        "name": "poi-southeast-01",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false
+      },
+      "transform": {
+        "position": [
+          -5.486887085065782, 1.3887594528418785, -2.976817787388975
+        ],
+        "rotation": [0, -0.7120327163983109, 0, 0.7021462887308046]
+      },
+
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPoint",
+      "config": {
+        "name": "poi-southeast-02",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false
+      },
+      "transform": {
+        "position": [-4.614467323050521, 1.792056601674341, -5.08895125993846],
+        "rotation": [0, -0.9163217704510809, 0, 0.40044277118883853]
+      },
+
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPoint",
+      "config": {
+        "name": "poi-southwest-01",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false
+      },
+      "transform": {
+        "position": [
+          3.6275462917363837, 1.5605000719998676, -5.682469319891793
+        ],
+        "rotation": [0, 0.9995795294692159, 0, 0.028995935337579413]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPoint",
+      "config": {
+        "name": "poi-southwest-02",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false
+      },
+      "transform": {
+        "position": [5.457963694135037, 1.8555465324604659, -4.546208855141037],
+        "rotation": [0, 0.9243730872843638, 0, 0.38148970563355167]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPoint",
+      "config": {
+        "name": "poi-origin02",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false
+      },
+      "transform": {
+        "position": [
+          6.3024718276415275, 1.4246350376880423, -2.148508335551191
+        ],
+        "rotation": [0, 0.6920960905426771, 0, 0.7218053764385124]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPoint",
+      "config": {
+        "name": "poi-central-01",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false
+      },
+      "transform": {
+        "position": [
+          0.16796409956438435, 0.7606330782484589, 2.320073267644251
+        ],
+        "rotation": [0, -0.04677924881523576, 0, 0.9989052517032244]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPoint",
+      "config": {
+        "name": "poi-central-02",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false
+      },
+      "transform": {
+        "position": [
+          -2.1871709364586267, 1.4366047864371208, -0.40884018699455915
+        ],
+        "rotation": [0, -0.630505012032868, 0, 0.7761851775197933]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPoint",
+      "config": {
+        "name": "poi-central-03",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false
+      },
+      "transform": {
+        "position": [1.7742131847749174, 0.74603677167166, -1.9374434272827048],
+        "rotation": [0, 0.927920937803593, 0, 0.3727770556052246]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPoint",
+      "config": {
+        "name": "poi-west-02",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false
+      },
+      "transform": {
+        "position": [
+          6.0738651023515065, 1.6204953921327054, 0.3614029871388181
+        ],
+        "rotation": [0, 0.6919623229420755, 0, 0.721933614419364]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPoint",
+      "config": {
+        "name": "poi-west-03",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false
+      },
+      "transform": {
+        "position": [
+          6.1719861496147015, 1.3251350529079955, 2.9469053261990625
+        ],
+        "rotation": [0, 0.691668188474942, 0, 0.7222154228841918]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPoint",
+      "config": {
+        "name": "poi-northwest",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false
+      },
+      "transform": {
+        "position": [5.036064536530179, 1.7960319843025565, 5.330915029645002],
+        "rotation": [0, 0.35340049173991467, 0, 0.9354721227476459]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPoint",
+      "config": {
+        "name": "poi-origin02",
+        "width": 0.125,
+        "height": 0.125,
+        "depth": 0.125,
+        "visualise": false
+      },
+      "transform": {
+        "position": [3.046446739065856, 1.167324005400263, 6.368584158766734],
+        "rotation": [0, -0.011203438821437199, 0, 0.9999372395098476]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    }
+  ]
+}

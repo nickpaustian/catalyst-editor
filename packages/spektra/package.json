@@ -1,0 +1,12 @@
+{
+  "name": "@vitrine/spektra",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/Spektra.ts"
+  },
+  "dependencies": {
+    "@vitrine/catalyst": "*"
+  }
+}

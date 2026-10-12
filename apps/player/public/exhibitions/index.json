@@ -1,0 +1,9 @@
+{
+  "exhibitions": [
+    {
+      "id": "beruk",
+      "title": "Beruk",
+      "manifest": "beruk/manifest.json"
+    }
+  ]
+}

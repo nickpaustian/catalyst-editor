@@ -1,0 +1,24 @@
+{
+  "name": "vitrine",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @vitrine/player",
+    "build": "npm run build --workspace @vitrine/player",
+    "preview": "npm run preview --workspace @vitrine/player",
+    "typecheck": "npm run typecheck --workspace @vitrine/player",
+    "build:wasm": "npm run build:wasm --workspace @vitrine/stelligra"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.2",
+    "@types/three": "^0.182.0",
+    "sass": "^1.93.2",
+    "typescript": "~5.9.3",
+    "vite": "^8.0.3"
+  }
+}

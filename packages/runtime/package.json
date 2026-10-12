@@ -1,0 +1,20 @@
+{
+  "name": "@vitrine/runtime",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.scss": "./src/styles/main.scss"
+  },
+  "dependencies": {
+    "@sparkjsdev/spark": "^0.1.10",
+    "@vitrine/catalyst": "*",
+    "@vitrine/debug": "*",
+    "@vitrine/spektra": "*",
+    "@vitrine/stelligra": "*",
+    "@vitrine/telemetry": "*",
+    "simplebar": "^6.3.3",
+    "three": "^0.183.2"
+  }
+}

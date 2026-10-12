@@ -1,0 +1,276 @@
+{
+  "type": "Node3D",
+  "name": "focalPointTriggers",
+  "children": [
+    {
+      "type": "FocalPointTrigger",
+      "config": {
+        "name": "trigger-northeast-01",
+        "width": 2.0,
+        "height": 2.0,
+        "depth": 3.0,
+        "visualise": false
+      },
+      "transform": {
+        "position": [
+          -1.9151995722992745, 1.7004126369528616, 5.032670148954685
+        ],
+        "rotation": [0, -0.017795387432896912, 0, 0.9998416495556249]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPointTrigger",
+      "config": {
+        "name": "trigger-northeast-02",
+        "width": 0.75,
+        "height": 2.0,
+        "depth": 3.0,
+        "visualise": false
+      },
+      "transform": {
+        "position": [
+          -3.8252150506755855, 1.6604716080818112, 3.9811174473858957
+        ],
+        "rotation": [0, -0.3651522369317195, 0, 0.930947820161668]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPointTrigger",
+      "config": {
+        "name": "trigger-northeast-03",
+        "width": 1.5,
+        "height": 2.0,
+        "depth": 3.0,
+        "visualise": false
+      },
+      "transform": {
+        "position": [
+          -5.086668595330091, 1.4525719870411122, 2.8341545426301034
+        ],
+        "rotation": [0, -0.6995705524127181, 0, 0.7145635326526009]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPointTrigger",
+      "config": {
+        "name": "trigger-southeast-01",
+        "width": 2.0,
+        "height": 2.0,
+        "depth": 3.0,
+        "visualise": false
+      },
+      "transform": {
+        "position": [
+          -5.3447869415244265, 1.5245046078672928, -2.453905555791482
+        ],
+        "rotation": [0, -0.7289564676013781, 0, 0.6845600545913565]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPointTrigger",
+      "config": {
+        "name": "trigger-southeast-02",
+        "width": 2.0,
+        "height": 2.0,
+        "depth": 3.0,
+        "visualise": false
+      },
+      "transform": {
+        "position": [
+          -3.8086380348436117, 1.4925213316267283, -4.2318203371763605
+        ],
+        "rotation": [0, -0.9337663448678449, 0, 0.35788323960775953]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPointTrigger",
+      "config": {
+        "name": "trigger-southwest-01",
+        "width": 2.0,
+        "height": 2.0,
+        "depth": 3.0,
+        "visualise": false
+      },
+      "transform": {
+        "position": [
+          2.9530860348686416, 1.5005155509922574, -5.128644769289675
+        ],
+        "rotation": [0, 0.9968811225824584, 0, 0.07891785247165509]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPointTrigger",
+      "config": {
+        "name": "trigger-southwest-02",
+        "width": 2.0,
+        "height": 2.0,
+        "depth": 3.0,
+        "visualise": false
+      },
+      "transform": {
+        "position": [4.776246592542823, 1.0, -3.7880095529723725],
+        "rotation": [0, 0.9326884948140964, 0, 0.36068292396704255]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPointTrigger",
+      "config": {
+        "name": "trigger-central-01",
+        "width": 2.0,
+        "height": 2.0,
+        "depth": 4.0,
+        "isTrigger": true,
+        "visualise": false
+      },
+      "transform": {
+        "position": [1.5032103286524658, 1.0, 1.088279110150721],
+        "rotation": [0, -0.4459216343019879, 0, 0.8950720060762957]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": [],
+        "tags": ["before-centre"]
+      }
+    },
+    {
+      "type": "FocalPointTrigger",
+      "config": {
+        "name": "trigger-central-02",
+        "width": 2.5,
+        "height": 2.0,
+        "depth": 2.0,
+        "visualise": false
+      },
+      "transform": {
+        "position": [-2.0276667839940328, 1.0, -0.35276172260636857],
+        "rotation": [0, -0.7213823574366004, 0, 0.6925369985634072]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPointTrigger",
+      "config": {
+        "name": "trigger-central-03",
+        "width": 2.0,
+        "height": 2.0,
+        "depth": 2.5,
+        "visualise": false
+      },
+      "transform": {
+        "position": [0.9919716253408526, 1.0, -1.7069800855275516],
+        "rotation": [0, 0.7838216658808481, 0, 0.6209859870365609]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPointTrigger",
+      "config": {
+        "name": "trigger-west-02",
+        "width": 2.0,
+        "height": 1.0,
+        "depth": 5.0,
+        "visualise": false
+      },
+      "transform": {
+        "position": [5.234099181130622, 1.5, 0.3617645365374399],
+        "rotation": [0, 0.7017110917300271, 0, 0.712461608609933]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": [],
+        "tags": ["after-centre"]
+      }
+    },
+    {
+      "type": "FocalPointTrigger",
+      "config": {
+        "name": "trigger-west-03",
+        "width": 2.0,
+        "height": 1.0,
+        "depth": 3.0,
+        "visualise": false
+      },
+      "transform": {
+        "position": [
+          5.567013525773998, 1.0738268124040244, 0.16671407229866234
+        ],
+        "rotation": [0, 0.7017110917300249, 0, 0.7124616086099353]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": [],
+        "tags": ["after-centre"]
+      }
+    },
+    {
+      "type": "FocalPointTrigger",
+      "config": {
+        "name": "trigger-west-04",
+        "width": 2.0,
+        "height": 2.0,
+        "depth": 2.0,
+        "visualise": false
+      },
+      "transform": {
+        "position": [5.510025039574828, 1.3291071931018648, 2.2386121829203907],
+        "rotation": [0, 0.6667178491140503, 0, 0.7453102103639359]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    },
+    {
+      "type": "FocalPointTrigger",
+      "config": {
+        "name": "trigger-northwest",
+        "width": 2.0,
+        "height": 2.0,
+        "depth": 4.0,
+        "visualise": false
+      },
+      "transform": {
+        "position": [5.070605644988279, 1.632494441806467, 4.3516090641405185],
+        "rotation": [0, 0.4148667283850002, 0, 0.9098821889009183]
+      },
+      "properties": {
+        "layers": [1],
+        "collidesWith": []
+      }
+    }
+  ]
+}
