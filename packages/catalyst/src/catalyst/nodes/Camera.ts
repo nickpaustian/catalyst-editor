@@ -65,14 +65,18 @@ export class Camera extends Node3D {
     this.setFocalLength(this.focalLength.current)
 
     // Subscribe to resize signal to update aspect
-    Catalyst._.signals.onResize.subscribe((data: ResizeSignalData) => {
-      this.updateAspect(data.width, data.height)
-    })
+    this.track(
+      Catalyst._.signals.onResize.subscribe((data: ResizeSignalData) => {
+        this.updateAspect(data.width, data.height)
+      })
+    )
 
     // Subscribe to render loop to sync transform
-    Catalyst._.signals.onRender.subscribe((data: UpdateSignalData) => {
-      this.onRender?.(data.deltaTime)
-    })
+    this.track(
+      Catalyst._.signals.onRender.subscribe((data: UpdateSignalData) => {
+        this.onRender?.(data.deltaTime)
+      })
+    )
   }
 
   /**

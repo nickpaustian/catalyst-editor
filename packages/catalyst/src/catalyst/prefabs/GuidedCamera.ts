@@ -51,19 +51,22 @@ export class GuidedCamera extends Camera {
     this.body.collider = this.collider
     // this.body.addNode(this.collider)
 
-    Catalyst._.signals.input.onForceChanged.subscribe(
-      (data: InputForceData) => {
-        this.inputForce = Math.abs(data.force.y)
-      },
+    this.track(
+      Catalyst._.signals.input.onForceChanged.subscribe(
+        (data: InputForceData) => {
+          this.inputForce = Math.abs(data.force.y)
+        },
+      ),
     )
 
     // Update target and rotation each frame
-    Catalyst._.signals.onUpdate.subscribe((data: UpdateSignalData) => {
-      if (this._paused) return
-      console.log("not paused")
-      this.updateLookTarget()
-      this.updateRotationVelocity(data.deltaTime)
-    })
+    this.track(
+      Catalyst._.signals.onUpdate.subscribe((data: UpdateSignalData) => {
+        if (this._paused) return
+        this.updateLookTarget()
+        this.updateRotationVelocity(data.deltaTime)
+      }),
+    )
   }
 
   public set paused(value: boolean) {

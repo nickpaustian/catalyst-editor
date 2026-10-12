@@ -41,9 +41,11 @@ export class FocalPointTrigger extends Node3D {
 
     this._allFocalPoints = config.focalPoints
 
-    Catalyst._.signals.onStart.subscribe(() => {
-      this.getFocalPoints()
-    })
+    this.track(
+      Catalyst._.signals.onStart.subscribe(() => {
+        this.getFocalPoints()
+      })
+    )
 
     this._collider.signals.onTriggerEnter.subscribe((_data) => {
       this._containedFocalPoints.forEach((focalpoint) => {
@@ -68,6 +70,7 @@ export class FocalPointTrigger extends Node3D {
 
   public set focalPoints(fps: FocalPoint[]) {
     this._allFocalPoints = fps
+    if (Catalyst._.getIsRunning()) this.getFocalPoints()
   }
 
   public set active(active: boolean) {
@@ -79,6 +82,7 @@ export class FocalPointTrigger extends Node3D {
   //=========================
 
   public getFocalPoints(): void {
+    this._containedFocalPoints = []
     this._allFocalPoints.forEach((focalpoint) => {
       if (this._collider.containsPoint(focalpoint.transform.position))
         this._containedFocalPoints.push(focalpoint)

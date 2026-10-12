@@ -152,6 +152,14 @@ export class BezierCurve extends Node3D {
     Catalyst._.scene.add(this.visualisationLine)
   }
 
+  protected override onDispose(): void {
+    if (!this.visualisationLine) return
+    this.visualisationLine.parent?.remove(this.visualisationLine)
+    this.visualisationLine.geometry.dispose()
+    ;(this.visualisationLine.material as THREE.Material).dispose()
+    this.visualisationLine = null
+  }
+
   /**
    * Get a point on the curve at parameter t (0 to 1).
    */

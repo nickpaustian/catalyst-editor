@@ -14,9 +14,11 @@ export class Debug extends Node {
     this._transform = new Transform3D("transform")
     super.addNode(this._transform, "transform")
 
-    Catalyst._.signals.onRender.subscribe((data) => {
-      this.onRender(data.deltaTime)
-    })
+    this.track(
+      Catalyst._.signals.onRender.subscribe((data) => {
+        this.onRender(data.deltaTime)
+      })
+    )
   }
 
   /**
@@ -77,5 +79,18 @@ export class Debug extends Node {
       this.debugShape.parent.remove(this.debugShape)
     }
     this.debugShape = null
+  }
+
+  protected override onDispose(): void {
+    const shape = this.debugShape
+    this.clearDebugShape()
+    shape?.traverse((object) => {
+      const mesh = object as THREE.Mesh
+      mesh.geometry?.dispose()
+      const materials = Array.isArray(mesh.material)
+        ? mesh.material
+        : [mesh.material]
+      materials.forEach((material) => material?.dispose())
+    })
   }
 }

@@ -57,6 +57,11 @@ export default class SceneManager extends BaseManager {
 
   private focalPoints!: Node3D
   private focalPointTriggers!: Node3D
+  private pointsOfInterest: Node3D | null = null
+  private environment: Node3D | null = null
+  private rail: Node3D | null = null
+  private disposed: boolean = false
+  private cleanups: (() => void)[] = []
 
   private vgs?: VolumetricGaussianSplat
   private vgsReady: boolean = false
@@ -75,6 +80,22 @@ export default class SceneManager extends BaseManager {
   private _player: CameraPathPlayer | null = null
   private _useBakedPath: boolean = false
 
+  private static readonly ACTIONS = [
+    "toggleCamera",
+    "shutdown",
+    "logPos",
+    "close",
+    "interact",
+    "mouseInteract",
+    "toggleDebug",
+    "renderVgs",
+    "clearVgs",
+    "record",
+    "toggleBaked",
+    "toggleMute",
+    "setRailProgress",
+  ]
+
   private get manifest(): LoadedManifest {
     return this.managers.manifest
   }
@@ -89,6 +110,7 @@ export default class SceneManager extends BaseManager {
     this.managers.game.initialise()
 
     this.focalPoints = await this.setupFocalPoints()
+    if (this.disposed) return
 
     this.fixedCamera = new GuidedCamera({
       name: "guided-camera",
@@ -99,26 +121,32 @@ export default class SceneManager extends BaseManager {
       ) as FocalPoint[],
     })
 
-    this.setupPointsOfInterest()
-    this.setupGuidedCameraRail()
+    this.pointsOfInterest = await this.setupPointsOfInterest()
+    if (this.disposed) return
+    this.rail = this.setupGuidedCameraRail()
     this.setupSignalSubscriptions()
     this.controller = this.setupFirstPersonController()
 
-    await this.setupEnvironmentCollisions()
+    this.environment = await this.setupEnvironmentCollisions()
+    if (this.disposed) return
     this.focalPointTriggers = await this.setupFocalPointTriggers(
       this.focalPoints.getChildrenOfType(FocalPoint) as FocalPoint[]
     )
+    if (this.disposed) return
 
     this.setupKeybinds()
 
-    Catalyst._.signals.onRender.subscribe(() => {
-      this.computeVgs()
-    })
+    this.cleanups.push(
+      Catalyst._.signals.onRender.subscribe(() => {
+        this.computeVgs()
+      })
+    )
 
     const catalyst = Catalyst._
     catalyst.targetFPS = this.manifest.rendering?.targetFps ?? defaultTargetFps
     catalyst.initialise().then(() => {
-      catalyst.start()
+      if (this.disposed) return
+      if (!catalyst.getIsRunning()) catalyst.start()
 
       if (Catalyst._.camera && this?.controller?.camera)
         Catalyst._.camera.target = this.controller.camera
@@ -127,6 +155,42 @@ export default class SceneManager extends BaseManager {
       this.fixedCamera?.snapToTarget()
       this.footerReadEnd = this.managers.ui.calculateFooterEnd()
     })
+  }
+
+  public dispose(): void {
+    if (this.disposed) return
+    this.disposed = true
+    this.vgsReady = false
+
+    if (this._isRecording) {
+      this._isRecording = false
+      this._recorder = null
+    }
+
+    this.cleanups.forEach((cleanup) => cleanup())
+    this.cleanups = []
+
+    this.controller?.disablePointerLock()
+
+    ;[
+      this.vgs,
+      this.controller,
+      this.fixedCamera,
+      this.rail,
+      this.pointsOfInterest,
+      this.focalPointTriggers,
+      this.focalPoints,
+      this.environment,
+    ].forEach((node) => node?.dispose())
+
+    this.vgs = undefined
+    this.controller = undefined
+    this.fixedCamera = undefined
+    this.rail = null
+    this.pointsOfInterest = null
+    this.environment = null
+    this._path = null
+    this._player = null
   }
 
   public get volumetricSplat(): VolumetricGaussianSplat | undefined {
@@ -229,7 +293,8 @@ export default class SceneManager extends BaseManager {
     if (start) controller.transform.position = toVector3(start)
     controller.rigidBody.sync()
 
-    Catalyst._.signals.onUpdate.subscribe(() => {
+    this.cleanups.push(
+      Catalyst._.signals.onUpdate.subscribe(() => {
       if (!this.managers?.state) return
 
       const result = this.controller?.raycast.cast()
@@ -265,7 +330,8 @@ export default class SceneManager extends BaseManager {
         lookBackDir
       )
       node.transform.rotation = lookBackRotation
-    })
+      })
+    )
 
     return controller
   }
@@ -286,24 +352,28 @@ export default class SceneManager extends BaseManager {
       rail.transform.position = toVector3(guided.rail.offset)
     }
 
-    Catalyst._.signals.onUpdate.subscribe(() => {
-      if (!this._isRecording || !this._recorder || !this.fixedCamera) return
+    this.cleanups.push(
+      Catalyst._.signals.onUpdate.subscribe(() => {
+        if (!this._isRecording || !this._recorder || !this.fixedCamera) return
 
-      Catalyst._.signals.input.onForceChanged.emit({
-        force: new THREE.Vector3(0, 2, 0),
+        Catalyst._.signals.input.onForceChanged.emit({
+          force: new THREE.Vector3(0, 2, 0),
+        })
+
+        this._recorder.captureFrame(this.pathProgress, this.fixedCamera)
+
+        if (this.pathProgress >= 1.0) {
+          this.stopRecording()
+        }
       })
+    )
 
-      this._recorder.captureFrame(this.pathProgress, this.fixedCamera)
-
-      if (this.pathProgress >= 1.0) {
-        this.stopRecording()
-      }
-    })
-
-    Catalyst._.signals.input.onForceChanged.subscribe(
-      (data: InputForceData) => {
-        this.handleForceUpdate(data)
-      }
+    this.cleanups.push(
+      Catalyst._.signals.input.onForceChanged.subscribe(
+        (data: InputForceData) => {
+          this.handleForceUpdate(data)
+        }
+      )
     )
 
     this.pathProgress = 0
@@ -509,7 +579,11 @@ export default class SceneManager extends BaseManager {
 
     input.bind("setRailProgress", "numbers")
 
-    input.signals.onActionEnd.subscribe(({ action, context }) => {
+    this.cleanups.push(() => {
+      SceneManager.ACTIONS.forEach((action) => input.unbind(action))
+    })
+
+    const unsubscribe = input.signals.onActionEnd.subscribe(({ action, context }) => {
       if (action === "logPos" && this.controller) {
         console.log("current pos: ", this.controller.transform.position)
       }
@@ -630,17 +704,20 @@ export default class SceneManager extends BaseManager {
         }
       }
     })
+    this.cleanups.push(unsubscribe)
   }
 
   private setupSignalSubscriptions(): void {
-    Catalyst._.signals.game.onInputTimeout.subscribe(() => {
-      if (!this.managers.state?.isGuidedCamera) return
-      const after = this.manifest.presentation?.hud?.moveHintAfter
-      if (after !== undefined && !this.isAbove(after)) return
+    this.cleanups.push(
+      Catalyst._.signals.game.onInputTimeout.subscribe(() => {
+        if (!this.managers.state?.isGuidedCamera) return
+        const after = this.manifest.presentation?.hud?.moveHintAfter
+        if (after !== undefined && !this.isAbove(after)) return
 
-      this.scrollMessageDisplayCount++
-      this.managers.ui.showMessage()
-    })
+        this.scrollMessageDisplayCount++
+        this.managers.ui.showMessage()
+      })
+    )
   }
 
   public toggleCamera(): void {
@@ -701,6 +778,7 @@ export default class SceneManager extends BaseManager {
     if (!url) return
     const response = await fetch(url)
     const data = await response.json()
+    if (this.disposed) return
     this._player = new CameraPathPlayer()
     this._player.load(data)
     this._useBakedPath = true
@@ -723,6 +801,7 @@ export default class SceneManager extends BaseManager {
         this.managers.ui.updateLoadingProgress(progress.percentage)
       },
       onComplete: async () => {
+        if (this.disposed) return
         this.managers.ui.completeLoading()
 
         sceneGroup.childrenGrouped.audio.forEach((child: any) => {
@@ -735,6 +814,7 @@ export default class SceneManager extends BaseManager {
         if (!renderer || !Catalyst._.scene) return
 
         const gpuCapacity = await probeGPUCapacity(renderer)
+        if (this.disposed) return
         const transform = manifest.splat.transform
 
         const vgs = new VolumetricGaussianSplat({
@@ -758,6 +838,7 @@ export default class SceneManager extends BaseManager {
         // Partitions go in one after another, in manifest order, the way
         // Beruk chained s0..s4; the scene is ready once the last is in
         const loadNext = (index: number) => {
+          if (this.disposed) return
           const partition = partitions[index]
           if (!partition) {
             this.vgsReady = true

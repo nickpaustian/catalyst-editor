@@ -41,6 +41,7 @@ export default class UiManager extends BaseManager {
   public footerContent!: HTMLElement
   public hud!: HTMLElement
   public fpch!: HTMLElement
+  private overlayBlur!: HTMLElement
   public poiDiv!: HTMLElement
   public footerReadStart: number = 1.0
   public footerReadEnd: number = 1.1
@@ -282,6 +283,7 @@ export default class UiManager extends BaseManager {
     const overlayBlur = document.createElement("div")
     overlayBlur.setAttribute("id", "footer-card-overlay-blur")
     Catalyst._.ui?.canvas.appendChild(overlayBlur)
+    this.overlayBlur = overlayBlur
 
     const overlay = document.createElement("div")
     overlay.setAttribute("id", "footer-card-overlay")
@@ -823,6 +825,24 @@ export default class UiManager extends BaseManager {
     this.footerReadEnd =
       this.footerReadStart + scrollableHeight * (this.presentation.footer?.scrollFeel ?? 0)
     return this.footerReadEnd
+  }
+
+  public dispose(): void {
+    ;[
+      this.landingCard,
+      this.footerCard,
+      this.overlayBlur,
+      this.hud,
+      this.fpch,
+    ].forEach((el) => el?.remove())
+    document.body.classList.remove(
+      "guided-mode",
+      "header-visible",
+      "message-visible",
+      "muted"
+    )
+    document.body.classList.add("interactive-mode")
+    document.body.style.removeProperty("--fc-blur")
   }
 
   public playUISound(soundType: string): void {

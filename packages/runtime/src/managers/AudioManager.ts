@@ -1380,6 +1380,14 @@ export class AudioManager {
     debug("Audio manager cleaned up")
   }
 
+  public dispose(): void {
+    this.fadeTimeouts.forEach((timeout) => clearTimeout(timeout))
+    this.fadeTimeouts.clear()
+    this.cleanup()
+    this.masterGainNode.disconnect()
+    if (this.audioContext.state !== "closed") void this.audioContext.close()
+  }
+
   public cleanupInstances(): void {
     const tracksToRemove: string[] = []
 

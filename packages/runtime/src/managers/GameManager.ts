@@ -28,7 +28,7 @@ export default class GameManager extends BaseManager {
       defaultScene: Catalyst._.scene,
     })
 
-    Catalyst._.scene.environmentRotation.y += 1.0
+    Catalyst._.scene.environmentRotation.y = 1.0
     Catalyst._.scene.background = new THREE.Color(0x000000)
     Catalyst._.renderer?.domElement.setAttribute("aria-hidden", "true")
   }

@@ -16,6 +16,8 @@ export class Node {
 
   protected _root: Node | null = null
   private rootSubscriptionCleanup: (() => void) | null = null
+  private cleanups: (() => void)[] = []
+  private _disposed: boolean = false
 
   // Signals
   protected _signals: Record<string, Signal<any>> = {
@@ -243,6 +245,52 @@ export class Node {
    * Override in subclasses to handle transform dirty notifications.
    */
   protected onWorldTransformChanged(): void {}
+
+  /**
+   * Register a cleanup (typically a signal unsubscribe) to run on dispose.
+   */
+  protected track(cleanup: () => void): void {
+    this.cleanups.push(cleanup)
+  }
+
+  public get isDisposed(): boolean {
+    return this._disposed
+  }
+
+  /**
+   * Override in subclasses to release scene objects, DOM and physics state.
+   * Children are disposed before this runs.
+   */
+  protected onDispose(): void {}
+
+  /**
+   * Dispose this node and its whole subtree: children first, then tracked
+   * cleanups, then onDispose, then detach from the parent.
+   */
+  public dispose(): void {
+    if (this._disposed) return
+    this._disposed = true
+
+    Array.from(this.children.values()).forEach((child) => child.dispose())
+    this.children.clear()
+    this.childCounters.clear()
+
+    this.cleanups.forEach((cleanup) => cleanup())
+    this.cleanups = []
+
+    this.rootSubscriptionCleanup?.()
+    this.rootSubscriptionCleanup = null
+
+    this.onDispose()
+
+    if (this._parent) {
+      const parent = this._parent
+      parent.children.forEach((child, key) => {
+        if (child === this) parent.children.delete(key)
+      })
+      this._parent = null
+    }
+  }
 
   //=========================
   // Tags

@@ -49,9 +49,11 @@ export abstract class Collider<
     this.attachColliderSignals()
 
     // Subscribe to render updates to sync collider position
-    Catalyst._.signals.onRender.subscribe((data) => {
-      this.onRender?.(data.deltaTime)
-    })
+    this.track(
+      Catalyst._.signals.onRender.subscribe((data) => {
+        this.onRender?.(data.deltaTime)
+      })
+    )
 
     if (this._visualised) {
       this.createVisualisation()
@@ -198,10 +200,7 @@ export abstract class Collider<
     return this._collider.raycastGeometry(ray, maxDistance)
   }
 
-  /**
-   * Dispose of the collider.
-   */
-  public dispose(): void {
+  protected override onDispose(): void {
     this._collider.dispose()
   }
 

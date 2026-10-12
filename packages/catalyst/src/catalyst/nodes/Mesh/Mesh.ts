@@ -12,9 +12,11 @@ export abstract class Mesh extends Node3D {
   constructor(name: string = "meshNode") {
     super(name)
 
-    Catalyst._.signals.onRender.subscribe((data) => {
-      this.onRender(data.deltaTime)
-    })
+    this.track(
+      Catalyst._.signals.onRender.subscribe((data) => {
+        this.onRender(data.deltaTime)
+      })
+    )
   }
 
   //=========================
@@ -46,5 +48,16 @@ export abstract class Mesh extends Node3D {
     this._mesh.position.copy(this.transform.getWorldPosition())
     this._mesh.quaternion.copy(this.transform.getWorldRotation())
     // this._collider.scale = this.transform.getWorldScale()
+  }
+
+  protected override onDispose(): void {
+    if (!this._mesh) return
+    this._mesh.parent?.remove(this._mesh)
+    this._mesh.geometry.dispose()
+    const materials = Array.isArray(this._mesh.material)
+      ? this._mesh.material
+      : [this._mesh.material]
+    materials.forEach((material) => material.dispose())
+    this._mesh = null
   }
 }

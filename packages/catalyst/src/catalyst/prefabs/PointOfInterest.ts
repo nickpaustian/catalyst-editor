@@ -145,7 +145,7 @@ export class PointOfInterest extends Node3D {
       if (this?._onInteract) this._onInteract()
     })
 
-    Catalyst._.signals.onPostRender.subscribe(() => {
+    const unsubscribe = Catalyst._.signals.onPostRender.subscribe(() => {
       const screenData = worldToScreenSpace(this.transform.getWorldPosition())
 
       if (!screenData) {
@@ -223,6 +223,7 @@ export class PointOfInterest extends Node3D {
         pulse.style.scale = `${pulseScale}`
       }
     })
+    this.track(unsubscribe)
 
     return element
   }
@@ -249,6 +250,10 @@ export class PointOfInterest extends Node3D {
 
     const results = this._raycast.cast()
     return results && results.length > 0
+  }
+
+  protected override onDispose(): void {
+    this._element.remove()
   }
 
   //=========================

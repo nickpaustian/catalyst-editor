@@ -1139,7 +1139,7 @@ export class VolumetricGaussianSplat extends Node3D {
     }
   }
 
-  public dispose(): void {
+  protected override onDispose(): void {
     this._fetcher.cancelAll()
     this._cells.forEach((cell) => cell.dispose())
     this._cells.clear()

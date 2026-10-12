@@ -1,5 +1,5 @@
 import "@vitrine/runtime/styles.scss"
-import { runExhibition } from "@vitrine/runtime"
+import { Player } from "@vitrine/runtime"
 
 interface CatalogueEntry {
   id: string
@@ -11,30 +11,53 @@ interface Catalogue {
   exhibitions: CatalogueEntry[]
 }
 
-const CATALOGUE_URL = "exhibitions/index.json"
+const CATALOGUE_URL = new URL("exhibitions/index.json", window.location.href)
+const PARAM = "exhibition"
 
-const pickExhibition = async (): Promise<CatalogueEntry> => {
+declare global {
+  interface Window {
+    player?: Player
+    openExhibition?: (id: string) => Promise<void>
+  }
+}
+
+const loadCatalogue = async (): Promise<Catalogue> => {
   const response = await fetch(CATALOGUE_URL)
   if (!response.ok) {
     throw new Error(`Failed to load catalogue (${response.status})`)
   }
-  const catalogue = (await response.json()) as Catalogue
+  return (await response.json()) as Catalogue
+}
 
-  const requested = new URLSearchParams(window.location.search).get(
-    "exhibition"
-  )
-  const entry = requested
-    ? catalogue.exhibitions.find((e) => e.id === requested)
+const entryFor = (catalogue: Catalogue, id: string | null): CatalogueEntry => {
+  const entry = id
+    ? catalogue.exhibitions.find((e) => e.id === id)
     : catalogue.exhibitions[0]
-
-  if (!entry) {
-    throw new Error(`No exhibition "${requested ?? ""}" in the catalogue`)
-  }
+  if (!entry) throw new Error(`No exhibition "${id ?? ""}" in the catalogue`)
   return entry
 }
 
+const requestedId = () => new URLSearchParams(window.location.search).get(PARAM)
+
 document.addEventListener("DOMContentLoaded", async () => {
-  const entry = await pickExhibition()
-  const manifestUrl = new URL(entry.manifest, new URL(CATALOGUE_URL, window.location.href)).href
-  await runExhibition(manifestUrl)
+  const catalogue = await loadCatalogue()
+  const player = new Player()
+
+  const open = async (id: string | null) => {
+    const entry = entryFor(catalogue, id)
+    await player.load(new URL(entry.manifest, CATALOGUE_URL).href)
+  }
+
+  // Swapping exhibitions is a URL change, so back/forward work and links share
+  window.openExhibition = async (id: string) => {
+    const url = new URL(window.location.href)
+    url.searchParams.set(PARAM, id)
+    history.pushState(null, "", url)
+    await open(id)
+  }
+  window.addEventListener("popstate", () => void open(requestedId()))
+
+  if (__DEBUG__) window.player = player
+
+  await open(requestedId())
 })

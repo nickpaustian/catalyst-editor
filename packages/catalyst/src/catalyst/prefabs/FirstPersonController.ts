@@ -30,6 +30,14 @@ export class FirstPersonController extends Node3D {
   private jumpForce: number
 
   private _debugMode: boolean = false
+  private static readonly ACTIONS = [
+    "moveForward",
+    "moveBackward",
+    "moveLeft",
+    "moveRight",
+    "jump",
+    "sprint",
+  ]
   private canLockPointer: () => boolean
 
   private pointerLockControls: PointerLockControls | null = null
@@ -94,15 +102,19 @@ export class FirstPersonController extends Node3D {
     this.raycast.setDirection(new THREE.Vector3(0, 0, -1))
     this.raycast.layers = 9
 
-    Catalyst._.signals.onUpdate.subscribe(() => {
-      this.applyMovement()
-    })
+    this.track(
+      Catalyst._.signals.onUpdate.subscribe(() => {
+        this.applyMovement()
+      })
+    )
 
     // Subscribe to update loop to apply movement
-    Catalyst._.signals.onRender.subscribe((data) => {
-      this.applyHeadBob(data.deltaTime)
-      this.syncTransformWithPointerLock()
-    }, 10)
+    this.track(
+      Catalyst._.signals.onRender.subscribe((data) => {
+        this.applyHeadBob(data.deltaTime)
+        this.syncTransformWithPointerLock()
+      }, 10)
+    )
 
     this.setupPointerLock()
 
@@ -132,15 +144,23 @@ export class FirstPersonController extends Node3D {
     helm.bind("sprint", "Shift")
 
     // Track input state
-    helm.signals.onActionStart.subscribe(({ action }) => {
-      this.updateInputState(action, true)
-      if (action === "jump") {
-        this.jump()
-      }
-    })
+    this.track(
+      helm.signals.onActionStart.subscribe(({ action }) => {
+        this.updateInputState(action, true)
+        if (action === "jump") {
+          this.jump()
+        }
+      })
+    )
 
-    helm.signals.onActionEnd.subscribe(({ action }) => {
-      this.updateInputState(action, false)
+    this.track(
+      helm.signals.onActionEnd.subscribe(({ action }) => {
+        this.updateInputState(action, false)
+      })
+    )
+
+    this.track(() => {
+      FirstPersonController.ACTIONS.forEach((action) => helm.unbind(action))
     })
   }
 
@@ -244,18 +264,26 @@ export class FirstPersonController extends Node3D {
       document.body
     )
 
-    // Lock pointer on click
-    document.addEventListener("click", () => {
+    const onClick = () => {
       if (!this.canLockPointer()) return
       if (this.active) this.enablePointerLock()
-    })
-
-    document.addEventListener("pointerlockchange", () => {
+    }
+    const onPointerLockChange = () => {
       if (document.pointerLockElement) {
         Catalyst._.signals.game.onPointerLockChange.emit({ enabled: true })
       } else {
         Catalyst._.signals.game.onPointerLockChange.emit({ enabled: false })
       }
+    }
+    document.addEventListener("click", onClick)
+    document.addEventListener("pointerlockchange", onPointerLockChange)
+
+    this.track(() => {
+      document.removeEventListener("click", onClick)
+      document.removeEventListener("pointerlockchange", onPointerLockChange)
+      if (document.pointerLockElement) this.pointerLockControls?.unlock()
+      this.pointerLockControls?.dispose()
+      this.pointerLockControls = null
     })
   }
 

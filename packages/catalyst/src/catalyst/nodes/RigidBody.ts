@@ -49,9 +49,11 @@ export class RigidBody extends Node3D {
     const worldPos = this.transform.getWorldPosition()
     this._rigidBody.position = worldPos
 
-    catalyst.signals.onUpdate.subscribe((data) => {
-      this.onRender?.(data.deltaTime)
-    })
+    this.track(
+      catalyst.signals.onUpdate.subscribe((data) => {
+        this.onRender?.(data.deltaTime)
+      })
+    )
   }
 
   /**
@@ -159,6 +161,10 @@ export class RigidBody extends Node3D {
    * Sync rigid body position with node transform each frame.
    * Position must be accessed via transform.
    */
+  protected override onDispose(): void {
+    this._rigidBody.dispose()
+  }
+
   public onRender(_deltaTime: number): void {
     if (this.syncParent && this.parent) {
       const parent = this.parent as Node3D

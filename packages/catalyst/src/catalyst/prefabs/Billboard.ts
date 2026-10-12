@@ -18,9 +18,11 @@ export class Billboard extends Plane {
     this.targetCamera = config.targetCamera ?? Catalyst._.camera?.view
 
     // Subscribe to render to update billboard rotation
-    Catalyst._.signals.onRender.subscribe(() => {
-      this.updateBillboard()
-    })
+    this.track(
+      Catalyst._.signals.onRender.subscribe(() => {
+        this.updateBillboard()
+      })
+    )
   }
 
   /**

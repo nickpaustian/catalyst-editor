@@ -166,6 +166,21 @@ export class Modal {
     }
   }
 
+  /** Hard close without animation, for tearing an exhibition down. */
+  public async reset(): Promise<void> {
+    this.clearAnimationClasses()
+    this._element.classList.add("hidden")
+    document.body.classList.remove("modal-open")
+    const wasOpen = this._isOpen
+    this._isOpen = false
+    if (this._currentTemplate) {
+      await this._currentTemplate.executeOnUnload()
+      this._currentTemplate = null
+    }
+    this._contentEle.innerHTML = ""
+    if (wasOpen) Catalyst._.resume()
+  }
+
   public async openWithTemplate(
     template: Template,
     data?: any,

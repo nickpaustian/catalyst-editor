@@ -147,6 +147,10 @@ export class Raycast extends Node3D {
     return this
   }
 
+  protected override onDispose(): void {
+    this.disableVisualisation()
+  }
+
   public disableVisualisation(): this {
     if (!this.isVisualised) return this
 

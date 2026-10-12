@@ -9,15 +9,20 @@ import StateManager from "./StateManager"
 import UiManager from "./UiManager"
 import GameManager from "./GameManager"
 import AudioManager from "./AudioManager"
+import { Modal } from "./Modal"
 import setupTelemetry from "../debug/setupTelemetry"
 import type { LoadedManifest } from "../manifest"
 import { buildContent, type ExhibitionContent } from "../content/templates"
 
 const debugEnabled = import.meta.env.VITE_DEBUG === "true"
 
+let telemetry: Telemetry | null = null
+
+/** The managers for one loaded exhibition. One registry is current at a time. */
 export default class ManagerRegistry {
-  private static instance: ManagerRegistry
+  private static instance: ManagerRegistry | null = null
   private isInitialised: boolean = false
+  private _disposed: boolean = false
 
   private managers: BaseManager[] = []
 
@@ -54,16 +59,17 @@ export default class ManagerRegistry {
     })
 
     if (debugEnabled) {
-      this.telemetry = setupTelemetry()
+      telemetry ??= setupTelemetry()
+      this.telemetry = telemetry
     }
 
     this.managers = [this.assets, this.preferences, this.scene]
   }
 
-  /** Creates the registry for an exhibition. Must run before any manager is used. */
+  /** Creates the registry for an exhibition. The previous one must be disposed first. */
   public static create(manifest: LoadedManifest): ManagerRegistry {
     if (ManagerRegistry.instance) {
-      throw new Error("ManagerRegistry already created")
+      throw new Error("Dispose the current ManagerRegistry before creating another")
     }
     ManagerRegistry.instance = new ManagerRegistry(manifest)
     ManagerRegistry.instance.init()
@@ -72,7 +78,7 @@ export default class ManagerRegistry {
 
   public static getInstance(): ManagerRegistry {
     if (!ManagerRegistry.instance) {
-      throw new Error("ManagerRegistry.create(manifest) has not been called")
+      throw new Error("No exhibition is loaded")
     }
 
     return ManagerRegistry.instance
@@ -80,6 +86,14 @@ export default class ManagerRegistry {
 
   public static get _(): ManagerRegistry {
     return this.getInstance()
+  }
+
+  public static get current(): ManagerRegistry | null {
+    return ManagerRegistry.instance
+  }
+
+  public get isDisposed(): boolean {
+    return this._disposed
   }
 
   private init(): void {
@@ -90,5 +104,19 @@ export default class ManagerRegistry {
     this.managers.forEach((manager) => {
       manager.setManagers(this)
     })
+  }
+
+  /** Tears the exhibition down and leaves the engine running for the next one. */
+  public async dispose(): Promise<void> {
+    if (this._disposed) return
+    this._disposed = true
+
+    await Modal._.reset()
+    this.scene.dispose()
+    this.ui.dispose()
+    this.audio.dispose()
+
+    if (ManagerRegistry.instance === this) ManagerRegistry.instance = null
+    debug(`Managers disposed for ${this.manifest.id}`, "init")
   }
 }
