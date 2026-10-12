@@ -204,6 +204,29 @@ export default class SceneManager extends BaseManager {
     }
   }
 
+  /** The guided rail, for tooling. */
+  public get railPath(): BezierCurve | null {
+    return this._path
+  }
+
+  /** Whether the guided camera follows the baked recording (true) or the live rail (false). */
+  public get useBakedPath(): boolean {
+    return this._useBakedPath
+  }
+
+  public set useBakedPath(enabled: boolean) {
+    this._useBakedPath = enabled && this._player !== null
+    if (this.fixedCamera) this.fixedCamera.paused = this._useBakedPath
+  }
+
+  public get isRecording(): boolean {
+    return this._isRecording
+  }
+
+  public get pathProgressValue(): number {
+    return this.pathProgress
+  }
+
   /** Turn the debug visualisers on or off for every node in the scene trees. */
   public visualiseScene(enabled: boolean): void {
     Object.values(this.sceneRoots).forEach((root) => {

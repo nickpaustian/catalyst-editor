@@ -4,6 +4,7 @@ import { assets, type Exhibition } from "@vitrine/runtime"
 import type { JsonAsset } from "@vitrine/assets"
 import { EditorCamera, type GizmoMode } from "./EditorCamera"
 import { EditorInput } from "./EditorInput"
+import { RailEditor } from "./RailEditor"
 
 interface CatalogueEntry {
   id: string
@@ -55,6 +56,7 @@ export class EditorPanel {
   private visualised = false
   private lastMoveNode: Node3D | null = null
   private camera: EditorCamera | null = null
+  private rail: RailEditor
   private input = new EditorInput({ focusSelected: () => this.focusSelected() })
   private viewLabel: HTMLElement
 
@@ -110,6 +112,9 @@ export class EditorPanel {
       this.root.append(el("h2", { textContent: key }), list)
     })
 
+    this.rail = new RailEditor(exhibition, () => this.camera)
+    this.root.append(this.rail.root)
+
     this.selectionLabel = el("div", { className: "row hint", textContent: "Nothing selected" })
     this.root.append(
       el("h2", { textContent: "Selected" }),
@@ -127,7 +132,7 @@ export class EditorPanel {
       el("p", {
         className: "hint",
         textContent:
-          "Scene files are the loaded JSON with live transforms written back by node name.",
+          "Scene files are the loaded JSON with live transforms written back by node name. The manifest carries the live rail control points.",
       })
     )
 
@@ -142,6 +147,7 @@ export class EditorPanel {
       this.toggleVisualisers()
       this.camera = new EditorCamera()
       this.setView("orbit")
+      this.rail.refresh()
     })
     setInterval(() => this.pollMoveNode(), 250)
   }
@@ -332,8 +338,12 @@ export class EditorPanel {
   }
 
   private exportManifest(): void {
-    const raw = assets.getAs<JsonAsset>(this.exhibition.manifest.url)
+    const raw = assets.getAs<JsonAsset<any>>(this.exhibition.manifest.url)
     if (!raw?.isReady) return
-    download("manifest.json", JSON.stringify(raw.json, null, 2))
+    const json = structuredClone(raw.json)
+    if (json.camera?.guided?.rail) {
+      json.camera.guided.rail.controlPoints = this.rail.toManifest()
+    }
+    download("manifest.json", JSON.stringify(json, null, 2))
   }
 }

@@ -8,7 +8,7 @@ interface BezierCurveConfig {
   visualise?: boolean
 }
 
-interface ControlPoint {
+export interface ControlPoint {
   name?: string
   point: THREE.Vector3
 }
@@ -81,6 +81,34 @@ export class BezierCurve extends Node3D {
   public setControlPoints(controlPoints: ControlPoint[]): void {
     this.controlPoints = controlPoints
     this.updateCurve()
+  }
+
+  /**
+   * Change one control point's position or name in place.
+   */
+  public updateControlPoint(
+    index: number,
+    changes: Partial<ControlPoint>
+  ): void {
+    const existing = this.controlPoints[index]
+    if (!existing) return
+    if (changes.point) existing.point.copy(changes.point)
+    if (changes.name !== undefined) existing.name = changes.name
+    this.updateCurve()
+  }
+
+  /**
+   * Insert a control point before `index` (append when index is past the end).
+   */
+  public insertControlPoint(index: number, controlPoint: ControlPoint): void {
+    this.controlPoints.splice(index, 0, controlPoint)
+    this.updateCurve()
+  }
+
+  public removeControlPoint(index: number): ControlPoint | undefined {
+    const [removed] = this.controlPoints.splice(index, 1)
+    this.updateCurve()
+    return removed
   }
 
   /**

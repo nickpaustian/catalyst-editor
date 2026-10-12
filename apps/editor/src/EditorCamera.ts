@@ -4,6 +4,23 @@ import { Catalyst, Collider, type Node3D } from "@vitrine/catalyst"
 
 export type GizmoMode = "translate" | "rotate"
 
+/** Anything the gizmo can drive: a node, a control point, a marker. */
+export interface GizmoTarget {
+  position: () => THREE.Vector3
+  rotation?: () => THREE.Quaternion
+  apply: (position: THREE.Vector3, rotation: THREE.Quaternion) => void
+}
+
+export const nodeTarget = (node: Node3D): GizmoTarget => ({
+  position: () => node.transform.getWorldPosition(),
+  rotation: () => node.transform.getWorldRotation(),
+  apply: (position, rotation) => {
+    node.transform.position = position.clone()
+    node.transform.rotation = rotation.clone()
+    if (node instanceof Collider) node.needsUpdate()
+  },
+})
+
 /**
  * Authoring camera: orbit around a point of interest, with a transform gizmo
  * on a proxy object that writes back to the selected Catalyst node. Catalyst
@@ -15,7 +32,7 @@ export class EditorCamera {
   private readonly orbit: OrbitControls
   private readonly gizmo: TransformControls
   private readonly proxy = new THREE.Object3D()
-  private node: Node3D | null = null
+  private target: GizmoTarget | null = null
   private active = false
   private previousTarget: THREE.Camera | null = null
   private unsubscribe: (() => void) | null = null
@@ -90,35 +107,45 @@ export class EditorCamera {
 
   /** Orbit around a node, keeping the current viewing direction. */
   public focus(node: Node3D, distance = 2.5): void {
-    const target = node.transform.getWorldPosition()
+    this.focusPoint(node.transform.getWorldPosition(), distance)
+  }
+
+  /** Put the gizmo on a node. The proxy mirrors its world transform. */
+  public attach(node: Node3D, onChanged?: () => void): void {
+    this.attachTarget(nodeTarget(node), onChanged)
+  }
+
+  /** Put the gizmo on anything that can report and apply a transform. */
+  public attachTarget(target: GizmoTarget, onChanged?: () => void): void {
+    this.target = target
+    this.onNodeChanged = onChanged ?? null
+    this.syncFromNode()
+    this.gizmo.attach(this.proxy)
+  }
+
+  public detach(): void {
+    this.gizmo.detach()
+    this.target = null
+    this.onNodeChanged = null
+  }
+
+  /** Refresh the proxy after the target moved by other means (panel fields, move mode). */
+  public syncFromNode(): void {
+    if (!this.target) return
+    this.proxy.position.copy(this.target.position())
+    const rotation = this.target.rotation?.()
+    if (rotation) this.proxy.quaternion.copy(rotation)
+    else this.proxy.quaternion.identity()
+  }
+
+  /** Orbit around a world position. */
+  public focusPoint(target: THREE.Vector3, distance = 2.5): void {
     const direction = this.view.position.clone().sub(this.orbit.target)
     if (direction.lengthSq() < 1e-6) direction.set(1, 0.6, 1)
     direction.setLength(distance)
     this.orbit.target.copy(target)
     this.view.position.copy(target).add(direction)
     this.orbit.update()
-  }
-
-  /** Put the gizmo on a node. The proxy mirrors its world transform. */
-  public attach(node: Node3D, onChanged?: () => void): void {
-    this.node = node
-    this.onNodeChanged = onChanged ?? null
-    this.proxy.position.copy(node.transform.getWorldPosition())
-    this.proxy.quaternion.copy(node.transform.getWorldRotation())
-    this.gizmo.attach(this.proxy)
-  }
-
-  public detach(): void {
-    this.gizmo.detach()
-    this.node = null
-    this.onNodeChanged = null
-  }
-
-  /** Refresh the proxy after the node moved by other means (panel fields, move mode). */
-  public syncFromNode(): void {
-    if (!this.node) return
-    this.proxy.position.copy(this.node.transform.getWorldPosition())
-    this.proxy.quaternion.copy(this.node.transform.getWorldRotation())
   }
 
   public set mode(mode: GizmoMode) {
@@ -128,10 +155,8 @@ export class EditorCamera {
   // Scene roots have identity transforms, so the proxy's world transform is
   // the node's local one
   private writeBack(): void {
-    if (!this.node) return
-    this.node.transform.position = this.proxy.position.clone()
-    this.node.transform.rotation = this.proxy.quaternion.clone()
-    if (this.node instanceof Collider) this.node.needsUpdate()
+    if (!this.target) return
+    this.target.apply(this.proxy.position, this.proxy.quaternion)
     this.onNodeChanged?.()
   }
 
