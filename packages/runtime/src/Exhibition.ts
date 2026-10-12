@@ -33,6 +33,11 @@ export class Exhibition {
     return new Exhibition(manifest, managers)
   }
 
+  /** Resolves once the scene is built; assets may still be streaming. */
+  public get ready(): Promise<void> {
+    return this.managers.scene.ready
+  }
+
   public get isDisposed(): boolean {
     return this.managers.isDisposed
   }

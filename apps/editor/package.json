@@ -1,0 +1,17 @@
+{
+  "name": "@vitrine/editor",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@vitrine/catalyst": "*",
+    "@vitrine/runtime": "*",
+    "three": "^0.183.2"
+  }
+}

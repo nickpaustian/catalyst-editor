@@ -13,6 +13,10 @@ export default class StateManager extends BaseManager {
   private _currentRayIntersection: Collider | null = null
   private _movingNode: Node3D | null = null
   public isMuted: boolean = false
+  /** Leaving pointer lock opens the pause menu for visitors; tooling turns this off. */
+  public pauseOnPointerUnlock: boolean = true
+  /** Clicks for which this returns false do not grab the pointer (e.g. on tool panels). */
+  public lockPointerFilter: ((target: EventTarget | null) => boolean) | null = null
 
   public set currentRayIntersection(collider: Collider | null) {
     if (collider !== this._currentRayIntersection) {

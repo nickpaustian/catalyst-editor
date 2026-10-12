@@ -13,7 +13,7 @@ interface FirstPersonControllerConfig {
   jumpForce?: number
   cameraFOV?: number
   visualise?: boolean
-  canLockPointer?: () => boolean
+  canLockPointer?: (event: MouseEvent) => boolean
 }
 
 /**
@@ -38,7 +38,7 @@ export class FirstPersonController extends Node3D {
     "jump",
     "sprint",
   ]
-  private canLockPointer: () => boolean
+  private canLockPointer: (event: MouseEvent) => boolean
 
   private pointerLockControls: PointerLockControls | null = null
 
@@ -264,8 +264,8 @@ export class FirstPersonController extends Node3D {
       document.body
     )
 
-    const onClick = () => {
-      if (!this.canLockPointer()) return
+    const onClick = (event: MouseEvent) => {
+      if (!this.canLockPointer(event)) return
       if (this.active) this.enablePointerLock()
     }
     const onPointerLockChange = () => {

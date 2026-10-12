@@ -12,7 +12,9 @@
     "build": "npm run build --workspace @vitrine/player",
     "preview": "npm run preview --workspace @vitrine/player",
     "typecheck": "npm run typecheck --workspace @vitrine/player",
-    "build:wasm": "npm run build:wasm --workspace @vitrine/stelligra"
+    "build:wasm": "npm run build:wasm --workspace @vitrine/stelligra",
+    "dev:editor": "npm run dev --workspace @vitrine/editor",
+    "build:editor": "npm run build --workspace @vitrine/editor"
   },
   "devDependencies": {
     "@types/node": "^24.6.2",

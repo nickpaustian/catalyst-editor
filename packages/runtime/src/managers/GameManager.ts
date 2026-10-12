@@ -94,6 +94,7 @@ export default class GameManager extends BaseManager {
       (data: { enabled: boolean }) => {
         if (!data?.enabled) {
           nextTick(() => {
+            if (!this.managers.state.pauseOnPointerUnlock) return
             if (this.managers.state.isGuidedCamera) return
             if (Modal._.isOpen) return
             Catalyst._.signals.game.onPause.emit()

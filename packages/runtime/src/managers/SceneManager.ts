@@ -56,6 +56,11 @@ export default class SceneManager extends BaseManager {
   private rail: Node3D | null = null
   private disposed: boolean = false
   private cleanups: (() => void)[] = []
+  private resolveReady!: () => void
+  /** Resolves once the scene trees, cameras and controller exist (before assets finish). */
+  public readonly ready: Promise<void> = new Promise((resolve) => {
+    this.resolveReady = resolve
+  })
 
   private vgs?: VolumetricGaussianSplat
   private vgsReady: boolean = false
@@ -148,6 +153,7 @@ export default class SceneManager extends BaseManager {
       if (this.manifest.camera.initial === "guided") this.toggleCamera()
       this.fixedCamera?.snapToTarget()
       this.footerReadEnd = this.managers.ui.calculateFooterEnd()
+      this.resolveReady()
     })
   }
 
@@ -155,6 +161,7 @@ export default class SceneManager extends BaseManager {
     if (this.disposed) return
     this.disposed = true
     this.vgsReady = false
+    this.resolveReady()
 
     if (this._isRecording) {
       this._isRecording = false
@@ -185,6 +192,26 @@ export default class SceneManager extends BaseManager {
     this.environment = null
     this._path = null
     this._player = null
+  }
+
+  /** The node trees parsed from the manifest's scene files, for tooling. */
+  public get sceneRoots(): Record<string, Node3D | null> {
+    return {
+      colliders: this.environment,
+      focalPoints: this.focalPoints ?? null,
+      focalPointTriggers: this.focalPointTriggers ?? null,
+      pointsOfInterest: this.pointsOfInterest,
+    }
+  }
+
+  /** Turn the debug visualisers on or off for every node in the scene trees. */
+  public visualiseScene(enabled: boolean): void {
+    Object.values(this.sceneRoots).forEach((root) => {
+      root?.walk().forEach((node) => {
+        if (node instanceof Node3D && node !== root) node.visualised = enabled
+      })
+    })
+    if (this.vgs) this.vgs.visualised = enabled
   }
 
   public get volumetricSplat(): VolumetricGaussianSplat | undefined {
@@ -279,8 +306,10 @@ export default class SceneManager extends BaseManager {
   private setupFirstPersonController(): FirstPersonController {
     const controller = new FirstPersonController({
       visualise: false,
-      canLockPointer: () =>
-        !this.managers.state.isPaused && !Modal._.isOpen,
+      canLockPointer: (event) =>
+        !this.managers.state.isPaused &&
+        !Modal._.isOpen &&
+        (this.managers.state.lockPointerFilter?.(event.target) ?? true),
     })
 
     const start = this.manifest.camera.firstPerson?.start

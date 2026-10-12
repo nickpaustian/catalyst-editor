@@ -101,6 +101,11 @@ export class Node {
     return Array.from(this.children.values())
   }
 
+  /** This node and every descendant, depth first. */
+  public walk(): Node[] {
+    return [this, ...this.getChildren().flatMap((child) => child.walk())]
+  }
+
   public getChildrenOfType<T extends Node>(
     type: new (...args: any[]) => T
   ): T[] {
