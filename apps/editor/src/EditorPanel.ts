@@ -2,6 +2,7 @@ import * as THREE from "three"
 import { Collider, Node3D } from "@vitrine/catalyst"
 import { assets, type Exhibition } from "@vitrine/runtime"
 import type { JsonAsset } from "@vitrine/assets"
+import { EditorCamera, type GizmoMode } from "./EditorCamera"
 
 interface CatalogueEntry {
   id: string
@@ -52,6 +53,8 @@ export class EditorPanel {
   private selectionLabel: HTMLElement
   private visualised = false
   private lastMoveNode: Node3D | null = null
+  private camera: EditorCamera | null = null
+  private viewLabel: HTMLElement
 
   private exhibition: Exhibition
 
@@ -81,16 +84,21 @@ export class EditorPanel {
       el("div", { className: "row" }, [select]),
       el("h2", { textContent: "View" }),
       el("div", {}, [
+        this.button("Orbit", () => this.setView("orbit")),
+        this.button("First person", () => this.setView("firstPerson")),
+        this.button("Guided", () => this.setView("guided")),
+      ]),
+      (this.viewLabel = el("div", { className: "row hint", textContent: "" })),
+      el("div", {}, [
         this.button("Visualisers", () => this.toggleVisualisers()),
-        this.button("Guided / first person", () =>
-          exhibition.managers.scene.toggleCamera()
-        ),
         this.button("Move mode (o)", () => this.toggleMoveMode()),
+        this.button("Translate", () => this.setGizmo("translate")),
+        this.button("Rotate", () => this.setGizmo("rotate")),
       ]),
       el("p", {
         className: "hint",
         textContent:
-          "First person: WASD, click to look. Move mode: look at a node and press F to pick it up, F again to drop.",
+          "Orbit: drag to orbit, right-drag to pan, wheel to zoom; drag the gizmo to move the selected node. First person: WASD, click to look. Move mode: look at a node and press F to pick it up, F again to drop.",
       })
     )
 
@@ -101,7 +109,11 @@ export class EditorPanel {
     })
 
     this.selectionLabel = el("div", { className: "row hint", textContent: "Nothing selected" })
-    this.root.append(el("h2", { textContent: "Selected" }), this.selectionLabel)
+    this.root.append(
+      el("h2", { textContent: "Selected" }),
+      this.selectionLabel,
+      el("div", {}, [this.button("Focus", () => this.focusSelected())])
+    )
     this.root.append(this.transformFields())
 
     this.root.append(
@@ -125,6 +137,8 @@ export class EditorPanel {
     void exhibition.ready.then(() => {
       this.refreshLists()
       this.toggleVisualisers()
+      this.camera = new EditorCamera()
+      this.setView("orbit")
     })
     setInterval(() => this.pollMoveNode(), 250)
   }
@@ -142,6 +156,37 @@ export class EditorPanel {
   private toggleVisualisers(): void {
     this.visualised = !this.visualised
     this.scene.visualiseScene(this.visualised)
+  }
+
+  private setView(view: "orbit" | "firstPerson" | "guided"): void {
+    const state = this.exhibition.managers.state
+    const controller = this.scene.controller
+    if (view === "orbit") {
+      if (state.isGuidedCamera) this.scene.toggleCamera()
+      controller?.disablePointerLock()
+      if (controller) controller.active = false
+      this.camera?.activate()
+    } else {
+      this.camera?.deactivate()
+      if (controller) controller.active = true
+      const wantGuided = view === "guided"
+      if (state.isGuidedCamera !== wantGuided) this.scene.toggleCamera()
+    }
+    this.viewLabel.textContent = `View: ${view}`
+    if (this.selected) this.attachGizmo(this.selected)
+  }
+
+  private setGizmo(mode: GizmoMode): void {
+    if (this.camera) this.camera.mode = mode
+  }
+
+  private focusSelected(): void {
+    if (this.selected && this.camera?.isActive) this.camera.focus(this.selected)
+  }
+
+  private attachGizmo(node: Node3D): void {
+    if (!this.camera?.isActive) return
+    this.camera.attach(node, () => this.readTransform())
   }
 
   private toggleMoveMode(): void {
@@ -175,6 +220,8 @@ export class EditorPanel {
       : "Nothing selected"
     this.refreshLists()
     this.readTransform()
+    if (node) this.attachGizmo(node)
+    else this.camera?.detach()
   }
 
   private transformFields(): HTMLElement {
@@ -226,6 +273,7 @@ export class EditorPanel {
     )
     node.transform.rotation = new THREE.Quaternion().setFromEuler(euler)
     if (node instanceof Collider) node.needsUpdate()
+    this.camera?.syncFromNode()
   }
 
   /** Follow the move mode: picking a node up selects it, dropping it refreshes the fields. */
@@ -240,6 +288,7 @@ export class EditorPanel {
       this.select(moving, key ?? null)
     } else {
       this.readTransform()
+      this.camera?.syncFromNode()
     }
   }
 
