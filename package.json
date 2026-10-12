@@ -8,13 +8,13 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace @vitrine/player",
-    "build": "npm run build --workspace @vitrine/player",
-    "preview": "npm run preview --workspace @vitrine/player",
-    "typecheck": "npm run typecheck --workspace @vitrine/player",
-    "build:wasm": "npm run build:wasm --workspace @vitrine/stelligra",
-    "dev:editor": "npm run dev --workspace @vitrine/editor",
-    "build:editor": "npm run build --workspace @vitrine/editor"
+    "dev": "cd apps/player && vite --host",
+    "dev:editor": "cd apps/editor && vite --host",
+    "build": "cd apps/player && tsc && vite build",
+    "build:editor": "cd apps/editor && tsc && vite build",
+    "preview": "cd apps/player && vite preview",
+    "typecheck": "cd apps/player && tsc && cd ../editor && tsc",
+    "build:wasm": "cd packages/stelligra/stelligra-wasm && wasm-pack build --target web --release"
   },
   "devDependencies": {
     "@types/node": "^24.6.2",

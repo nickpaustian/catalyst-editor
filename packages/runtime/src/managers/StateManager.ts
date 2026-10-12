@@ -15,6 +15,8 @@ export default class StateManager extends BaseManager {
   public isMuted: boolean = false
   /** Leaving pointer lock opens the pause menu for visitors; tooling turns this off. */
   public pauseOnPointerUnlock: boolean = true
+  /** Grab the pointer as soon as first person is activated (visitors); tooling turns this off. */
+  public autoPointerLock: boolean = true
   /** Clicks for which this returns false do not grab the pointer (e.g. on tool panels). */
   public lockPointerFilter: ((target: EventTarget | null) => boolean) | null = null
 

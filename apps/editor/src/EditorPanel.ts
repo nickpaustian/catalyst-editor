@@ -3,6 +3,7 @@ import { Collider, Node3D } from "@vitrine/catalyst"
 import { assets, type Exhibition } from "@vitrine/runtime"
 import type { JsonAsset } from "@vitrine/assets"
 import { EditorCamera, type GizmoMode } from "./EditorCamera"
+import { EditorInput } from "./EditorInput"
 
 interface CatalogueEntry {
   id: string
@@ -54,6 +55,7 @@ export class EditorPanel {
   private visualised = false
   private lastMoveNode: Node3D | null = null
   private camera: EditorCamera | null = null
+  private input = new EditorInput({ focusSelected: () => this.focusSelected() })
   private viewLabel: HTMLElement
 
   private exhibition: Exhibition
@@ -98,7 +100,7 @@ export class EditorPanel {
       el("p", {
         className: "hint",
         textContent:
-          "Orbit: drag to orbit, right-drag to pan, wheel to zoom; drag the gizmo to move the selected node. First person: WASD, click to look. Move mode: look at a node and press F to pick it up, F again to drop.",
+          "Orbit: drag to orbit, right-drag to pan, wheel to zoom; F focuses the selected node; drag the gizmo to move it. First person: WASD, click to look. Move mode: look at a node and press F to pick it up, F again to drop.",
       })
     )
 
@@ -132,6 +134,7 @@ export class EditorPanel {
     document.body.append(this.root)
     const state = exhibition.managers.state
     state.pauseOnPointerUnlock = false
+    state.autoPointerLock = false
     state.lockPointerFilter = (target) =>
       !(target instanceof Node && this.root.contains(target))
     void exhibition.ready.then(() => {
@@ -166,7 +169,9 @@ export class EditorPanel {
       controller?.disablePointerLock()
       if (controller) controller.active = false
       this.camera?.activate()
+      this.input.activate()
     } else {
+      this.input.deactivate()
       this.camera?.deactivate()
       if (controller) controller.active = true
       const wantGuided = view === "guided"

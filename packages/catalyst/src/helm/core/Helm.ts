@@ -210,7 +210,12 @@ export class Helm {
    */
   private startInputLoop(): void {
     const update = () => {
-      this.processInput()
+      // One throwing action callback must not kill input for the rest of the page
+      try {
+        this.processInput()
+      } catch (error) {
+        console.error("Helm input frame failed:", error)
+      }
       this._inputFrameId = requestAnimationFrame(update)
     }
     update()

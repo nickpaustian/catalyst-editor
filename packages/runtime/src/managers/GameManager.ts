@@ -79,7 +79,7 @@ export default class GameManager extends BaseManager {
 
     Catalyst._.signals.game.onFPCameraActivated.subscribe(() => {
       this.managers.ui.disableGuidedMode()
-      if (!this.managers.state.isPaused)
+      if (!this.managers.state.isPaused && this.managers.state.autoPointerLock)
         this.managers.scene.controller?.enablePointerLock()
       this.managers.state.isGuidedCamera = false
     })

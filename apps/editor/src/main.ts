@@ -1,6 +1,7 @@
 import "@vitrine/runtime/styles.scss"
 import "./editor.scss"
 import { Player, assets } from "@vitrine/runtime"
+import { Catalyst } from "@vitrine/catalyst"
 import { EditorPanel } from "./EditorPanel"
 
 interface CatalogueEntry {
@@ -16,6 +17,7 @@ declare global {
   interface Window {
     player?: Player
     assets?: typeof assets
+    catalyst?: Catalyst
   }
 }
 
@@ -31,6 +33,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const player = new Player()
   window.player = player
   window.assets = assets
+  window.catalyst = Catalyst._
 
   const exhibition = await player.load(new URL(entry.manifest, CATALOGUE_URL).href)
   new EditorPanel(exhibition, catalogue.exhibitions, (id) => {

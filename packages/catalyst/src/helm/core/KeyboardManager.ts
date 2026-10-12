@@ -1,5 +1,13 @@
 import { normaliseKey } from "../utils"
 
+/** Keys typed into a form field or editable element are not game input. */
+const isTypingTarget = (target: EventTarget | null): boolean =>
+  target instanceof HTMLElement &&
+  (target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    target.isContentEditable)
+
 /**
  * KeyboardManager - Tracks keyboard input state.
  *
@@ -64,6 +72,7 @@ export class KeyboardManager {
    * Handle keydown event.
    */
   private handleKeyDown(e: KeyboardEvent): void {
+    if (isTypingTarget(e.target)) return
     const key = normaliseKey(e.key)
     if (!this.keyState.get(key)) {
       this.keyState.set(key, true)
