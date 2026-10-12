@@ -5,6 +5,8 @@ export const ResourceType = {
   IMAGE: "image",
   SPLAT: "splat",
   HDRI: "hdri",
+  JSON: "json",
+  TEXT: "text",
 } as const
 
 export type ResourceType = (typeof ResourceType)[keyof typeof ResourceType]

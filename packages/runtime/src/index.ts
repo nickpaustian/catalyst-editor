@@ -1,3 +1,5 @@
 export { Exhibition, Player, runExhibition } from "./Exhibition"
 export * from "./manifest"
 export { default as ManagerRegistry } from "./managers/ManagerRegistry"
+export { assets } from "./assets/registry"
+export { registerExhibition, rootKey, type ExhibitionAssets } from "./assets/registers"

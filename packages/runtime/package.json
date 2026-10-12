@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@sparkjsdev/spark": "^0.1.10",
+    "@vitrine/assets": "*",
     "@vitrine/catalyst": "*",
     "@vitrine/debug": "*",
     "@vitrine/spektra": "*",

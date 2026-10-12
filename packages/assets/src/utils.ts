@@ -1,4 +1,4 @@
-import PreferenceManager from "../../PreferenceManager"
+import { blobUrlStore } from "./cache"
 
 type BufferInput =
   | ArrayBuffer
@@ -11,7 +11,6 @@ export function decodeToDataURL(
   storeKey?: string,
   mimeType: string = "image/jpeg"
 ): string {
-  //TODO fix this struct so we aren't targeting buffer.buffer.bloburl
   if (
     buffer &&
     typeof buffer === "object" &&
@@ -36,24 +35,33 @@ export function decodeToDataURL(
 
   const blob = new Blob([buffer], { type: mimeType })
   const blobUrl = URL.createObjectURL(blob)
-  if (storeKey) storeUrlBlob(storeKey, blobUrl)
+  if (storeKey) blobUrlStore.set(storeKey, blobUrl)
   return blobUrl
 }
 
-export const storeUrlBlob: (key: string, blobUrl: string) => void = (
-  key,
-  blobUrl
-) => {
-  const preferences: PreferenceManager = PreferenceManager.getInstance()
-  cleanupBlobUrl(key)
-  preferences.setPreference(`blob-store__${key}`, blobUrl)
+export const isString = (value: unknown): value is string =>
+  typeof value === "string" || value instanceof String
+
+export const getObjPathByValue = (
+  obj: any,
+  value: string,
+  path: string[] = []
+): string[] | undefined => {
+  for (const [key, val] of Object.entries(obj)) {
+    const currentPath = [...path, key]
+
+    if (val === value) return currentPath
+
+    if (Array.isArray(val)) {
+      if (val.includes(value)) return currentPath
+    } else if (typeof val === "object" && val !== null) {
+      const found = getObjPathByValue(val, value, currentPath)
+      if (found) return found
+    }
+  }
+
+  return undefined
 }
 
-export const cleanupBlobUrl = (key: string) => {
-  const preferences = PreferenceManager.getInstance()
-  const blobUrl = preferences.getPreference(`blob-store__${key}`)
-  if (blobUrl && typeof blobUrl === "string") {
-    URL.revokeObjectURL(blobUrl)
-    preferences.removePreference(`blob-store__${key}`)
-  }
-}
+export const decodeText = (buffer: ArrayBuffer): string =>
+  new TextDecoder().decode(buffer)

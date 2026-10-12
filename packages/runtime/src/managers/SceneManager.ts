@@ -11,7 +11,6 @@ import {
   isNode3D,
   Collider,
   VolumetricGaussianSplat,
-  loadJsonNodeFile,
   parseJsonNodes,
 } from "@vitrine/catalyst"
 import type { InputForceData } from "@vitrine/catalyst/helm/mapping/InputMapper"
@@ -22,13 +21,8 @@ import { CameraPathRecorder } from "../camera/CameraPathRecorder"
 import { CameraPathPlayer } from "../camera/CameraPathPlayer"
 import { Modal } from "./Modal"
 import BaseManager from "./BaseManager"
-import { SplatAsset } from "./AssetManager"
-import AudioAsset from "./AssetManager/assets/AudioAsset"
-import {
-  buildRegisters,
-  partitionAssetKey,
-  SCENE_ASSET_KEY,
-} from "../assets/registers"
+import type { JsonAsset } from "@vitrine/assets"
+import type { BakedCameraPath } from "../camera/CameraPathRecorder"
 import {
   isWithinAnyRange,
   resolveProgressPoint,
@@ -223,15 +217,15 @@ export default class SceneManager extends BaseManager {
     if (this.vgs) this.vgs.hideAll()
   }
 
-  private async loadSceneNodes(url: string | undefined, name: string) {
-    if (!url) return new Node3D(name)
-    const json = await loadJsonNodeFile(url)
-    return parseJsonNodes(json) as Node3D
+  private async loadSceneNodes(asset: JsonAsset | undefined, name: string) {
+    if (!asset) return new Node3D(name)
+    await asset.ensure()
+    return parseJsonNodes(asset.json) as Node3D
   }
 
   private async setupPointsOfInterest(): Promise<Node3D> {
     const parsed = await this.loadSceneNodes(
-      this.manifest.scene.pointsOfInterest,
+      this.managers.exhibitionAssets.scene.pointsOfInterest,
       "pointsOfInterest"
     )
     const pois = parsed.getChildrenOfType(PointOfInterest) as PointOfInterest[]
@@ -257,7 +251,7 @@ export default class SceneManager extends BaseManager {
     focalPoints: FocalPoint[]
   ): Promise<Node3D> {
     const parsed = await this.loadSceneNodes(
-      this.manifest.scene.focalPointTriggers,
+      this.managers.exhibitionAssets.scene.focalPointTriggers,
       "focalPointTriggers"
     )
 
@@ -550,12 +544,15 @@ export default class SceneManager extends BaseManager {
   }
 
   private async setupFocalPoints(): Promise<Node3D> {
-    return this.loadSceneNodes(this.manifest.scene.focalPoints, "focalPoints")
+    return this.loadSceneNodes(
+      this.managers.exhibitionAssets.scene.focalPoints,
+      "focalPoints"
+    )
   }
 
   private async setupEnvironmentCollisions(): Promise<Node3D> {
     return this.loadSceneNodes(
-      this.manifest.scene.colliders,
+      this.managers.exhibitionAssets.scene.colliders,
       "environmentColliders"
     )
   }
@@ -774,85 +771,69 @@ export default class SceneManager extends BaseManager {
   }
 
   private async loadBakedPath(): Promise<void> {
-    const url = this.guided?.bakedPath
-    if (!url) return
-    const response = await fetch(url)
-    const data = await response.json()
+    const asset = this.managers.exhibitionAssets.bakedPath as
+      | JsonAsset<BakedCameraPath>
+      | undefined
+    if (!asset) return
+    await asset.ensure()
     if (this.disposed) return
     this._player = new CameraPathPlayer()
-    this._player.load(data)
+    this._player.load(asset.json)
     this._useBakedPath = true
     if (this.fixedCamera) this.fixedCamera.paused = true
   }
 
   public async loadAssets(): Promise<void> {
     const manifest = this.manifest
-    const registers = buildRegisters(manifest)
+    const exhibition = this.managers.exhibitionAssets
 
-    this.managers.assets.resources.register(registers.resources)
-    this.managers.assets.register(registers.assets)
-
-    const sceneGroup = this.managers.assets.get(SCENE_ASSET_KEY)
-
-    if (!sceneGroup) return
-
-    sceneGroup.load({
+    await exhibition.core.ensure({
       onProgress: (progress) => {
         this.managers.ui.updateLoadingProgress(progress.percentage)
       },
-      onComplete: async () => {
-        if (this.disposed) return
-        this.managers.ui.completeLoading()
-
-        sceneGroup.childrenGrouped.audio.forEach((child: any) => {
-          if (child instanceof AudioAsset) {
-            this.managers.audio.loadTrack(child.key, child.buffer)
-          }
-        })
-
-        const renderer = Catalyst._.renderer
-        if (!renderer || !Catalyst._.scene) return
-
-        const gpuCapacity = await probeGPUCapacity(renderer)
-        if (this.disposed) return
-        const transform = manifest.splat.transform
-
-        const vgs = new VolumetricGaussianSplat({
-          name: manifest.id,
-          url: manifest.splat.source,
-          gpuCapacity: gpuCapacity,
-          position: transform?.position && toVector3(transform.position),
-          rotation: transform?.rotation && toQuaternion(transform.rotation),
-          scale: transform?.scale,
-          ...manifest.splat.streaming,
-        })
-        this.vgs = vgs
-
-        const partitions = manifest.splat.partitions.map(
-          (_, index) =>
-            this.managers.assets.get(
-              partitionAssetKey(manifest, index)
-            ) as SplatAsset
-        )
-
-        // Partitions go in one after another, in manifest order, the way
-        // Beruk chained s0..s4; the scene is ready once the last is in
-        const loadNext = (index: number) => {
-          if (this.disposed) return
-          const partition = partitions[index]
-          if (!partition) {
-            this.vgsReady = true
-            return
-          }
-          vgs.loadPartition(partition.buffer, () => {
-            partition.releaseBuffers()
-            loadNext(index + 1)
-          })
-        }
-        loadNext(0)
-
-        await this.loadBakedPath()
-      },
     })
+    if (this.disposed) return
+
+    this.managers.ui.completeLoading()
+
+    exhibition.audio.forEach(({ asset, group, decode }, name) => {
+      this.managers.audio.loadTrack(name, asset, { group, decode })
+    })
+
+    const renderer = Catalyst._.renderer
+    if (!renderer || !Catalyst._.scene) return
+
+    const gpuCapacity = await probeGPUCapacity(renderer)
+    if (this.disposed) return
+    const transform = manifest.splat.transform
+
+    const vgs = new VolumetricGaussianSplat({
+      name: manifest.id,
+      url: manifest.splat.source,
+      gpuCapacity: gpuCapacity,
+      position: transform?.position && toVector3(transform.position),
+      rotation: transform?.rotation && toQuaternion(transform.rotation),
+      scale: transform?.scale,
+      ...manifest.splat.streaming,
+    })
+    this.vgs = vgs
+
+    // Partitions go in one after another, in manifest order, the way
+    // Beruk chained s0..s4; the scene is ready once the last is in
+    const loadNext = (index: number) => {
+      if (this.disposed) return
+      const partition = exhibition.partitions[index]
+      if (!partition) {
+        this.vgsReady = true
+        return
+      }
+      vgs.loadPartition(partition.buffer, () => {
+        partition.release()
+        loadNext(index + 1)
+      })
+    }
+    loadNext(0)
+
+    await this.loadBakedPath()
   }
 }

@@ -129,9 +129,14 @@ export interface HtmlContent {
 
 export type ContentEntry = HtmlContent
 
+/** A URL, or a URL with playback hints. `decode` overrides the size rule (small clips stay decoded). */
+export type AudioSource =
+  | string
+  | { url: string; group?: string; decode?: "keep" | "on-demand" }
+
 export interface AssetSources {
   images?: Record<string, string>
-  audio?: Record<string, string>
+  audio?: Record<string, AudioSource>
 }
 
 export interface LogoEntry {

@@ -1,4 +1,4 @@
-import { debug } from "../../utils"
+import { debug } from "@vitrine/debug"
 import { type ResourceLoadConfig } from "./assets/Asset"
 
 export class ResourceManager {

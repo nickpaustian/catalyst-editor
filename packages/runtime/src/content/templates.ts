@@ -1,4 +1,5 @@
-import type { LoadedManifest } from "../manifest"
+import type { TextAsset } from "@vitrine/assets"
+import type { ExhibitionAssets } from "../assets/registers"
 import ManagerRegistry from "../managers/ManagerRegistry"
 import { Template } from "../managers/Template"
 import { Catalyst, nextTick } from "@vitrine/catalyst"
@@ -164,9 +165,9 @@ export interface ExhibitionContent {
   byId: Record<string, Template>
 }
 
-const pauseTemplate = (path: string): Template =>
+const pauseTemplate = (asset: TextAsset): Template =>
   new Template({
-    path,
+    asset,
     onLoad: () => {
       ManagerRegistry._.state.isPaused = true
 
@@ -198,9 +199,9 @@ const pauseTemplate = (path: string): Template =>
     },
   })
 
-const contentTemplate = (path: string): Template =>
+const contentTemplate = (asset: TextAsset): Template =>
   new Template({
-    path,
+    asset,
     onLoad: () => {
       initModal()
     },
@@ -210,18 +211,10 @@ const contentTemplate = (path: string): Template =>
   })
 
 /** One Template per manifest content entry, plus the pause menu. */
-export const buildContent = (manifest: LoadedManifest): ExhibitionContent => {
-  const menu = manifest.presentation?.menu
-  if (!menu) {
-    throw new Error("Manifest has no presentation.menu for the pause screen")
-  }
-
+export const buildContent = (exhibition: ExhibitionAssets): ExhibitionContent => {
   const byId = Object.fromEntries(
-    Object.entries(manifest.content).map(([id, entry]) => [
-      id,
-      contentTemplate(entry.src),
-    ])
+    Array.from(exhibition.contentById, ([id, asset]) => [id, contentTemplate(asset)])
   )
 
-  return { pause: pauseTemplate(menu), byId }
+  return { pause: pauseTemplate(exhibition.menu), byId }
 }

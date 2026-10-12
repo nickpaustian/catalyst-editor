@@ -1,5 +1,5 @@
 import { Asset, type AssetOptions } from "./Asset"
-import { ResourceType } from "../types"
+import { ResourceType } from "../ResourceType"
 import { decodeToDataURL } from "../utils"
 
 export interface AudioAssetOptions extends AssetOptions {}

@@ -1,5 +1,5 @@
 import "@vitrine/runtime/styles.scss"
-import { Player } from "@vitrine/runtime"
+import { Player, assets } from "@vitrine/runtime"
 
 interface CatalogueEntry {
   id: string
@@ -17,6 +17,7 @@ const PARAM = "exhibition"
 declare global {
   interface Window {
     player?: Player
+    assets?: typeof assets
     openExhibition?: (id: string) => Promise<void>
   }
 }
@@ -57,7 +58,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   window.addEventListener("popstate", () => void open(requestedId()))
 
-  if (__DEBUG__) window.player = player
+  if (__DEBUG__) {
+    window.player = player
+    window.assets = assets
+  }
 
   await open(requestedId())
 })

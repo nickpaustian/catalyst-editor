@@ -16,12 +16,11 @@
  * - Prevents multiple HEAD requests and ensures stable progress reporting.
  */
 
-import { debug } from "../../utils"
+import { debug } from "@vitrine/debug"
 import { type ResourceLoadConfig } from "./assets/Asset"
-import PreferenceManager from "../PreferenceManager"
-import DBManager from "../DBManager"
-import { namespace } from "../../constants"
-import type { ResourceType } from "./types"
+import DBManager from "./DBManager"
+import { DEFAULT_CACHE, blobUrlStore, type AssetCacheConfig } from "./cache"
+import { ResourceType } from "./ResourceType"
 
 export interface LoadGroupConfig {
   name: string
@@ -36,6 +35,7 @@ export interface LoadGroupConfig {
   priority?: number
   manualComplete?: boolean
   debug?: boolean
+  cache?: AssetCacheConfig
 }
 
 export interface LoadProgress {
@@ -59,16 +59,8 @@ export interface LoadError {
   attempts: number
 }
 
-export const AssetType = {
-  MODEL: "model",
-  TEXTURE: "texture",
-  AUDIO: "audio",
-  IMAGE: "image",
-  SPLAT: "splat",
-  HDRI: "hdri",
-} as const
-
-export type AssetType = (typeof AssetType)[keyof typeof AssetType]
+export const AssetType = ResourceType
+export type AssetType = ResourceType
 
 export const LoadStatus = {
   PENDING: "pending",
@@ -93,6 +85,20 @@ export interface LoadedAsset {
 }
 
 export default class LoadGroup {
+  private static dbs = new Map<string, DBManager>()
+
+  /** One open connection per database and store, shared by every group. */
+  private static dbFor(db: { name: string; store: string }): DBManager {
+    const id = `${db.name}/${db.store}`
+    let manager = LoadGroup.dbs.get(id)
+    if (!manager) {
+      manager = new DBManager(db.name, db.store)
+      void manager.init()
+      LoadGroup.dbs.set(id, manager)
+    }
+    return manager
+  }
+
   // CORE PROPERTIES
   private readonly name: string
   private readonly maxRetries: number
@@ -104,8 +110,8 @@ export default class LoadGroup {
   private readonly manualComplete: boolean
   private parentGroup: LoadGroup | null = null
   private debug: boolean = false
-  private preferenceManager: PreferenceManager
-  private useIndexDb: boolean | null = false
+  private readonly cache: Required<AssetCacheConfig>
+  private useIndexDb: boolean = false
   private dbManager!: DBManager
 
   // ASSET TRACKING
@@ -163,13 +169,11 @@ export default class LoadGroup {
     this.onAssetLoaded = config.onAssetLoaded
     this.onError = config.onError
 
-    this.preferenceManager = PreferenceManager.getInstance()
+    this.cache = { ...DEFAULT_CACHE, ...config.cache }
+    this.useIndexDb = this.cache.db !== false
 
-    this.useIndexDb = this.preferenceManager.getPreference("use-indexDb", true)
-
-    if (this.useIndexDb) {
-      this.dbManager = DBManager.getInstance(`${namespace}-db`, `asset-store`)
-      this.dbManager.init()
+    if (this.cache.db) {
+      this.dbManager = LoadGroup.dbFor(this.cache.db)
     }
 
     // Initialise asset collections
@@ -192,6 +196,7 @@ export default class LoadGroup {
       this.children = config.children.map((childConfig) => {
         const childGroup = new LoadGroup({
           ...childConfig,
+          cache: childConfig?.cache ?? this.cache,
           debug: childConfig?.debug ?? this.debug,
         })
         childGroup.parentGroup = this
@@ -453,10 +458,7 @@ export default class LoadGroup {
 
   private getCachedImageBlobUrl: (key: string) => Promise<string | null> =
     async (key) => {
-      const blobUrl = this.preferenceManager.getPreference(
-        this.getBlobCacheKey(key),
-        null
-      )
+      const blobUrl = blobUrlStore.get(this.getBlobCacheKey(key))
 
       if (!blobUrl || typeof blobUrl !== "string") {
         return null
@@ -465,7 +467,7 @@ export default class LoadGroup {
       const isValid = await this.isImageBlobUrlValid(blobUrl)
 
       if (!isValid) {
-        this.preferenceManager.removePreference(this.getBlobCacheKey(key))
+        blobUrlStore.remove(this.getBlobCacheKey(key))
         return null
       }
 
@@ -538,6 +540,7 @@ export default class LoadGroup {
     item: AssetLoadItem
   ) => Promise<boolean> = async (key, item) => {
     try {
+      await this.dbManager.ready
       const buffer = (await this.dbManager.read(key)) as ArrayBuffer
 
       // Validate buffer exists and has data
@@ -592,7 +595,9 @@ export default class LoadGroup {
           this.completeAssetLoad(key, item, data, "remote")
 
           if (this.useIndexDb) {
-            this.dbManager.write(key, data).catch((error) => {
+            this.dbManager.ready
+              .then(() => this.dbManager.write(key, data))
+              .catch((error) => {
               debug(
                 `Failed to cache ${key} to IndexedDB: ${error}`,
                 "asset-cache"
@@ -683,6 +688,8 @@ export default class LoadGroup {
         case AssetType.TEXTURE:
         case AssetType.HDRI:
         case AssetType.IMAGE:
+        case AssetType.JSON:
+        case AssetType.TEXT:
           return data.buffer
 
         default:
@@ -999,6 +1006,8 @@ export default class LoadGroup {
             case AssetType.SPLAT:
             case AssetType.MODEL:
             case AssetType.AUDIO:
+            case AssetType.JSON:
+            case AssetType.TEXT:
               asset.data = null
               break
 

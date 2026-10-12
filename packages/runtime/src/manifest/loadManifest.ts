@@ -1,4 +1,6 @@
-import type { ExhibitionManifest, LoadedManifest } from "./types"
+import { JsonAsset, ResourceType } from "@vitrine/assets"
+import { assets } from "../assets/registry"
+import type { AudioSource, ExhibitionManifest, LoadedManifest } from "./types"
 
 const resolve = (base: string, path: string | undefined): string | undefined =>
   path === undefined ? undefined : new URL(path, base).href
@@ -10,6 +12,21 @@ const resolveRecord = (
   if (!record) return undefined
   return Object.fromEntries(
     Object.entries(record).map(([key, path]) => [key, resolve(base, path)!])
+  )
+}
+
+const resolveAudio = (
+  base: string,
+  record: Record<string, AudioSource> | undefined
+): Record<string, AudioSource> | undefined => {
+  if (!record) return undefined
+  return Object.fromEntries(
+    Object.entries(record).map(([key, source]) => [
+      key,
+      typeof source === "string"
+        ? resolve(base, source)!
+        : { ...source, url: resolve(base, source.url)! },
+    ])
   )
 }
 
@@ -50,7 +67,7 @@ export const resolveManifestUrls = (
     ),
     assets: manifest.assets && {
       images: resolveRecord(baseUrl, manifest.assets.images),
-      audio: resolveRecord(baseUrl, manifest.assets.audio),
+      audio: resolveAudio(baseUrl, manifest.assets.audio),
     },
     presentation: presentation && {
       ...presentation,
@@ -80,11 +97,14 @@ export const resolveManifestUrls = (
 
 export const loadManifest = async (url: string): Promise<LoadedManifest> => {
   const absolute = new URL(url, window.location.href).href
-  const response = await fetch(absolute)
-  if (!response.ok) {
-    throw new Error(`Failed to load manifest ${absolute} (${response.status})`)
+  if (!assets.resources.has(absolute)) {
+    assets.resources.register({ key: absolute, type: ResourceType.JSON, url: absolute })
   }
-  const manifest = (await response.json()) as ExhibitionManifest
+  const asset = assets.registerOrGet(
+    new JsonAsset<ExhibitionManifest>({ key: absolute, resources: [absolute] })
+  )
+  await asset.ensure()
+  const manifest = asset.json
   if (manifest.version !== 1) {
     throw new Error(`Unsupported manifest version ${manifest.version}`)
   }

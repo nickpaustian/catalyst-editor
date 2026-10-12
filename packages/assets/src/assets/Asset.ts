@@ -1,9 +1,9 @@
-import { debug } from "../../../utils"
-import type AssetManager from "../AssetManager"
+import { debug } from "@vitrine/debug"
+import type { AssetManager } from "../AssetManager"
 import LoadGroup from "../LoadGroup"
 import type { LoadGroupConfig, LoadedAsset, LoadProgress } from "../LoadGroup"
-import { ResourceType } from "../types"
-import { getObjPathByValue } from "../../../utils/debug/general"
+import { ResourceType } from "../ResourceType"
+import { getObjPathByValue } from "../utils"
 
 type NestedStringArray =
   | string
@@ -31,17 +31,33 @@ export interface LoadConfig {
   onProgress?: (progress: LoadProgress, group: LoadGroup) => void
 }
 
-export const AssetLoadStatus = {
+export interface ReleaseOptions {
+  /** Also release every descendant. */
+  deep?: boolean
+}
+
+export const AssetStatus = {
+  /** Registered, never fetched. */
   UNLOADED: "unloaded",
-  LOADED: "loaded",
+  LOADING: "loading",
+  /** Buffers are held and usable. */
+  READY: "ready",
+  /** Was ready; buffers dropped and can be fetched again with ensure(). */
+  RELEASED: "released",
+  ERROR: "error",
 } as const
 
-export type AssetLoadStatus =
-  (typeof AssetLoadStatus)[keyof typeof AssetLoadStatus]
+export type AssetStatus = (typeof AssetStatus)[keyof typeof AssetStatus]
 
+/**
+ * A stub that knows what it needs to fetch and how to prepare it. Register
+ * first, then `ensure()` whenever the asset is actually needed: it resolves
+ * at once when ready, joins a load in flight, and otherwise fetches from the
+ * cache or the network. `release()` drops the buffers but keeps the stub.
+ */
 export class Asset {
   private _key: string
-  private _status: AssetLoadStatus = AssetLoadStatus.UNLOADED
+  private _status: AssetStatus = AssetStatus.UNLOADED
   private _resources: (ResourceLoadConfig | string)[]
   private _childrenKeys: string[]
   private _children: Asset[] = []
@@ -50,6 +66,9 @@ export class Asset {
   private _manager: AssetManager | null = null
   private childrenStruct: NestedStringArray | null = null
   private structuredChildren: any
+  private _inFlight: Promise<void> | null = null
+  private _settleInFlight: (() => void) | null = null
+  private _failInFlight: ((error: Error) => void) | null = null
   public resourceBuffers: Map<string, ArrayBuffer> = new Map()
   protected readonly resourceLimit: number = 0
   protected readonly allowedResourceTypes: ResourceType[] = []
@@ -58,12 +77,27 @@ export class Asset {
     return this._key
   }
 
-  get status(): AssetLoadStatus {
+  get status(): AssetStatus {
     return this._status
   }
 
+  /** True when this asset's own resources are held (groups with no resources are trivially ready). */
+  get isReady(): boolean {
+    return this._resources.length === 0 || this._status === AssetStatus.READY
+  }
+
+  /** True when this asset and every descendant is ready. */
+  get isTreeReady(): boolean {
+    return this.isReady && this.children.every((child) => child.isTreeReady)
+  }
+
+  get isLoading(): boolean {
+    return this._inFlight !== null
+  }
+
+  /** @deprecated use isReady */
   get isLoaded(): boolean {
-    return this._status === AssetLoadStatus.LOADED
+    return this.isReady
   }
 
   get resources(): (ResourceLoadConfig | string)[] {
@@ -143,6 +177,11 @@ export class Asset {
     }))
   }
 
+  /** Every descendant, depth first, including this asset. */
+  public walk(): Asset[] {
+    return [this, ...this.children.flatMap((child) => child.walk())]
+  }
+
   constructor(opts: AssetOptions) {
     this._key = opts.key
     this._resources = opts.resources
@@ -181,41 +220,103 @@ export class Asset {
     this.customVerification = func
   }
 
-  // Load group
+  // Loading
 
+  private beginLoad(): void {
+    if (this._inFlight) return
+    this._status = AssetStatus.LOADING
+    this._inFlight = new Promise<void>((resolve, reject) => {
+      this._settleInFlight = resolve
+      this._failInFlight = reject
+    })
+    // A failure is surfaced through ensure(); nothing else awaits this promise
+    this._inFlight.catch(() => undefined)
+  }
+
+  private endLoad(error?: Error): void {
+    this._status = error ? AssetStatus.ERROR : AssetStatus.READY
+    const settle = this._settleInFlight
+    const fail = this._failInFlight
+    this._inFlight = null
+    this._settleInFlight = null
+    this._failInFlight = null
+    if (error) fail?.(error)
+    else settle?.()
+  }
+
+  /**
+   * Load group covering whatever in this subtree isn't ready yet. Returns
+   * null when nothing needs fetching.
+   */
   public generateLoadGroup(config?: LoadConfig): LoadGroupConfig | null {
     if (!this.manager) return null
-    let children: LoadGroupConfig[] = []
+
+    const children: LoadGroupConfig[] = []
     this.children.forEach((child) => {
-      const cLoadGroup = child?.generateLoadGroup()
-      if (!cLoadGroup) return
-      children.push(cLoadGroup)
+      const childGroup = child.generateLoadGroup()
+      if (childGroup) children.push(childGroup)
     })
-    const lg: LoadGroupConfig = {
+
+    const needsOwnResources = !this.isReady && !this._inFlight
+    if (!needsOwnResources && children.length === 0 && !this._inFlight) {
+      return null
+    }
+
+    if (needsOwnResources) this.beginLoad()
+
+    return {
       name: `${this._key}__load-group`,
-      assets: this.manager.parseResources(this._resources),
+      assets: needsOwnResources ? this.manager.parseResources(this._resources) : [],
       children,
+      cache: this.manager.cache,
       onProgress: config?.onProgress,
       onComplete: async (assets: LoadedAsset[], loadGroup: LoadGroup) => {
         assets.forEach((a) => {
           this.resourceBuffers.set(a.key, a.data)
           a.data = null
         })
+        if (needsOwnResources) this.endLoad()
         if (config?.onComplete) config.onComplete(assets, loadGroup)
         loadGroup.cleanup()
       },
+      onError: (errors) => {
+        if (needsOwnResources && errors.length > 0) {
+          this.endLoad(errors[0].error)
+        }
+      },
     }
-    return lg
   }
 
+  /** Fetch everything in this subtree that isn't held yet. Prefer ensure(). */
   public async load(config?: LoadConfig): Promise<void> {
     if (!this.manager) {
       debug("This asset doesn't have a registered manager.", "error")
+      return
     }
-    const lgConfig: LoadGroupConfig | null = this.generateLoadGroup(config)
-    if (!lgConfig) return
-    const lg: LoadGroup = new LoadGroup(lgConfig)
+    const lgConfig = this.generateLoadGroup(config)
+    if (!lgConfig) {
+      config?.onComplete?.([], undefined)
+      return
+    }
+    const lg = new LoadGroup(lgConfig)
     await lg.load()
+  }
+
+  /**
+   * Resolves with the asset once its subtree is ready: immediately if it is,
+   * by joining a load in flight, or by fetching (cache first, then network).
+   */
+  public async ensure(config?: LoadConfig): Promise<this> {
+    if (this.isTreeReady) return this
+    if (this._inFlight && this.children.every((child) => child.isTreeReady)) {
+      await this._inFlight
+      return this
+    }
+    await this.load(config)
+    if (!this.isTreeReady) {
+      throw new Error(`Asset ${this._key} did not become ready`)
+    }
+    return this
   }
 
   public process(): any {
@@ -224,12 +325,23 @@ export class Asset {
     )
   }
 
-  public releaseBuffers(): void {
+  /** Drop held buffers; the stub stays registered and ensure() can refetch. */
+  public release(options: ReleaseOptions = {}): void {
     this.resourceBuffers.clear()
+    this._object = null
+    if (this._status === AssetStatus.READY) {
+      this._status = AssetStatus.RELEASED
+    }
+    if (options.deep) this.children.forEach((child) => child.release(options))
+  }
+
+  /** @deprecated use release() */
+  public releaseBuffers(): void {
+    this.release()
   }
 
   public cleanup(): void {
-    this.releaseBuffers()
+    this.release()
   }
 
   // Resource Validation
@@ -241,7 +353,6 @@ export class Asset {
   }
 
   public validateResourceTypes(): boolean {
-    // Check if all resource types are allowed
     if (!this.allowedResourceTypes.length) return true
 
     if (!this?.manager) {

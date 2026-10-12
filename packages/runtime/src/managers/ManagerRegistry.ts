@@ -1,7 +1,9 @@
 import { debug } from "../utils"
 
 import BaseManager from "./BaseManager"
-import { AssetManager } from "./AssetManager"
+import { assets } from "../assets/registry"
+import { registerExhibition, type ExhibitionAssets } from "../assets/registers"
+import type { AssetManager } from "@vitrine/assets"
 import PreferenceManager from "./PreferenceManager"
 import SceneManager from "./SceneManager"
 import Telemetry from "@vitrine/telemetry"
@@ -27,6 +29,7 @@ export default class ManagerRegistry {
   private managers: BaseManager[] = []
 
   public readonly manifest: LoadedManifest
+  public readonly exhibitionAssets: ExhibitionAssets
   public readonly content: ExhibitionContent
 
   public assets: AssetManager
@@ -42,9 +45,10 @@ export default class ManagerRegistry {
     debug("Begin managers registration", "init")
 
     this.manifest = manifest
-    this.content = buildContent(manifest)
+    this.exhibitionAssets = registerExhibition(manifest)
+    this.content = buildContent(this.exhibitionAssets)
 
-    this.assets = new AssetManager()
+    this.assets = assets
     this.preferences = PreferenceManager.getInstance()
     this.scene = new SceneManager()
     this.state = new StateManager()
@@ -63,7 +67,7 @@ export default class ManagerRegistry {
       this.telemetry = telemetry
     }
 
-    this.managers = [this.assets, this.preferences, this.scene]
+    this.managers = [this.preferences, this.scene]
   }
 
   /** Creates the registry for an exhibition. The previous one must be disposed first. */
@@ -115,6 +119,7 @@ export default class ManagerRegistry {
     this.scene.dispose()
     this.ui.dispose()
     this.audio.dispose()
+    this.exhibitionAssets.root.release({ deep: true })
 
     if (ManagerRegistry.instance === this) ManagerRegistry.instance = null
     debug(`Managers disposed for ${this.manifest.id}`, "init")

@@ -1,12 +1,12 @@
-import { debug } from "../utils"
+import { debug } from "@vitrine/debug"
 
 export default class DBManager {
-  private static instance: DBManager
   private dbName: string = ""
   private storeName: string = ""
   private version: number = 1
   private db: IDBDatabase | null = null
   private initStarted: boolean = false
+  private initPromise: Promise<void> | null = null
 
   constructor(
     dbName: string = "database",
@@ -19,22 +19,11 @@ export default class DBManager {
     this.db = null
   }
 
-  public static getInstance(
-    dbName: string = "database",
-    storeName: string = "keyvalue",
-    version: number = 1
-  ): DBManager {
-    if (!DBManager.instance) {
-      DBManager.instance = new DBManager(dbName, storeName, version)
-    }
-    return DBManager.instance
-  }
-
   async init(): Promise<void> {
-    if (this.initStarted) return
+    if (this.initStarted) return this.initPromise ?? undefined
     this.initStarted = true
 
-    return new Promise((resolve, reject) => {
+    this.initPromise = new Promise((resolve, reject) => {
       debug("DB start init", "Index-db")
       const request = indexedDB.open(this.dbName, this.version)
 
@@ -52,6 +41,7 @@ export default class DBManager {
         }
       }
     })
+    return this.initPromise
   }
 
   async write<T>(key: string, value: T): Promise<void> {
@@ -89,6 +79,25 @@ export default class DBManager {
         resolve(result ? result.value : null)
       }
     })
+  }
+
+  /** True when a record exists for the key, without reading its value. */
+  async has(key: string): Promise<boolean> {
+    if (!this.db) return false
+
+    const transaction = this.db.transaction([this.storeName], "readonly")
+    const store = transaction.objectStore(this.storeName)
+
+    return new Promise((resolve, reject) => {
+      const request = store.getKey(key)
+      request.onerror = () => reject(request.error)
+      request.onsuccess = () => resolve(request.result !== undefined)
+    })
+  }
+
+  /** Resolves once init() has opened the database. */
+  get ready(): Promise<void> {
+    return this.initPromise ?? Promise.resolve()
   }
 
   async delete(key: string): Promise<void> {

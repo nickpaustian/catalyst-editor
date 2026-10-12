@@ -9,7 +9,7 @@
  * - Resource cleanup for completed groups
  */
 import LoadGroup, { type LoadGroupConfig, type LoadProgress } from "./LoadGroup"
-import { debug } from "../../utils"
+import { debug } from "@vitrine/debug"
 
 export default class LoadQueueManager {
   // CORE PROPERTIES

@@ -1,29 +1,30 @@
-/**
- * Template class for managing template content
- */
+import type { TextAsset } from "@vitrine/assets"
 
 export interface TemplateConfig<TData = void> {
-  path: string
+  /** Either a URL to fetch, or a registered text asset. */
+  path?: string
+  asset?: TextAsset
   onLoad?: (data: TData) => void | Promise<void>
   onUnload?: () => void | Promise<void>
 }
 
 export class Template<TData = void> {
-  private path: string
+  private path: string | null
+  private asset: TextAsset | null
   private onLoadCallback?: (data: TData) => void | Promise<void>
   private onUnloadCallback?: () => void | Promise<void>
   private htmlContent: string | null = null
   private _isLoaded: boolean = false
 
   constructor(config: TemplateConfig<TData>) {
-    this.path = config.path
+    this.path = config.path ?? null
+    this.asset = config.asset ?? null
+    if (!this.path && !this.asset) {
+      throw new Error("Template needs a path or an asset")
+    }
     this.onLoadCallback = config.onLoad
     this.onUnloadCallback = config.onUnload
   }
-
-  //=========================
-  // Getters & Setters
-  //=========================
 
   public get html(): string {
     if (!this.htmlContent) {
@@ -36,28 +37,24 @@ export class Template<TData = void> {
     return this._isLoaded
   }
 
-  //=========================
-  // Methods
-  //=========================
-
   async loadHtml(): Promise<string> {
+    if (this.asset) {
+      await this.asset.ensure()
+      return this.asset.text
+    }
+
     if (this.htmlContent) {
       return this.htmlContent
     }
 
-    try {
-      const response = await fetch(this.path)
-      if (!response.ok) {
-        throw new Error(
-          `Failed to load template: ${this.path} (${response.status})`
-        )
-      }
-      this.htmlContent = await response.text()
-      return this.htmlContent
-    } catch (error) {
-      console.error(`Error loading template from ${this.path}:`, error)
-      throw error
+    const response = await fetch(this.path!)
+    if (!response.ok) {
+      throw new Error(
+        `Failed to load template: ${this.path} (${response.status})`
+      )
     }
+    this.htmlContent = await response.text()
+    return this.htmlContent
   }
 
   public async executeOnLoad(data?: any): Promise<void> {
@@ -73,10 +70,6 @@ export class Template<TData = void> {
       this._isLoaded = false
     }
   }
-
-  //=========================
-  // Cleanup
-  //=========================
 
   public clear(): void {
     this.htmlContent = null

@@ -1,10 +1,23 @@
 import { debug, lerp } from "../utils"
+import type { AudioAsset } from "@vitrine/assets"
+
+/** Whether a decoded buffer stays resident between plays. */
+export type DecodePolicy = "keep" | "on-demand"
+
+export type AudioSource = string | ArrayBuffer | AudioAsset
+
+const isAudioAsset = (source: AudioSource): source is AudioAsset =>
+  typeof source === "object" && "ensure" in source
 
 interface AudioTrack {
   source: AudioBufferSourceNode | null
   gainNode: GainNode
   buffer: AudioBuffer | null
   compressedData: ArrayBuffer | null
+  /** Stub that can refetch the compressed bytes; set instead of compressedData for asset-backed tracks. */
+  asset: AudioAsset | null
+  /** Keep the compressed copy after decoding (always true without an asset to refetch from). */
+  keepCompressed: boolean
   duration?: number
   isPlaying: boolean
   startTime?: number
@@ -46,6 +59,8 @@ interface AudioManagerOptions {
   groups?: string[]
   initialGroupVolumes?: { [key: string]: number }
   onTrackNotFound?: (trackName: string) => Promise<void> | void
+  /** Tracks whose compressed size is under this stay decoded; larger ones decode on demand. Default 1 MiB. */
+  keepDecodedBelowBytes?: number
 }
 
 interface PlayTrackOptions {
@@ -78,6 +93,9 @@ interface LoadTrackOptions {
   active?: boolean
   decodeImmediately?: boolean
   keepDecoded?: boolean
+  /** Overrides the size rule. */
+  decode?: DecodePolicy
+  keepCompressed?: boolean
 }
 
 type TrackEventType = "complete"
@@ -94,6 +112,10 @@ export class AudioManager {
   private fadeTimeouts: Map<string, number> = new Map()
   private initialised: boolean = false
   private readonly progressUpdateInterval: number = 50
+  private readonly keepDecodedBelowBytes: number
+  private readonly onVisibilityChange = () => {
+    if (document.visibilityState === "visible") void this.revalidate()
+  }
 
   constructor(options: AudioManagerOptions = {}) {
     this.audioContext = new (window.AudioContext ||
@@ -102,6 +124,8 @@ export class AudioManager {
     this.masterGainNode.connect(this.audioContext.destination)
 
     this.onTrackNotFound = options.onTrackNotFound
+    this.keepDecodedBelowBytes = options.keepDecodedBelowBytes ?? 1024 * 1024
+    document.addEventListener("visibilitychange", this.onVisibilityChange)
 
     if (options.groups) {
       options.groups.forEach((groupName) => {
@@ -136,7 +160,7 @@ export class AudioManager {
 
   public loadTrack(
     name: string,
-    source: string | ArrayBuffer,
+    source: AudioSource,
     options: LoadTrackOptions & { group?: string } = {}
   ): Promise<void> {
     const {
@@ -145,10 +169,12 @@ export class AudioManager {
       active = false,
       group,
       decodeImmediately = false,
-      keepDecoded = false,
+      decode,
     } = options
+    const asset = isAudioAsset(source) ? source : null
+    const keepCompressed = options.keepCompressed ?? asset === null
 
-    const processBuffer = async (arrayBuffer: ArrayBuffer): Promise<void> => {
+    const processBuffer = async (arrayBuffer: ArrayBuffer | null): Promise<void> => {
       try {
         const gainNode = this.audioContext.createGain()
         const targetNode = group
@@ -157,34 +183,30 @@ export class AudioManager {
 
         gainNode.connect(targetNode)
 
-        let audioBuffer: AudioBuffer | null = null
-
-        if (decodeImmediately) {
-          audioBuffer = await this.audioContext.decodeAudioData(
-            arrayBuffer.slice()
-          )
-        }
-
         const track: AudioTrack = {
           source: null,
           gainNode,
-          buffer: audioBuffer,
+          buffer: null,
           compressedData: arrayBuffer,
+          asset,
+          keepCompressed,
           isPlaying: false,
           isPausable,
           active,
           eventHandlers: new Map(),
           groupId: group,
-          isDecoded: !!audioBuffer,
-          keepDecoded,
+          isDecoded: false,
+          keepDecoded: this.resolveKeepDecoded(options, decode, arrayBuffer ?? asset?.resourceBuffers.values().next().value),
         }
 
         this.initialiseEventHandlers(track)
         this.tracks.set(name, track)
 
+        if (decodeImmediately) await this.ensureTrackDecoded(track)
+
         debug(
           `Audio track loaded - ${name}${group ? ` (group: ${group})` : ""} ${
-            audioBuffer ? "(pre-decoded)" : "(compressed only)"
+            track.isDecoded ? "(pre-decoded)" : asset ? "(stub)" : "(compressed only)"
           }`
         )
         if (onLoaded) onLoaded()
@@ -194,16 +216,44 @@ export class AudioManager {
     }
 
     return new Promise((resolve, reject) => {
-      if (typeof source === "string") {
+      if (asset) {
+        processBuffer(null).then(resolve).catch(reject)
+      } else if (typeof source === "string") {
         fetch(source)
           .then((response) => response.arrayBuffer())
           .then(processBuffer)
           .then(resolve)
           .catch(reject)
       } else {
-        processBuffer(source).then(resolve).catch(reject)
+        processBuffer(source as ArrayBuffer).then(resolve).catch(reject)
       }
     })
+  }
+
+  /** Small clips stay decoded; long ones decode on demand unless the caller says otherwise. */
+  private resolveKeepDecoded(
+    options: LoadTrackOptions,
+    decode: DecodePolicy | undefined,
+    compressed: ArrayBuffer | undefined
+  ): boolean {
+    if (options.keepDecoded !== undefined) return options.keepDecoded
+    if (decode) return decode === "keep"
+    if (!compressed) return false
+    return compressed.byteLength < this.keepDecodedBelowBytes
+  }
+
+  /**
+   * A decoded buffer the browser has quietly dropped still looks like an
+   * AudioBuffer, so check it has samples and isn't all zeros before trusting it.
+   */
+  private isBufferUsable(buffer: AudioBuffer | null): buffer is AudioBuffer {
+    if (!buffer || buffer.length <= 1 || buffer.numberOfChannels === 0) return false
+    const data = buffer.getChannelData(0)
+    const step = Math.max(1, Math.floor(data.length / 64))
+    for (let i = 0; i < data.length; i += step) {
+      if (data[i] !== 0) return true
+    }
+    return false
   }
 
   private async ensureTrackDecoded(
@@ -222,20 +272,32 @@ export class AudioManager {
       track = trackOrName
     }
 
-    if (track.isDecoded && track.buffer) {
-      return track // Already decoded
+    if (track.isDecoded && this.isBufferUsable(track.buffer)) {
+      return track
+    }
+    if (track.isDecoded) {
+      debug("Decoded buffer was dropped; decoding again", "warning")
+      track.buffer = null
+      track.isDecoded = false
     }
 
-    if (!track.compressedData) {
+    let compressed = track.compressedData
+    if (!compressed && track.asset) {
+      await track.asset.ensure()
+      compressed = track.asset.buffer
+    }
+    if (!compressed) {
       throw new Error("No compressed data available for decoding")
     }
 
     debug("Decoding audio on-demand...")
     try {
       // Create a copy of the ArrayBuffer for decoding to avoid detaching the original
-      const bufferCopy = track.compressedData.slice()
+      const bufferCopy = compressed.slice()
       track.buffer = await this.audioContext.decodeAudioData(bufferCopy)
       track.isDecoded = true
+      if (track.keepDecoded === undefined) track.keepDecoded = compressed.byteLength < this.keepDecodedBelowBytes
+      if (track.asset && !track.keepCompressed) track.asset.release()
 
       // Store duration for future reference
       track.duration = track.buffer.duration
@@ -260,9 +322,25 @@ export class AudioManager {
 
   public async reloadTrack(
     name: string,
-    source: string | ArrayBuffer
+    source?: AudioSource
   ): Promise<void> {
     const existingTrack = this.tracks.get(name)
+
+    if (existingTrack?.asset && source === undefined) {
+      const wasPlaying = existingTrack.isPlaying
+      const pauseTime = existingTrack.pauseTime || 0
+      if (wasPlaying) this.stopTrack(name)
+      existingTrack.buffer = null
+      existingTrack.isDecoded = false
+      existingTrack.asset.release()
+      await this.ensureTrackDecoded(existingTrack)
+      if (wasPlaying) this.playTrack(name, { startTime: pauseTime })
+      debug(`Track ${name} refetched through its asset`)
+      return
+    }
+    if (source === undefined) {
+      throw new Error(`reloadTrack(${name}) needs a source for a track without an asset`)
+    }
 
     if (existingTrack) {
       // Save properties we want to keep
@@ -359,7 +437,7 @@ export class AudioManager {
       return false
     }
 
-    const hasAudioData = !!(track.buffer || track.compressedData)
+    const hasAudioData = !!(track.buffer || track.compressedData || track.asset)
 
     if (!hasAudioData) {
       debug(
@@ -445,6 +523,7 @@ export class AudioManager {
     options: PlayTrackOptions = {}
   ): Promise<string> {
     if (!this.initialised) this.initAudio()
+    if (this.audioContext.state === "suspended") await this.unlock()
 
     debug([`playTrack called for ${name} with options:`, options])
 
@@ -676,6 +755,8 @@ export class AudioManager {
       gainNode,
       buffer: originalTrack.buffer,
       compressedData: originalTrack.compressedData,
+      asset: originalTrack.asset,
+      keepCompressed: originalTrack.keepCompressed,
       isPlaying: false,
       isPausable: originalTrack.isPausable,
       active: true,
@@ -799,6 +880,81 @@ export class AudioManager {
     } else {
       this.handleTrackNotFound(name)
     }
+  }
+
+  /**
+   * Drop everything an idle track holds in memory: the decoded buffer and,
+   * for asset-backed tracks, the compressed bytes. The stub refetches on play.
+   */
+  public releaseTrack(name: string): boolean {
+    const track = this.tracks.get(name)
+    if (!track || track.isPlaying) return false
+    this.clearTrackBuffer(name)
+    track.asset?.release()
+    if (track.asset) track.compressedData = null
+    return true
+  }
+
+  /** Memory pressure: release every idle track, keeping small resident clips unless asked. */
+  public releaseIdle(options: { includeKept?: boolean } = {}): number {
+    let released = 0
+    this.tracks.forEach((track, name) => {
+      if (track.isPlaying) return
+      if (track.keepDecoded && !options.includeKept) return
+      if (this.releaseTrack(name)) released++
+    })
+    debug(`Released ${released} idle tracks`)
+    return released
+  }
+
+  /**
+   * Check every decoded buffer is still usable (the browser can drop them
+   * while a tab is in the background) and decode resident clips again.
+   */
+  public async revalidate(): Promise<string[]> {
+    const dropped: string[] = []
+    for (const [name, track] of this.tracks) {
+      if (!track.isDecoded || this.isBufferUsable(track.buffer)) continue
+      dropped.push(name)
+      track.buffer = null
+      track.isDecoded = false
+      if (track.keepDecoded) {
+        try {
+          await this.ensureTrackDecoded(track)
+        } catch (error) {
+          console.error(`Failed to restore track ${name}:`, error)
+        }
+      }
+    }
+    if (dropped.length) debug([`Dropped audio buffers found:`, dropped], "warning")
+    return dropped
+  }
+
+  /**
+   * Resume a suspended context, with the silent-buffer nudge iOS needs.
+   * resume() stays pending until the browser has seen a user gesture, so
+   * it is raced against a timeout rather than awaited outright.
+   */
+  public async unlock(timeoutMs = 250): Promise<boolean> {
+    if (this.audioContext.state === "suspended") {
+      try {
+        await Promise.race([
+          this.audioContext.resume(),
+          new Promise((resolve) => setTimeout(resolve, timeoutMs)),
+        ])
+      } catch (error) {
+        console.warn("Failed to resume AudioContext:", error)
+        return false
+      }
+    }
+    if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+      const silent = this.audioContext.createBuffer(1, 1, 22050)
+      const source = this.audioContext.createBufferSource()
+      source.buffer = silent
+      source.connect(this.audioContext.destination)
+      source.start(0)
+    }
+    return this.audioContext.state === "running"
   }
 
   public clearTrackBuffer(name: string): void {
@@ -1340,16 +1496,21 @@ export class AudioManager {
     decodedTracks: number
     playingTracks: number
     compressedSize: number
+    decodedSize: number
   } {
     let decodedTracks = 0
     let playingTracks = 0
     let compressedSize = 0
+    let decodedSize = 0
 
     this.tracks.forEach((track) => {
       if (track.isDecoded && track.buffer) decodedTracks++
       if (track.isPlaying) playingTracks++
       if (track.compressedData)
         compressedSize += track.compressedData.byteLength
+      if (track.asset?.isReady) compressedSize += track.asset.buffer.byteLength
+      if (track.buffer)
+        decodedSize += track.buffer.length * track.buffer.numberOfChannels * 4
     })
 
     return {
@@ -1357,6 +1518,7 @@ export class AudioManager {
       decodedTracks,
       playingTracks,
       compressedSize,
+      decodedSize,
     }
   }
 
@@ -1381,6 +1543,7 @@ export class AudioManager {
   }
 
   public dispose(): void {
+    document.removeEventListener("visibilitychange", this.onVisibilityChange)
     this.fadeTimeouts.forEach((timeout) => clearTimeout(timeout))
     this.fadeTimeouts.clear()
     this.cleanup()
