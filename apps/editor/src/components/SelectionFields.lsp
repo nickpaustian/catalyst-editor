@@ -2,7 +2,10 @@
 <div class="selection">
   <p class="hint" $if="!shared['editor:selection']">Nothing selected</p>
   <template $else>
-    <p class="hint">{{ shared['editor:selection']?.type }} {{ shared['editor:selection']?.name }}</p>
+    <p class="hint">{{ shared['editor:selection']?.type }}</p>
+    <div class="row">
+      <input class="name" type="text" $model="state.name" @change="rename" />
+    </div>
     <div class="buttons">
       <button @click="send('focus')">Focus</button>
       <button @click="send('delete')">Delete</button>
@@ -43,10 +46,11 @@ const selection = shared('editor:selection', null)
 
 // Local copies of the fields, so typing doesn't fight the scene publishing
 // the same values back on every gizmo move
-const state = reactive({ px: 0, py: 0, pz: 0, rx: 0, ry: 0, rz: 0 })
+const state = reactive({ name: '', px: 0, py: 0, pz: 0, rx: 0, ry: 0, rz: 0 })
 
 selection.subscribe((next: any) => {
   if (!next) return
+  state.name = next.name
   state.px = next.position.x
   state.py = next.position.y
   state.pz = next.position.z
@@ -57,6 +61,12 @@ selection.subscribe((next: any) => {
 
 function send(type: string) {
   sendCommand({ type })
+}
+
+// Names are what the manifest's activation rules and the scene files key on,
+// so a rename has to be a deliberate change
+function rename() {
+  sendCommand({ type: 'rename', name: state.name })
 }
 
 function setContent(event: Event) {
@@ -102,6 +112,11 @@ button {
 
 input[type="number"] {
   width: 64px;
+}
+
+input.name {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 button {

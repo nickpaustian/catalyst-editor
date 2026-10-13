@@ -147,6 +147,26 @@ export class Node {
   }
 
   /**
+   * Rename the node, re-keying it in its parent so `getNode(newName)` finds it.
+   * Returns false when a sibling already has that name.
+   */
+  public rename(name: string): boolean {
+    if (!name || name === this._name) return name === this._name
+    const parent = this._parent
+    if (parent) {
+      if (parent.children.has(name)) return false
+      let currentKey: string | null = null
+      parent.children.forEach((child, key) => {
+        if (child === this) currentKey = key
+      })
+      if (currentKey !== null) parent.children.delete(currentKey)
+      parent.children.set(name, this)
+    }
+    this._name = name
+    return true
+  }
+
+  /**
    * Create a Proxy for magic property access to child nodes.
    */
 

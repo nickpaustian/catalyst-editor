@@ -85,6 +85,7 @@ export type EditorCommand =
   | { type: "focus" }
   | { type: "setTransform"; position: { x: number; y: number; z: number }; rotation: { x: number; y: number; z: number } }
   | { type: "setContent"; id: string }
+  | { type: "rename"; name: string }
   | { type: "exportScene" }
   | { type: "exportManifest" }
   | { type: "railToggleShown" }
@@ -141,6 +142,8 @@ export class EditorSession {
   private selected: Node3D | null = null
   private lastMoveNode: Node3D | null = null
   private created = new Map<Node3D, { type: string; config: Record<string, unknown> }>()
+  /** Nodes renamed this session → the name they had in the loaded file, so export can still find the entry. */
+  private originalNames = new Map<Node3D, string>()
   /** Working copy of the manifest's presentation, applied live and saved. */
   private presentation: Presentation
   /** Content HTML edited this session, by id; entries added and removed this session. */
@@ -503,6 +506,9 @@ export class EditorSession {
       case "setContent":
         this.writeContent(command.id)
         break
+      case "rename":
+        this.renameSelected(command.name)
+        break
       case "exportScene":
         this.exportSceneFiles()
         break
@@ -650,6 +656,22 @@ export class EditorSession {
     node.transform.rotation = new THREE.Quaternion().setFromEuler(euler)
     if (node instanceof Collider) node.needsUpdate()
     this.camera?.syncFromNode()
+    this.publishSelection()
+  }
+
+  private renameSelected(name: string): void {
+    const node = this.selected
+    const clean = name.trim()
+    if (!node || !clean || clean === node.name) return
+    const original = this.originalNames.get(node) ?? node.name
+    if (!node.rename(clean)) {
+      this.publishSelection()
+      return
+    }
+    if (!this.created.has(node)) this.originalNames.set(node, original)
+    const made = this.created.get(node)
+    if (made) made.config.name = clean
+    this.publishGroups()
     this.publishSelection()
   }
 
@@ -881,9 +903,12 @@ export class EditorSession {
         position: [round(p.x), round(p.y), round(p.z)],
         rotation: [round(q.x), round(q.y), round(q.z), round(q.w)],
       }
-      const original = originals.get(child.name)
+      const original = originals.get(this.originalNames.get(child) ?? child.name)
       if (original) {
         original.transform = { ...original.transform, ...transform }
+        if (this.originalNames.has(child)) {
+          original.config = { ...original.config, name: child.name }
+        }
         if (child instanceof PointOfInterest) {
           original.config = { ...original.config, modalName: child.modalName ?? undefined }
         }
