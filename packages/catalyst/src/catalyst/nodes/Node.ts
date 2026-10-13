@@ -80,6 +80,53 @@ export class Node {
   }
 
   /**
+   * Add a child at a position among the existing children (the children map
+   * keeps insertion order, so it is rebuilt around the new entry).
+   */
+  public insertNode<T extends Node>(node: T, index: number, customName?: string): T {
+    const key = customName ?? node.name
+    const entries = Array.from(this.children.entries())
+    const at = Math.max(0, Math.min(index, entries.length))
+    entries.splice(at, 0, [key, node])
+    this.children = new Map(entries)
+    node.setParent(this)
+    node.onAttach?.()
+    return node
+  }
+
+  /** The key a child is stored under, or null if it isn't a child. */
+  public keyOf(child: Node): string | null {
+    for (const [key, node] of this.children) if (node === child) return key
+    return null
+  }
+
+  /** Position of a child among this node's children, or -1. */
+  public indexOf(child: Node): number {
+    return this.getChildren().indexOf(child)
+  }
+
+  /** Detach a child by identity. */
+  public detach(child: Node): boolean {
+    const key = this.keyOf(child)
+    return key === null ? false : this.removeNode(key)
+  }
+
+  /** First node with this name anywhere below (or at) this node, depth first. */
+  public find<T extends Node>(name: string): T | undefined {
+    return this.walk().find((node) => node.name === name) as T | undefined
+  }
+
+  /** True if `node` is this node or one of its descendants. */
+  public contains(node: Node): boolean {
+    let current: Node | null = node
+    while (current) {
+      if (current === this) return true
+      current = current.parent
+    }
+    return false
+  }
+
+  /**
    * Remove a child node by key.
    */
   public removeNode(key: string): boolean {

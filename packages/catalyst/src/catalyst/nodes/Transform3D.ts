@@ -138,6 +138,16 @@ export class Transform3D extends Node {
   }
 
   /**
+   * Set position, rotation and scale so that the world matrix becomes `world`
+   * under the current parent chain.
+   */
+  public setWorldMatrix(world: THREE.Matrix4): void {
+    const local = this.getParentWorldMatrix().clone().invert().multiply(world)
+    local.decompose(this._position, this._rotation, this._scale)
+    this.markDirty()
+  }
+
+  /**
    * Get the world matrix of all parent transforms (excluding this transform's local matrix).
    */
   public getParentWorldMatrix(): THREE.Matrix4 {

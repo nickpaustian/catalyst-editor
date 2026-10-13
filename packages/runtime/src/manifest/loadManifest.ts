@@ -51,12 +51,15 @@ export const resolveManifestPaths = (
       source: r(manifest.splat.source)!,
       partitions: manifest.splat.partitions.map((p) => r(p)!),
     },
-    scene: {
-      colliders: r(manifest.scene.colliders),
-      focalPoints: r(manifest.scene.focalPoints),
-      focalPointTriggers: r(manifest.scene.focalPointTriggers),
-      pointsOfInterest: r(manifest.scene.pointsOfInterest),
-    },
+    scene:
+      typeof manifest.scene === "string"
+        ? r(manifest.scene)!
+        : {
+            colliders: r(manifest.scene.colliders),
+            focalPoints: r(manifest.scene.focalPoints),
+            focalPointTriggers: r(manifest.scene.focalPointTriggers),
+            pointsOfInterest: r(manifest.scene.pointsOfInterest),
+          },
     camera: {
       ...manifest.camera,
       guided: manifest.camera.guided && {

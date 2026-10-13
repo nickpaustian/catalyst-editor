@@ -58,13 +58,22 @@ export interface SplatSource {
   streaming?: SplatStreamingSettings
 }
 
-/** Node JSON files in the `parseJsonNodes` format, relative to the manifest. */
+/**
+ * The scene is one node hierarchy in the `parseJsonNodes` format: a path
+ * relative to the manifest. Older manifests name four files instead, one per
+ * node kind; each becomes a child group of the scene root when loaded.
+ */
+export type SceneSource = string | SceneFiles
+
+/** The legacy per-kind scene files. */
 export interface SceneFiles {
   colliders?: string
   focalPoints?: string
   focalPointTriggers?: string
   pointsOfInterest?: string
 }
+
+export const isLegacyScene = (scene: SceneSource): scene is SceneFiles => typeof scene !== "string"
 
 export interface RailControlPoint {
   name: string
@@ -217,7 +226,7 @@ export interface ExhibitionManifest {
   id: string
   title: string
   splat: SplatSource
-  scene: SceneFiles
+  scene: SceneSource
   camera: CameraSettings
   content: Record<string, ContentEntry>
   assets?: AssetSources

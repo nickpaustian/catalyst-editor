@@ -25,6 +25,8 @@ export interface ExhibitionAssets {
   /** Modal HTML, fetched on demand. */
   content: Asset
   scene: {
+    /** The whole hierarchy, when the manifest names one scene file. */
+    tree?: JsonAsset
     colliders?: JsonAsset
     focalPoints?: JsonAsset
     focalPointTriggers?: JsonAsset
@@ -59,16 +61,19 @@ export const registerExhibition = (manifest: LoadedManifest): ExhibitionAssets =
   const json = (url: string) => single((o) => new JsonAsset(o), ResourceType.JSON, url)
   const text = (url: string) => single((o) => new TextAsset(o), ResourceType.TEXT, url)
 
-  const scene = {
-    colliders: manifest.scene.colliders ? json(manifest.scene.colliders) : undefined,
-    focalPoints: manifest.scene.focalPoints ? json(manifest.scene.focalPoints) : undefined,
-    focalPointTriggers: manifest.scene.focalPointTriggers
-      ? json(manifest.scene.focalPointTriggers)
-      : undefined,
-    pointsOfInterest: manifest.scene.pointsOfInterest
-      ? json(manifest.scene.pointsOfInterest)
-      : undefined,
-  }
+  const scene =
+    typeof manifest.scene === "string"
+      ? { tree: json(manifest.scene) }
+      : {
+          colliders: manifest.scene.colliders ? json(manifest.scene.colliders) : undefined,
+          focalPoints: manifest.scene.focalPoints ? json(manifest.scene.focalPoints) : undefined,
+          focalPointTriggers: manifest.scene.focalPointTriggers
+            ? json(manifest.scene.focalPointTriggers)
+            : undefined,
+          pointsOfInterest: manifest.scene.pointsOfInterest
+            ? json(manifest.scene.pointsOfInterest)
+            : undefined,
+        }
   const bakedPath = manifest.camera.guided?.bakedPath
     ? json(manifest.camera.guided.bakedPath)
     : undefined

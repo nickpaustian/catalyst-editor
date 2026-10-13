@@ -18,7 +18,6 @@ import {
   type Exhibition,
   type ExhibitionManifest,
   type Presentation,
-  type SceneFiles,
 } from "@vitrine/runtime"
 import type { JsonAsset } from "@vitrine/assets"
 import type { LightspeedRuntime } from "@lightspeed-js/core"
@@ -26,8 +25,24 @@ import { EditorCamera, type GizmoMode } from "./EditorCamera"
 import { EditorInput } from "./EditorInput"
 import { ExhibitionFolder } from "./ExhibitionFolder"
 
-export type SceneKey = "colliders" | "focalPoints" | "focalPointTriggers" | "pointsOfInterest"
-export const SCENE_KEYS: SceneKey[] = ["colliders", "focalPoints", "focalPointTriggers", "pointsOfInterest"]
+/** What the editor can add to the hierarchy; Group is an empty Node3D. */
+export type NodeKind = "Group" | "BoxCollider" | "FocalPoint" | "FocalPointTrigger" | "PointOfInterest"
+
+export interface TreeRow {
+  id: number
+  name: string
+  type: string
+  depth: number
+  hasChildren: boolean
+  expanded: boolean
+  selected: boolean
+  isRoot: boolean
+}
+
+export type DropPlace = "before" | "after" | "inside"
+
+/** Where a hierarchy saved from a legacy four-file exhibition goes. */
+const SCENE_FILE = "scene/scene.json"
 
 export type ViewMode = "orbit" | "firstPerson" | "guided"
 
@@ -42,11 +57,13 @@ export interface EditorCells {
   "editor:exhibition": { id: string; title: string; catalogue: CatalogueEntry[] }
   "editor:folder": { name: string | null; status: string; supported: boolean }
   "editor:view": { view: ViewMode; visualised: boolean; moveMode: boolean; gizmo: GizmoMode }
-  "editor:groups": { key: SceneKey; nodes: { name: string; type: string; selected: boolean }[] }[]
+  /** The scene hierarchy flattened in tree order, collapsed subtrees left out. */
+  "editor:tree": TreeRow[]
   "editor:selection": {
+    id: number
     name: string
     type: string
-    group: SceneKey | null
+    parent: string | null
     position: { x: number; y: number; z: number }
     rotation: { x: number; y: number; z: number }
     isPoi: boolean
@@ -80,8 +97,10 @@ export type EditorCommand =
   | { type: "toggleVisualisers" }
   | { type: "toggleMoveMode" }
   | { type: "setGizmo"; mode: GizmoMode }
-  | { type: "select"; group: SceneKey; name: string }
-  | { type: "add"; group: SceneKey }
+  | { type: "select"; id: number }
+  | { type: "add"; kind: NodeKind }
+  | { type: "toggleExpand"; id: number }
+  | { type: "move"; id: number; targetId: number; place: DropPlace }
   | { type: "delete" }
   | { type: "focus" }
   | { type: "setTransform"; position: { x: number; y: number; z: number }; rotation: { x: number; y: number; z: number } }
@@ -160,8 +179,12 @@ export class EditorSession {
   private selected: Node3D | null = null
   private lastMoveNode: Node3D | null = null
   private created = new Map<Node3D, { type: string; config: Record<string, unknown> }>()
-  /** Nodes renamed this session → the name they had in the loaded file, so export can still find the entry. */
-  private originalNames = new Map<Node3D, string>()
+  /** Each loaded node → its entry in the scene file, so a save keeps fields the editor doesn't know. */
+  private originals = new Map<Node3D, any>()
+  private ids = new Map<Node3D, number>()
+  private nodesById = new Map<number, Node3D>()
+  private nextId = 1
+  private collapsed = new Set<Node3D>()
   /** Working copy of the manifest's presentation, applied live and saved. */
   private presentation: Presentation
   /** Content HTML edited this session, by id; entries added and removed this session. */
@@ -220,7 +243,7 @@ export class EditorSession {
     this.publishExhibition()
     this.publishFolder()
     this.publishView()
-    this.publishGroups()
+    this.publishTree()
     this.publishSelection()
     this.publishRail()
     this.publishPresentation()
@@ -232,7 +255,7 @@ export class EditorSession {
       Catalyst._.renderOnDemand = true
       this.toggleVisualisers()
       this.setView("orbit")
-      this.publishGroups()
+      void this.captureOriginals().then(() => this.publishTree())
       this.publishRail()
       if (!document.hasFocus()) this.pauseWhileUnfocused()
     })
@@ -282,13 +305,7 @@ export class EditorSession {
   private publishFolder(status?: string): void {
     this.set("editor:folder", {
       name: this.folder?.name ?? null,
-      status:
-        status ??
-        (this.folder
-          ? ""
-          : ExhibitionFolder.isSupported
-          ? "Loaded from the server; Save as… writes a copy to a folder"
-          : "This browser can't open folders; use the export buttons"),
+      status: status ?? "",
       supported: ExhibitionFolder.isSupported,
     })
   }
@@ -302,21 +319,50 @@ export class EditorSession {
     })
   }
 
-  private publishGroups(): void {
-    const roots = this.scene.sceneRoots
-    this.set(
-      "editor:groups",
-      SCENE_KEYS.map((key) => ({
-        key,
-        nodes: (roots[key]?.getChildren() ?? [])
-          .filter((node): node is Node3D => node instanceof Node3D)
-          .map((node) => ({
-            name: node.name,
-            type: node.constructor.name,
-            selected: node === this.selected,
-          })),
-      }))
-    )
+  private get root(): Node3D | null {
+    return this.scene.sceneRoot
+  }
+
+  private idOf(node: Node3D): number {
+    let id = this.ids.get(node)
+    if (id === undefined) {
+      id = this.nextId++
+      this.ids.set(node, id)
+      this.nodesById.set(id, node)
+    }
+    return id
+  }
+
+  private childNodes(node: Node3D): Node3D[] {
+    return node.getChildren().filter((child): child is Node3D => child instanceof Node3D)
+  }
+
+  // Prefabs add their own child nodes (a point of interest's collider and
+  // raycast, a trigger's collider); those are internals, not scene content.
+  // The authored scene is what came from the file plus what the editor made.
+  private ownedChildren(node: Node3D): Node3D[] {
+    return this.childNodes(node).filter((child) => this.originals.has(child) || this.created.has(child))
+  }
+
+  private publishTree(): void {
+    const rows: TreeRow[] = []
+    const visit = (node: Node3D, depth: number) => {
+      const children = this.ownedChildren(node)
+      const expanded = !this.collapsed.has(node)
+      rows.push({
+        id: this.idOf(node),
+        name: node.name,
+        type: node.constructor.name,
+        depth,
+        hasChildren: children.length > 0,
+        expanded,
+        selected: node === this.selected,
+        isRoot: node === this.root,
+      })
+      if (expanded) children.forEach((child) => visit(child, depth + 1))
+    }
+    if (this.root) visit(this.root, 0)
+    this.set("editor:tree", rows)
   }
 
   private publishSelection(): void {
@@ -329,9 +375,10 @@ export class EditorSession {
     const e = new THREE.Euler().setFromQuaternion(node.transform.rotation, "YXZ")
     const poi = node instanceof PointOfInterest ? node : null
     this.set("editor:selection", {
+      id: this.idOf(node),
       name: node.name,
       type: node.constructor.name,
-      group: this.groupOf(node),
+      parent: node.parent instanceof Node3D ? node.parent.name : null,
       position: { x: round(p.x), y: round(p.y), z: round(p.z) },
       rotation: {
         x: round(THREE.MathUtils.radToDeg(e.x), 2),
@@ -519,13 +566,23 @@ export class EditorSession {
         if (this.camera) this.camera.mode = command.mode
         this.publishView()
         break
-      case "select": {
-        const node = this.scene.sceneRoots[command.group]?.getNode<Node3D>(command.name)
-        this.select(node ?? null)
+      case "select":
+        this.select(this.nodesById.get(command.id) ?? null)
+        break
+      case "add":
+        this.addNode(command.kind)
+        break
+      case "toggleExpand": {
+        const node = this.nodesById.get(command.id)
+        if (node) {
+          if (this.collapsed.has(node)) this.collapsed.delete(node)
+          else this.collapsed.add(node)
+          this.publishTree()
+        }
         break
       }
-      case "add":
-        this.addNode(command.group)
+      case "move":
+        this.moveNode(command.id, command.targetId, command.place)
         break
       case "delete":
         this.deleteSelected()
@@ -648,19 +705,16 @@ export class EditorSession {
 
   // ---------------- nodes ----------------
 
-  private groupOf(node: Node3D): SceneKey | null {
-    return SCENE_KEYS.find((k) => this.scene.sceneRoots[k]?.getChildren().includes(node)) ?? null
-  }
-
   private select(node: Node3D | null): void {
     this.selected = node
     if (node) {
       this.railSelected = -1
-      this.attachGizmo(node)
+      if (node === this.root) this.camera?.detach()
+      else this.attachGizmo(node)
     } else {
       this.camera?.detach()
     }
-    this.publishGroups()
+    this.publishTree()
     this.publishSelection()
     this.publishRail()
   }
@@ -697,15 +751,15 @@ export class EditorSession {
     const node = this.selected
     const clean = name.trim()
     if (!node || !clean || clean === node.name) return
-    const original = this.originalNames.get(node) ?? node.name
-    if (!node.rename(clean)) {
+    // Activation rules and content find nodes by name, so names stay unique
+    // across the whole scene, not just among siblings
+    if (this.root?.find(clean) || !node.rename(clean)) {
       this.publishSelection()
       return
     }
-    if (!this.created.has(node)) this.originalNames.set(node, original)
     const made = this.created.get(node)
     if (made) made.config.name = clean
-    this.publishGroups()
+    this.publishTree()
     this.publishSelection()
   }
 
@@ -727,54 +781,96 @@ export class EditorSession {
     }
   }
 
-  private addNode(key: SceneKey): void {
-    const root = this.scene.sceneRoots[key]
-    if (!root) return
-    const name = `${key}-${Date.now().toString(36)}`
+  /** New nodes go under the selected node (or the root), at the orbit target in world space. */
+  private addNode(kind: NodeKind): void {
+    const parent = this.selected ?? this.root
+    if (!parent) return
+    const name = `${kind.toLowerCase()}-${Date.now().toString(36)}`
     const at = this.camera?.isActive ? this.camera.orbitTarget : new THREE.Vector3(0, 1, 0)
 
     let node: Node3D
-    let type: string
+    let type: string = kind
     let config: Record<string, unknown>
-    switch (key) {
-      case "colliders":
-        type = "BoxCollider"
+    switch (kind) {
+      case "Group":
+        type = "Node3D"
+        config = { name, visualise: this.visualised }
+        node = new Node3D(config)
+        break
+      case "BoxCollider":
         config = { name, width: 1, height: 1, depth: 1, visualise: this.visualised }
         node = new BoxCollider(config)
         break
-      case "focalPoints":
-        type = "FocalPoint"
+      case "FocalPoint":
         config = { name, visualise: this.visualised }
         node = new FocalPoint(config)
         break
-      case "focalPointTriggers": {
-        type = "FocalPointTrigger"
+      case "FocalPointTrigger":
         config = { name, width: 1, height: 2, depth: 1, visualise: this.visualised }
-        const focalPoints = (this.scene.sceneRoots.focalPoints?.getChildrenOfType(FocalPoint) ??
-          []) as FocalPoint[]
-        node = new FocalPointTrigger({ ...config, focalPoints })
+        node = new FocalPointTrigger({ ...config, focalPoints: this.scene.focalPointNodes })
         break
-      }
-      case "pointsOfInterest":
-        type = "PointOfInterest"
+      case "PointOfInterest":
         config = { name, visualise: this.visualised }
         node = new PointOfInterest(config)
         this.wireContent(node as PointOfInterest)
         break
     }
-    node.transform.position = at
-    root.addNode(node)
+    parent.addNode(node)
+    node.transform.setWorldMatrix(new THREE.Matrix4().makeTranslation(at.x, at.y, at.z))
     this.created.set(node, { type, config })
+    this.collapsed.delete(parent)
+    if (node instanceof FocalPoint) this.scene.refreshFocalPointTargets()
     this.select(node)
   }
 
   private deleteSelected(): void {
     const node = this.selected
-    if (!node) return
+    if (!node || node === this.root) return
     this.camera?.detach()
-    this.created.delete(node)
+    const hadFocalPoints = node.walk().some((n) => n instanceof FocalPoint)
+    node.walk().forEach((n) => {
+      if (n instanceof Node3D) {
+        this.created.delete(n)
+        this.originals.delete(n)
+        const id = this.ids.get(n)
+        if (id !== undefined) this.nodesById.delete(id)
+        this.ids.delete(n)
+      }
+    })
     node.dispose()
+    if (hadFocalPoints) this.scene.refreshFocalPointTargets()
     this.select(null)
+  }
+
+  /** Reparent or reorder a node, keeping its world transform. */
+  private moveNode(id: number, targetId: number, place: DropPlace): void {
+    const node = this.nodesById.get(id)
+    const target = this.nodesById.get(targetId)
+    const root = this.root
+    if (!node || !target || !root || node === target || node === root) return
+    if (node.contains(target)) return
+    const newParent = place === "inside" ? target : target.parent
+    if (!(newParent instanceof Node3D)) return
+    const oldParent = node.parent
+    if (!(oldParent instanceof Node3D)) return
+    if (newParent !== oldParent && newParent.children.has(node.name)) {
+      this.publishFolder(`"${node.name}" already exists under ${newParent.name}`)
+      return
+    }
+
+    const world = node.transform.getWorldMatrix().clone()
+    oldParent.detach(node)
+    const index =
+      place === "inside" ? newParent.children.size : newParent.indexOf(target) + (place === "after" ? 1 : 0)
+    newParent.insertNode(node, index, node.name)
+    node.transform.setWorldMatrix(world)
+    node.walk().forEach((n) => {
+      if (n instanceof Collider) n.needsUpdate()
+    })
+    this.collapsed.delete(newParent)
+    this.camera?.syncFromNode()
+    this.publishTree()
+    this.publishSelection()
   }
 
   /** Follow the move mode: picking a node up selects it, dropping it refreshes the fields. */
@@ -872,7 +968,7 @@ export class EditorSession {
       )
     }
     this.syncMarkers()
-    this.publishGroups()
+    this.publishTree()
     this.publishSelection()
     this.publishRail()
   }
@@ -923,6 +1019,9 @@ export class EditorSession {
       assets.getAs<JsonAsset<ExhibitionManifest>>(this.exhibition.manifest.url)?.json
     if (!raw) return null
     const json = structuredClone(raw)
+    // Saving always writes the hierarchy as one file; a legacy manifest
+    // moves to it here and its four files are simply no longer written
+    if (typeof json.scene !== "string") json.scene = SCENE_FILE
     if (json.camera.guided?.rail) {
       json.camera.guided.rail.controlPoints = this.railToManifest()
     }
@@ -934,60 +1033,80 @@ export class EditorSession {
     return json
   }
 
-  private patchedSceneJson(key: SceneKey): unknown | null {
-    const asset = this.exhibition.managers.exhibitionAssets.scene[key] as JsonAsset<any> | undefined
-    const root = this.scene.sceneRoots[key]
-    if (!asset?.isReady || !root) return null
+  /**
+   * Pair every loaded node with its entry in the scene file(s), in tree order,
+   * so a save carries fields the editor doesn't edit. Legacy exhibitions pair
+   * each file's root with the group it became.
+   */
+  private async captureOriginals(): Promise<void> {
+    const root = this.root
+    if (!root) return
+    const scene = this.exhibition.managers.exhibitionAssets.scene
+    // parseJsonNodes appends a file's children after the ones a prefab's
+    // constructor made, so the entries line up with the last N children
+    const pair = (entry: any, node: Node3D) => {
+      this.originals.set(node, entry)
+      const children = this.childNodes(node)
+      const entries: any[] = entry?.children ?? []
+      const offset = children.length - entries.length
+      entries.forEach((childEntry, index) => {
+        const child = children[offset + index]
+        if (child) pair(childEntry, child)
+      })
+    }
+    if (scene.tree) {
+      await scene.tree.ensure()
+      pair(scene.tree.json, root)
+      return
+    }
+    const files = [scene.colliders, scene.focalPoints, scene.focalPointTriggers, scene.pointsOfInterest]
+    const groups = this.childNodes(root)
+    for (let index = 0; index < files.length; index++) {
+      const asset = files[index] as JsonAsset<any> | undefined
+      const group = groups[index]
+      if (!asset || !group) continue
+      await asset.ensure()
+      pair(asset.json, group)
+    }
+  }
 
-    const json = structuredClone(asset.json)
-    const originals = new Map<string, any>(
-      (json.children ?? []).map((entry: any) => [entry.config?.name ?? entry.name, entry])
-    )
-    // Live children in order: originals patched by name, new nodes serialised,
-    // deleted ones simply absent
-    json.children = root.getChildren().flatMap((child) => {
-      if (!(child instanceof Node3D)) return []
-      const p = child.transform.position
-      const q = child.transform.rotation
-      const transform = {
-        position: [round(p.x), round(p.y), round(p.z)],
-        rotation: [round(q.x), round(q.y), round(q.z), round(q.w)],
+  private serialiseNode(node: Node3D): any {
+    const p = node.transform.position
+    const q = node.transform.rotation
+    const transform = {
+      position: [round(p.x), round(p.y), round(p.z)],
+      rotation: [round(q.x), round(q.y), round(q.z), round(q.w)],
+    }
+    const children = this.ownedChildren(node).map((child) => this.serialiseNode(child))
+    const original = this.originals.get(node)
+
+    let entry: any
+    if (original) {
+      const { children: _children, name: _name, ...rest } = original
+      entry = {
+        ...rest,
+        config: { ...(original.config ?? {}), name: node.name },
+        transform: { ...(original.transform ?? {}), ...transform },
       }
-      const original = originals.get(this.originalNames.get(child) ?? child.name)
-      if (original) {
-        original.transform = { ...original.transform, ...transform }
-        if (this.originalNames.has(child)) {
-          original.config = { ...original.config, name: child.name }
-        }
-        if (child instanceof PointOfInterest) {
-          original.config = { ...original.config, modalName: child.modalName ?? undefined }
-        }
-        return [original]
-      }
-      const made = this.created.get(child)
-      if (!made) return []
-      const config: Record<string, unknown> = { ...made.config, visualise: false }
-      if (child instanceof PointOfInterest) config.modalName = child.modalName ?? undefined
-      return [
-        {
-          type: made.type,
-          config,
-          transform,
-          properties: { tags: child.tags, layers: [1], collidesWith: [] },
-        },
-      ]
-    })
-    return json
+    } else {
+      const made = this.created.get(node)
+      const type = made?.type ?? node.constructor.name
+      entry = { type, config: { ...(made?.config ?? {}), name: node.name, visualise: false }, transform }
+      if (type !== "Node3D") entry.properties = { tags: node.tags, layers: [1], collidesWith: [] }
+    }
+    if (node instanceof PointOfInterest) entry.config.modalName = node.modalName ?? undefined
+    if (children.length) entry.children = children
+    return entry
+  }
+
+  /** The whole hierarchy in the scene file format. */
+  private sceneJson(): unknown | null {
+    return this.root ? this.serialiseNode(this.root) : null
   }
 
   private exportSceneFiles(): void {
-    const manifest = this.exhibition.manifest
-    SCENE_KEYS.forEach((key) => {
-      const json = this.patchedSceneJson(key)
-      const url = manifest.scene[key]
-      if (!json || !url) return
-      download(url.split("/").pop() ?? `${key}.json`, JSON.stringify(json, null, 2))
-    })
+    const json = this.sceneJson()
+    if (json) download("scene.json", JSON.stringify(json, null, 2))
   }
 
   private async collectFiles(): Promise<{ manifest: ExhibitionManifest; text: Record<string, string> }> {
@@ -995,11 +1114,10 @@ export class EditorSession {
     if (!manifest) throw new Error("No manifest to save")
     const text: Record<string, string> = {}
 
-    SCENE_KEYS.forEach((key) => {
-      const path = manifest.scene[key as keyof SceneFiles]
-      const json = this.patchedSceneJson(key)
-      if (path && json) text[path] = JSON.stringify(json, null, 2) + "\n"
-    })
+    const sceneJson = this.sceneJson()
+    if (sceneJson && typeof manifest.scene === "string") {
+      text[manifest.scene] = JSON.stringify(sceneJson, null, 2) + "\n"
+    }
 
     const bakedPath = manifest.camera.guided?.bakedPath
     if (bakedPath) {

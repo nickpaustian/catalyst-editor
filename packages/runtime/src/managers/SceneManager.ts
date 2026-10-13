@@ -49,10 +49,7 @@ export default class SceneManager extends BaseManager {
   public lastFrameTime: number = 0
   public introSequenceActive: boolean = true
 
-  private focalPoints!: Node3D
-  private focalPointTriggers!: Node3D
-  private pointsOfInterest: Node3D | null = null
-  private environment: Node3D | null = null
+  private _sceneRoot: Node3D | null = null
   private rail: Node3D | null = null
   private disposed: boolean = false
   private cleanups: (() => void)[] = []
@@ -108,30 +105,21 @@ export default class SceneManager extends BaseManager {
 
     this.managers.game.initialise()
 
-    this.focalPoints = await this.setupFocalPoints()
+    this._sceneRoot = await this.loadScene()
     if (this.disposed) return
 
     this.fixedCamera = new GuidedCamera({
       name: "guided-camera",
       visualise: false,
       focalLength: { current: this.guided?.focalLength ?? 14 },
-      focalPoints: this.focalPoints.getChildrenOfType(
-        FocalPoint
-      ) as FocalPoint[],
+      focalPoints: this.focalPointNodes,
     })
 
-    this.pointsOfInterest = await this.setupPointsOfInterest()
-    if (this.disposed) return
+    this.wirePointsOfInterest()
+    this.wireFocalPointTriggers()
     this.rail = this.setupGuidedCameraRail()
     this.setupSignalSubscriptions()
     this.controller = this.setupFirstPersonController()
-
-    this.environment = await this.setupEnvironmentCollisions()
-    if (this.disposed) return
-    this.focalPointTriggers = await this.setupFocalPointTriggers(
-      this.focalPoints.getChildrenOfType(FocalPoint) as FocalPoint[]
-    )
-    if (this.disposed) return
 
     this.setupKeybinds()
 
@@ -173,35 +161,41 @@ export default class SceneManager extends BaseManager {
 
     this.controller?.disablePointerLock()
 
-    ;[
-      this.vgs,
-      this.controller,
-      this.fixedCamera,
-      this.rail,
-      this.pointsOfInterest,
-      this.focalPointTriggers,
-      this.focalPoints,
-      this.environment,
-    ].forEach((node) => node?.dispose())
+    ;[this.vgs, this.controller, this.fixedCamera, this.rail, this._sceneRoot].forEach((node) =>
+      node?.dispose()
+    )
 
     this.vgs = undefined
     this.controller = undefined
     this.fixedCamera = undefined
     this.rail = null
-    this.pointsOfInterest = null
-    this.environment = null
+    this._sceneRoot = null
     this._path = null
     this._player = null
   }
 
-  /** The node trees parsed from the manifest's scene files, for tooling. */
-  public get sceneRoots(): Record<string, Node3D | null> {
-    return {
-      colliders: this.environment,
-      focalPoints: this.focalPoints ?? null,
-      focalPointTriggers: this.focalPointTriggers ?? null,
-      pointsOfInterest: this.pointsOfInterest,
-    }
+  /** The scene hierarchy, for tooling. */
+  public get sceneRoot(): Node3D | null {
+    return this._sceneRoot
+  }
+
+  /** Every focal point in the scene, in tree order. */
+  public get focalPointNodes(): FocalPoint[] {
+    return (this._sceneRoot?.walk() ?? []).filter(
+      (node): node is FocalPoint => node instanceof FocalPoint
+    )
+  }
+
+  /**
+   * Point every trigger and the guided camera at the current set of focal
+   * points. Tooling calls this after adding or removing focal points.
+   */
+  public refreshFocalPointTargets(): void {
+    const focalPoints = this.focalPointNodes
+    this.fixedCamera?.setFocalPoints(focalPoints)
+    this._sceneRoot?.walk().forEach((node) => {
+      if (node instanceof FocalPointTrigger) node.focalPoints = focalPoints
+    })
   }
 
   /** The guided rail, for tooling. */
@@ -232,10 +226,9 @@ export default class SceneManager extends BaseManager {
 
   /** Turn the debug visualisers on or off for every node in the scene trees. */
   public visualiseScene(enabled: boolean): void {
-    Object.values(this.sceneRoots).forEach((root) => {
-      root?.walk().forEach((node) => {
-        if (node instanceof Node3D && node !== root) node.visualised = enabled
-      })
+    const root = this._sceneRoot
+    root?.walk().forEach((node) => {
+      if (node instanceof Node3D && node !== root) node.visualised = enabled
     })
     if (this.vgs) this.vgs.visualised = enabled
   }
@@ -276,47 +269,47 @@ export default class SceneManager extends BaseManager {
     return parseJsonNodes(asset.json) as Node3D
   }
 
-  private async setupPointsOfInterest(): Promise<Node3D> {
-    const parsed = await this.loadSceneNodes(
-      this.managers.exhibitionAssets.scene.pointsOfInterest,
-      "pointsOfInterest"
-    )
-    const pois = parsed.getChildrenOfType(PointOfInterest) as PointOfInterest[]
-    const content = this.managers.content.byId
+  /**
+   * One hierarchy from the manifest's scene file, or, for a legacy manifest,
+   * a root with each of the four per-kind files as a child group.
+   */
+  private async loadScene(): Promise<Node3D> {
+    const scene = this.managers.exhibitionAssets.scene
+    if (scene.tree) return this.loadSceneNodes(scene.tree, "scene")
 
-    pois.forEach((poi: PointOfInterest) => {
-      const modalName = poi.modalName
+    const root = new Node3D("scene")
+    const groups = await Promise.all([
+      this.loadSceneNodes(scene.colliders, "environmentColliders"),
+      this.loadSceneNodes(scene.focalPoints, "focalPoints"),
+      this.loadSceneNodes(scene.focalPointTriggers, "focalPointTriggers"),
+      this.loadSceneNodes(scene.pointsOfInterest, "pointsOfInterest"),
+    ])
+    groups.forEach((group) => root.addNode(group))
+    return root
+  }
+
+  private wirePointsOfInterest(): void {
+    const content = this.managers.content.byId
+    this._sceneRoot?.walk().forEach((node) => {
+      if (!(node instanceof PointOfInterest)) return
+      const modalName = node.modalName
       if (!modalName) return
       const template = content[modalName]
       if (!template) {
-        debug(`No content "${modalName}" for ${poi.name}`, "warning")
+        debug(`No content "${modalName}" for ${node.name}`, "warning")
         return
       }
-      poi.onInteract = () => {
+      node.onInteract = () => {
         Modal._.openWithTemplate(template)
       }
     })
-
-    return parsed
   }
 
-  private async setupFocalPointTriggers(
-    focalPoints: FocalPoint[]
-  ): Promise<Node3D> {
-    const parsed = await this.loadSceneNodes(
-      this.managers.exhibitionAssets.scene.focalPointTriggers,
-      "focalPointTriggers"
-    )
-
-    const triggers = parsed.getChildrenOfType(
-      FocalPointTrigger
-    ) as FocalPointTrigger[]
-
-    triggers.forEach((trigger: FocalPointTrigger) => {
-      trigger.focalPoints = focalPoints
+  private wireFocalPointTriggers(): void {
+    const focalPoints = this.focalPointNodes
+    this._sceneRoot?.walk().forEach((node) => {
+      if (node instanceof FocalPointTrigger) node.focalPoints = focalPoints
     })
-
-    return parsed
   }
 
   public restart(): void {
@@ -365,11 +358,11 @@ export default class SceneManager extends BaseManager {
       )
 
       const offset = 2.0
-      node.transform.position = controllerPos
+      const worldPosition = controllerPos
         .clone()
         .addScaledVector(cameraForward, offset)
 
-      const lookBackDir = controllerPos.clone().sub(node.transform.position)
+      const lookBackDir = controllerPos.clone().sub(worldPosition)
       lookBackDir.y = 0
       lookBackDir.normalize()
 
@@ -378,7 +371,10 @@ export default class SceneManager extends BaseManager {
         new THREE.Vector3(0, 0, -1),
         lookBackDir
       )
-      node.transform.rotation = lookBackRotation
+      // The carried node may sit under a group, so place it in world space
+      node.transform.setWorldMatrix(
+        new THREE.Matrix4().compose(worldPosition, lookBackRotation, node.transform.getWorldScale())
+      )
       })
     )
 
@@ -583,33 +579,17 @@ export default class SceneManager extends BaseManager {
       const active = isWithinAnyRange(path, this.pathProgress, rule.activeWhen)
 
       if (rule.focalPoint) {
-        const node = this.focalPoints.getNode<FocalPoint>(rule.focalPoint)
+        const node = this._sceneRoot?.find<FocalPoint>(rule.focalPoint)
         if (node) node.active = active
       }
 
       if (rule.triggerTag) {
-        const nodes = this.focalPointTriggers.getNodesByTag(
-          rule.triggerTag
-        ) as FocalPoint[]
-        nodes?.forEach((node) => {
+        const nodes = (this._sceneRoot?.getNodesByTag(rule.triggerTag) ?? []) as FocalPoint[]
+        nodes.forEach((node) => {
           node.active = active
         })
       }
     })
-  }
-
-  private async setupFocalPoints(): Promise<Node3D> {
-    return this.loadSceneNodes(
-      this.managers.exhibitionAssets.scene.focalPoints,
-      "focalPoints"
-    )
-  }
-
-  private async setupEnvironmentCollisions(): Promise<Node3D> {
-    return this.loadSceneNodes(
-      this.managers.exhibitionAssets.scene.colliders,
-      "environmentColliders"
-    )
   }
 
   public setupKeybinds(): void {
