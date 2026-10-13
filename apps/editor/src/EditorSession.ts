@@ -214,12 +214,17 @@ export class EditorSession {
       this.setView("orbit")
       this.publishGroups()
       this.publishRail()
+      if (!document.hasFocus()) this.pauseWhileUnfocused()
     })
     this.pollTimer = window.setInterval(() => this.poll(), 250)
+    window.addEventListener("blur", this.pauseWhileUnfocused)
+    window.addEventListener("focus", this.resumeWhenFocused)
   }
 
   public dispose(): void {
     window.clearInterval(this.pollTimer)
+    window.removeEventListener("blur", this.pauseWhileUnfocused)
+    window.removeEventListener("focus", this.resumeWhenFocused)
     this.unsubscribeCommands()
     this.input.deactivate()
     this.camera?.dispose()
@@ -744,6 +749,17 @@ export class EditorSession {
   }
 
   /** Follow the move mode: picking a node up selects it, dropping it refreshes the fields. */
+  // Nothing else pauses the editor (pointer unlock doesn't), so the engine
+  // would keep rendering the splats whenever the window is merely behind
+  // another one. A modal pauses on its own and resumes when it closes.
+  private pauseWhileUnfocused = (): void => {
+    Catalyst._.pause()
+  }
+
+  private resumeWhenFocused = (): void => {
+    if (!Modal._.isOpen) Catalyst._.resume()
+  }
+
   private poll(): void {
     const moving = this.exhibition.managers.state.moveNode
     if (moving === this.lastMoveNode) {
