@@ -18,7 +18,7 @@ import type { SplatRenderer } from "@vitrine/stelligra"
 import type { SliceProcessorPool } from "./SliceProcessorPool"
 import type { GridCell } from "./types"
 import { getCellBoundsInto } from "./utils"
-import { debug } from "@vitrine/debug"
+import { debug, trace } from "@vitrine/debug"
 
 export interface CellFetchRequest {
   cellId: string
@@ -188,7 +188,7 @@ export class VGSCell {
         if (this._sliceAllocIds[s] !== null) return
 
         const tReceived = performance.now()
-        debug(
+        trace(
           `[VGSCell] id=${jobId} cell=${this.id} slice=${s} ` +
             `roundTrip=${(tReceived - tQueued).toFixed(1)}ms`,
           "VGS",

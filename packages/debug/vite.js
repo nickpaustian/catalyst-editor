@@ -3,7 +3,7 @@ export const removeDebugCalls = (code) => {
   let i = 0
 
   while (i < code.length) {
-    const match = code.slice(i).match(/^debug\s*\(/)
+    const match = code.slice(i).match(/^(?:debug|trace)\s*\(/)
     const prevChar = i > 0 ? code[i - 1] : " "
 
     if (match && /[\s\W]/.test(prevChar)) {
@@ -32,7 +32,7 @@ export const removeDebugCalls = (code) => {
   return result
 }
 
-/** Replaces every debug(...) call with `void 0` outside node_modules. */
+/** Replaces every debug(...) and trace(...) call with `void 0` outside node_modules. */
 export const stripDebug = () => ({
   name: "strip-debug",
   enforce: "pre",

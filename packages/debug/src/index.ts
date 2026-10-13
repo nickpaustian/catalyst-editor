@@ -23,6 +23,29 @@ export const muteDebug = (mute: boolean): void => {
   muted = mute
 }
 
+const traceRequested = (): boolean => {
+  try {
+    return (
+      new URLSearchParams(window.location.search).has("trace") ||
+      window.localStorage.getItem("vitrine:trace") === "1"
+    )
+  } catch {
+    return false
+  }
+}
+
+let tracing = __DEBUG__ && traceRequested()
+
+/**
+ * Turn per-frame and per-slice logging on or off. Also on when the page URL
+ * has `?trace` or localStorage `vitrine:trace` is "1".
+ */
+export const enableTrace = (on: boolean): void => {
+  tracing = on
+}
+
+export const isTraceEnabled = (): boolean => tracing
+
 export const debug = __DEBUG__
   ? (messages: any | any[], type?: string, colour?: string) => {
       if (muted) return
@@ -45,5 +68,12 @@ export const debug = __DEBUG__
         "",
         ...parsedMessages
       )
+    }
+  : () => {}
+
+/** debug() for messages that fire every frame or every slice; off unless tracing. */
+export const trace = __DEBUG__
+  ? (messages: any | any[], type?: string, colour?: string) => {
+      if (tracing) debug(messages, type, colour)
     }
   : () => {}

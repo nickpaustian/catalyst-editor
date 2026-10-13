@@ -1,7 +1,7 @@
 import * as THREE from "three"
 import { Catalyst } from "../../core"
 import { Node3D } from "../Node3D"
-import { debug } from "@vitrine/debug"
+import { debug, trace } from "@vitrine/debug"
 import type { GridManifest, GridCell } from "./types"
 import {
   validateGridManifest,
@@ -499,7 +499,7 @@ export class VolumetricGaussianSplat extends Node3D {
       })
       const t5 = performance.now()
 
-      debug(
+      trace(
         `Budget: theoretical=${theoreticalCost.toLocaleString()} ` +
           `actual=${actualCost.toLocaleString()} ` +
           `budget=${this._effectiveBudget.toLocaleString()} ` +
@@ -508,7 +508,7 @@ export class VolumetricGaussianSplat extends Node3D {
           `sort=${this._splatRenderer.lastSortMs.toFixed(1)}ms`,
         "VGS",
       )
-      debug(
+      trace(
         `computeDesiredState: frustum=${(t1 - t0).toFixed(1)}ms ` +
           `cull=${(t2 - t1).toFixed(1)}ms ` +
           `pass1=${(t3 - t2).toFixed(1)}ms ` +
@@ -580,7 +580,7 @@ export class VolumetricGaussianSplat extends Node3D {
         this._config.frustumSmear ?? 8.0,
       )
 
-      debug(
+      trace(
         `Frustum smear: speed=${speed.toFixed(4)} ` +
           `linear=${linearSpeed.toFixed(4)} ` +
           `angular=${angularSpeed.toFixed(4)} ` +
@@ -897,7 +897,7 @@ export class VolumetricGaussianSplat extends Node3D {
     const frameTime = now - this._lastFrameTime
     this._lastFrameTime = now
 
-    debug(
+    trace(
       `updateRenderer: frameTime=${frameTime.toFixed(1)}ms ` +
         `pendingUploads=${this._splatRenderer["_pendingUploads"]?.length ?? 0} ` +
         `aliveCount=${this._splatRenderer.splatCount}`,
@@ -912,7 +912,7 @@ export class VolumetricGaussianSplat extends Node3D {
   //=========================
 
   private drainFetchQueue(): void {
-    debug(
+    trace(
       `Active loads: ${this._activeLoads.size}, queue: ${this._fetchQueue.length}`,
       "VGS",
     )

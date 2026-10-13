@@ -5,7 +5,7 @@ import {
 } from "../SplatMaterial/SplatMaterial"
 import { buildSplatGeometry } from "../SplatMaterial/SplatGeometry"
 import { SORT_WORKER_CODE } from "../SplatMesh/SortWorker"
-import { debug } from "@vitrine/debug"
+import { debug, trace } from "@vitrine/debug"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -255,7 +255,7 @@ export class SplatRenderer extends THREE.Mesh {
   ): void {
     const alloc = this._allocations.get(allocId)
     if (!alloc) return
-    debug(
+    trace(
       `uploadPacked: allocId=${allocId} slotStart=${alloc.slotStart} ` +
         `count=${alloc.count} pendingUploads=${this._pendingUploads.length} ` +
         `frame=${this._frame}`,
@@ -301,7 +301,7 @@ export class SplatRenderer extends THREE.Mesh {
     alloc.lastDesiredFrame = this._frame
     this._aliveCount += alloc.count
     this._sortCount = this._hwm
-    debug(
+    trace(
       `showSlice: allocId=${allocId} slotStart=${alloc.slotStart} count=${alloc.count} frame=${this._frame}`,
       "SPLAT",
     )
@@ -600,7 +600,7 @@ export class SplatRenderer extends THREE.Mesh {
       this._stats.sortMsMax = Math.max(this._stats.sortMsMax, this._lastSortMs)
       this._stats.visibleCount = visibleCount
       this._sortPending = false
-      debug(
+      trace(
         `Sort returned frame=${this._frame} visibleCount=${visibleCount}`,
         "SPLAT",
       )
@@ -615,7 +615,7 @@ export class SplatRenderer extends THREE.Mesh {
       const f = this._freeList[i]
       if (f.count === count) {
         this._freeList.splice(i, 1)
-        debug(
+        trace(
           `_allocSlots: free list exact match start=${f.start} count=${count}`,
           "SPLAT-RENDERER",
         )
@@ -625,7 +625,7 @@ export class SplatRenderer extends THREE.Mesh {
         const start = f.start
         f.start += count
         f.count -= count
-        debug(
+        trace(
           `_allocSlots: free list split start=${start} count=${count}`,
           "SPLAT-RENDERER",
         )
@@ -680,7 +680,7 @@ export class SplatRenderer extends THREE.Mesh {
       this._growCapacity(this._hwm)
     }
 
-    debug(
+    trace(
       `_allocSlots: HWM extend start=${start} count=${count} hwm=${this._hwm}`,
       "SPLAT-RENDERER",
     )
@@ -770,7 +770,7 @@ export class SplatRenderer extends THREE.Mesh {
     const uploadMs = performance.now() - t0
     this._stats.uploadBatches++
     this._stats.uploadMsTotal += uploadMs
-    debug(
+    trace(
       `_applyPendingOps: ${uploadMs.toFixed(1)}ms`,
       "SPLAT-RENDERER",
     )
