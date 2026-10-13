@@ -1,4 +1,4 @@
-import { InputBinding } from "./InputBinding"
+import { InputBinding, type BindingOptions } from "./InputBinding"
 
 /**
  * InputBindingMap - Manages a collection of input bindings.
@@ -18,14 +18,18 @@ export class InputBindingMap {
   /**
    * Create or update a binding.
    */
-  public bind(actionName: string, keys: string | string[]): InputBinding {
+  public bind(
+    actionName: string,
+    keys: string | string[],
+    options?: BindingOptions
+  ): InputBinding {
     // Remove old binding if it exists
     if (this.bindingsByAction.has(actionName)) {
       this.unbind(actionName)
     }
 
     // Create new binding
-    const binding = new InputBinding(actionName, keys)
+    const binding = new InputBinding(actionName, keys, options)
 
     // Store by action name
     this.bindingsByAction.set(actionName, binding)

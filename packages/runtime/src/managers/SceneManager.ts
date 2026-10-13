@@ -614,7 +614,7 @@ export default class SceneManager extends BaseManager {
     if (!input) return
 
     input.bind("toggleCamera", "p")
-    input.bind("shutdown", "q")
+    input.bind("shutdown", "shift+q", { taps: 3 })
     input.bind("logPos", "l")
     input.bind("close", "Escape")
     input.bind("interact", "f")

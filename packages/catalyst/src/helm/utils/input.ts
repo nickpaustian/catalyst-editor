@@ -4,8 +4,21 @@ export const MOUSE_BUTTON_ALIASES: Record<string, string> = {
   "mouse:middle": "mouse:3",
 }
 
+const MODIFIER_ALIASES: Record<string, string> = {
+  shift: "Shift",
+  ctrl: "Control",
+  control: "Control",
+  alt: "Alt",
+  option: "Alt",
+  meta: "Meta",
+  cmd: "Meta",
+  command: "Meta",
+}
+
 export function normaliseKey(key: string): string {
   const lower = key.toLowerCase()
+
+  if (MODIFIER_ALIASES[lower]) return MODIFIER_ALIASES[lower]
 
   // Pointer button codes use a "mouse:" prefix and resolve to canonical form.
   if (lower.startsWith("mouse:")) {
@@ -17,6 +30,23 @@ export function normaliseKey(key: string): string {
     return key.toLowerCase()
   }
   return key
+}
+
+/**
+ * A chord is several keys held together, written "shift+q". Each part is
+ * normalised; the "+" key itself can't be part of a chord.
+ */
+export function chordParts(chord: string): string[] {
+  return chord.split("+").filter((part) => part.length > 0).map(normaliseKey)
+}
+
+export function normaliseChord(chord: string): string {
+  return chordParts(chord).join("+")
+}
+
+export function chordSatisfied(chord: string, pressedKeys: string[]): boolean {
+  const parts = chordParts(chord)
+  return parts.length > 0 && parts.every((part) => pressedKeys.includes(part))
 }
 
 const KEY_GROUPS: Record<string, string[]> = {

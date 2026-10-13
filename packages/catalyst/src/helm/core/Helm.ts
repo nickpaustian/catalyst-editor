@@ -1,5 +1,6 @@
 import { KeyboardManager } from "./KeyboardManager"
 import { InputBindingMap } from "../bindings/InputBindingMap"
+import type { BindingOptions } from "../bindings/InputBinding"
 import { InputAction, type ActionContext } from "../actions/InputAction"
 import { inputSignals, type InputSignals } from "./InputSignals"
 import { HoldRepeater } from "./HoldRepeater"
@@ -61,6 +62,9 @@ export class Helm {
   private actions: Map<string, InputAction> = new Map()
   private holdRepeaters: Map<string, HoldRepeater> = new Map()
   private activeActions: Set<string> = new Set()
+  /** Actions whose key or chord was satisfied last frame, for tap edges. */
+  private chordHeld: Set<string> = new Set()
+  private tapStates: Map<string, { count: number; lastTapAt: number }> = new Map()
   private _activeTriggerKeys: Map<string, string> = new Map()
   private _inputFrameId: number | null = null
 
@@ -129,8 +133,14 @@ export class Helm {
   /**
    * Bind one or more keys to an action.
    */
-  public bind(actionName: string, keys: string | string[]): void {
-    this.bindings.bind(actionName, keys)
+  public bind(
+    actionName: string,
+    keys: string | string[],
+    options?: BindingOptions
+  ): void {
+    this.bindings.bind(actionName, keys, options)
+    this.tapStates.delete(actionName)
+    this.chordHeld.delete(actionName)
     const binding = this.bindings.getBinding(actionName)
     if (binding) {
       this.signals.onBindingChanged.emit({
@@ -236,15 +246,24 @@ export class Helm {
 
     this._mapper.update()
 
+    const currentlyHeld = new Set<string>()
+
     for (const actionName of this.bindings.getActions()) {
       const binding = this.bindings.getBinding(actionName)
       if (!binding) continue
 
-      const triggerKey = binding
-        .getKeys()
-        .find((key) => pressedKeys.includes(key))
+      const triggerKey = binding.match(pressedKeys)
+      if (triggerKey) currentlyHeld.add(actionName)
 
-      if (triggerKey) {
+      // Multi-tap bindings only become active on the tap that completes the
+      // sequence; earlier taps are counted and otherwise ignored
+      const active =
+        triggerKey !== undefined &&
+        (binding.taps <= 1 ||
+          previouslyActive.has(actionName) ||
+          this.completesTapSequence(actionName, binding, now))
+
+      if (active) {
         currentActive.add(actionName)
 
         if (!previouslyActive.has(actionName)) {
@@ -256,7 +275,26 @@ export class Helm {
       }
     }
 
+    this.chordHeld = currentlyHeld
     this.activeActions = currentActive
+  }
+
+  /** Count a rising edge of the binding; true when it is the final tap. */
+  private completesTapSequence(
+    actionName: string,
+    binding: { taps: number; tapWindowMs: number },
+    now: number
+  ): boolean {
+    if (this.chordHeld.has(actionName)) return false
+    const state = this.tapStates.get(actionName) ?? { count: 0, lastTapAt: 0 }
+    state.count = now - state.lastTapAt <= binding.tapWindowMs ? state.count + 1 : 1
+    state.lastTapAt = now
+    if (state.count >= binding.taps) {
+      this.tapStates.delete(actionName)
+      return true
+    }
+    this.tapStates.set(actionName, state)
+    return false
   }
 
   /**
@@ -369,6 +407,8 @@ export class Helm {
     this.holdRepeaters.forEach((repeater) => repeater.stop())
     this.holdRepeaters.clear()
     this.activeActions.clear()
+    this.chordHeld.clear()
+    this.tapStates.clear()
   }
 
   public dispose(): void {
