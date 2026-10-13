@@ -16,6 +16,7 @@ import {
   type BakedCameraPath,
   type Exhibition,
   type ExhibitionManifest,
+  type Presentation,
   type SceneFiles,
 } from "@vitrine/runtime"
 import type { JsonAsset } from "@vitrine/assets"
@@ -51,6 +52,13 @@ export interface EditorCells {
     contentId: string
     contentOptions: string[]
   } | null
+  /** The editable presentation strings; paths are dotted keys into the manifest's presentation. */
+  "editor:presentation": { path: string; label: string; value: string; multiline: boolean }[]
+  "editor:content": {
+    entries: { id: string; src: string; selected: boolean; edited: boolean }[]
+    selectedId: string | null
+    html: string
+  }
   "editor:rail": {
     shown: boolean
     cameraSource: "baked" | "rail"
@@ -88,6 +96,12 @@ export type EditorCommand =
   | { type: "railAddAfter" }
   | { type: "railDelete" }
   | { type: "railFocus" }
+  | { type: "setPresentation"; path: string; value: string }
+  | { type: "contentSelect"; id: string }
+  | { type: "contentSetHtml"; html: string }
+  | { type: "contentPreview" }
+  | { type: "contentAdd"; id: string }
+  | { type: "contentDelete" }
 
 const round = (n: number, places = 4) => Number(n.toFixed(places))
 
@@ -127,6 +141,13 @@ export class EditorSession {
   private selected: Node3D | null = null
   private lastMoveNode: Node3D | null = null
   private created = new Map<Node3D, { type: string; config: Record<string, unknown> }>()
+  /** Working copy of the manifest's presentation, applied live and saved. */
+  private presentation: Presentation
+  /** Content HTML edited this session, by id; entries added and removed this session. */
+  private contentEdits = new Map<string, string>()
+  private contentAdded = new Map<string, string>()
+  private contentDeleted = new Set<string>()
+  private contentSelected: string | null = null
   private pollTimer: number
   private unsubscribeCommands: () => void
 
@@ -154,6 +175,7 @@ export class EditorSession {
     this.onOpenFolder = options.onOpenFolder
     this.rawManifest = options.rawManifest ?? null
     this.folder = options.folder ?? null
+    this.presentation = structuredClone(this.exhibition.manifest.presentation ?? {})
 
     document.body.classList.add("editor-panel-open")
     const state = this.exhibition.managers.state
@@ -180,6 +202,8 @@ export class EditorSession {
     this.publishGroups()
     this.publishSelection()
     this.publishRail()
+    this.publishPresentation()
+    void this.publishContent()
 
     void this.exhibition.ready.then(() => {
       this.camera = new EditorCamera()
@@ -280,7 +304,7 @@ export class EditorSession {
       },
       isPoi: poi !== null,
       contentId: poi?.modalName ?? "",
-      contentOptions: Object.keys(this.exhibition.manifest.content),
+      contentOptions: this.contentEntries().map((entry) => entry.id),
     })
   }
 
@@ -306,6 +330,113 @@ export class EditorSession {
           }
         : null,
     })
+  }
+
+  private static readonly PRESENTATION_FIELDS: { path: string; label: string; multiline?: boolean }[] = [
+    { path: "landing.tagline", label: "Landing tagline" },
+    { path: "landing.description", label: "Landing description", multiline: true },
+    { path: "landing.headphonesNote", label: "Headphones note" },
+    { path: "landing.scrollPrompt", label: "Scroll prompt" },
+    { path: "hud.moveHint", label: "Move hint" },
+    { path: "footer.title", label: "Footer title" },
+    { path: "footer.copy", label: "Footer copy", multiline: true },
+    { path: "footer.creditsTitle", label: "Credits title" },
+    { path: "footer.credits", label: "Credits (one per line)", multiline: true },
+    { path: "footer.restartLabel", label: "Restart label" },
+  ]
+
+  private readPresentation(path: string): string {
+    const [section, key] = path.split(".")
+    const value = (this.presentation as any)[section]?.[key]
+    return Array.isArray(value) ? value.join("\n") : value ?? ""
+  }
+
+  private writePresentation(path: string, value: string): void {
+    const [section, key] = path.split(".")
+    const target = ((this.presentation as any)[section] ??= {})
+    target[key] = path === "footer.credits" ? value.split("\n").filter((l) => l.length) : value
+    this.exhibition.managers.ui.applyPresentation(this.presentation)
+    this.publishPresentation()
+  }
+
+  private publishPresentation(): void {
+    this.set(
+      "editor:presentation",
+      EditorSession.PRESENTATION_FIELDS.map((field) => ({
+        path: field.path,
+        label: field.label,
+        value: this.readPresentation(field.path),
+        multiline: field.multiline ?? false,
+      }))
+    )
+  }
+
+  // ---------------- content ----------------
+
+  /** Content entries as they would be saved: manifest ones minus deleted, plus added. */
+  private contentEntries(): { id: string; src: string }[] {
+    const raw = this.rawManifest ?? assets.getAs<JsonAsset<ExhibitionManifest>>(this.exhibition.manifest.url)?.json
+    const entries = Object.entries(raw?.content ?? {})
+      .filter(([id]) => !this.contentDeleted.has(id))
+      .map(([id, entry]) => ({ id, src: entry.src }))
+    this.contentAdded.forEach((src, id) => entries.push({ id, src }))
+    return entries
+  }
+
+  private async contentHtml(id: string): Promise<string> {
+    const edited = this.contentEdits.get(id)
+    if (edited !== undefined) return edited
+    const asset = this.exhibition.managers.exhibitionAssets.contentById.get(id)
+    if (!asset) return ""
+    await asset.ensure()
+    return asset.text
+  }
+
+  private async publishContent(): Promise<void> {
+    const entries = this.contentEntries()
+    const selectedId = this.contentSelected && entries.some((e) => e.id === this.contentSelected)
+      ? this.contentSelected
+      : null
+    this.set("editor:content", {
+      entries: entries.map((entry) => ({
+        ...entry,
+        selected: entry.id === selectedId,
+        edited: this.contentEdits.has(entry.id) || this.contentAdded.has(entry.id),
+      })),
+      selectedId,
+      html: selectedId ? await this.contentHtml(selectedId) : "",
+    })
+  }
+
+  private contentAdd(id: string): void {
+    const clean = id.trim().replace(/[^a-zA-Z0-9_-]/g, "")
+    if (!clean || this.contentEntries().some((e) => e.id === clean)) return
+    const src = `content/${clean}.html`
+    this.contentAdded.set(clean, src)
+    this.contentEdits.set(
+      clean,
+      `<div class="modal-header">\n  <div class="menu-left">\n    <div id="btn-resume" class="menu-close key">\n      <div class="key-button">Close</div>\n    </div>\n  </div>\n</div>\n<div class="modal-quote-wrapper">\n  <div class="modal-article-inner">\n    <article class="scrollable">\n      <div class="content-wrapper">\n        <h1>${clean}</h1>\n      </div>\n    </article>\n  </div>\n</div>\n`
+    )
+    this.contentSelected = clean
+    void this.publishContent()
+    this.publishSelection()
+  }
+
+  private contentDelete(): void {
+    const id = this.contentSelected
+    if (!id) return
+    if (this.contentAdded.has(id)) this.contentAdded.delete(id)
+    else this.contentDeleted.add(id)
+    this.contentEdits.delete(id)
+    this.contentSelected = null
+    void this.publishContent()
+    this.publishSelection()
+  }
+
+  private async contentPreview(): Promise<void> {
+    if (!this.contentSelected) return
+    const html = await this.contentHtml(this.contentSelected)
+    Modal._.open(html)
   }
 
   // ---------------- commands ----------------
@@ -407,6 +538,28 @@ export class EditorSession {
         break
       case "railDelete":
         this.railDelete()
+        break
+      case "setPresentation":
+        this.writePresentation(command.path, command.value)
+        break
+      case "contentSelect":
+        this.contentSelected = command.id
+        await this.publishContent()
+        break
+      case "contentSetHtml":
+        if (this.contentSelected) {
+          this.contentEdits.set(this.contentSelected, command.html)
+          await this.publishContent()
+        }
+        break
+      case "contentPreview":
+        await this.contentPreview()
+        break
+      case "contentAdd":
+        this.contentAdd(command.id)
+        break
+      case "contentDelete":
+        this.contentDelete()
         break
       case "railFocus": {
         const cp = this.railPoints[this.railSelected]
@@ -701,6 +854,11 @@ export class EditorSession {
     if (json.camera.guided?.rail) {
       json.camera.guided.rail.controlPoints = this.railToManifest()
     }
+    json.presentation = { ...json.presentation, ...structuredClone(this.presentation) }
+    this.contentDeleted.forEach((id) => delete json.content[id])
+    this.contentAdded.forEach((src, id) => {
+      json.content[id] = { type: "html", src }
+    })
     return json
   }
 
@@ -783,6 +941,11 @@ export class EditorSession {
 
     const content = this.exhibition.managers.exhibitionAssets
     for (const [id, entry] of Object.entries(manifest.content)) {
+      const edited = this.contentEdits.get(id)
+      if (edited !== undefined) {
+        text[entry.src] = edited
+        continue
+      }
       const asset = content.contentById.get(id)
       if (!asset) continue
       await asset.ensure()

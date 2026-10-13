@@ -42,6 +42,8 @@ export default class UiManager extends BaseManager {
   public hud!: HTMLElement
   public fpch!: HTMLElement
   private overlayBlur!: HTMLElement
+  /** The elements that show presentation copy, so edits can be applied live. */
+  private copy: Partial<Record<string, HTMLElement>> = {}
   public poiDiv!: HTMLElement
   public footerReadStart: number = 1.0
   public footerReadEnd: number = 1.1
@@ -160,11 +162,13 @@ export default class UiManager extends BaseManager {
     const contentTagline = document.createElement("div")
     contentTagline.setAttribute("id", "landing-card-content-tagline")
     contentTagline.innerText = landing.tagline ?? ""
+    this.copy.tagline = contentTagline
     contentInner.appendChild(contentTagline)
 
     const contentDescription = document.createElement("div")
     contentDescription.setAttribute("id", "landing-card-content-description")
     contentDescription.innerText = landing.description ?? ""
+    this.copy.description = contentDescription
     contentInner.appendChild(contentDescription)
 
     const contentHeadphones = document.createElement("div")
@@ -187,6 +191,7 @@ export default class UiManager extends BaseManager {
       "landing-card-content-headphones-label",
     )
     contentHeadphonesLabel.innerText = landing.headphonesNote ?? ""
+    this.copy.headphonesNote = contentHeadphonesLabel
     contentHeadphones.appendChild(contentHeadphonesLabel)
 
     const progressBarWrapper = document.createElement("div")
@@ -223,6 +228,7 @@ export default class UiManager extends BaseManager {
     const scrollContentLabel = document.createElement("div")
     scrollContentLabel.setAttribute("id", "landing-card-scroll-label")
     scrollContentLabel.innerText = landing.scrollPrompt ?? ""
+    this.copy.scrollPrompt = scrollContentLabel
     scrollContent.appendChild(scrollContentLabel)
 
     const scrollContentImage = document.createElement("img")
@@ -316,17 +322,20 @@ export default class UiManager extends BaseManager {
     const title = document.createElement("div")
     title.classList.add("heading")
     title.innerText = footerCopy.title ?? ""
+    this.copy.footerTitle = title
     copyInner.appendChild(title)
 
     const description = document.createElement("div")
     description.classList.add("copy")
     description.innerText = footerCopy.copy ?? ""
+    this.copy.footerCopy = description
 
     copyInner.appendChild(description)
 
     const creditsTitle = document.createElement("div")
     creditsTitle.classList.add("heading")
     creditsTitle.innerText = footerCopy.creditsTitle ?? ""
+    this.copy.creditsTitle = creditsTitle
     copyInner.appendChild(creditsTitle)
 
     const creditsCopy = document.createElement("div")
@@ -334,6 +343,7 @@ export default class UiManager extends BaseManager {
     creditsCopy.innerHTML = (footerCopy.credits ?? [])
       .map((line) => escapeHtml(line))
       .join("<br/>")
+    this.copy.credits = creditsCopy
 
     copyInner.appendChild(creditsCopy)
 
@@ -358,6 +368,7 @@ export default class UiManager extends BaseManager {
     restartExperienceButton.setAttribute("id", "footer-card-restart")
     restartExperienceButton.innerText =
       footerCopy.restartLabel ?? "Restart experience"
+    this.copy.restartLabel = restartExperienceButton
 
     restartExperienceButton.addEventListener("pointerup", () => {
       this.managers.scene.restart()
@@ -467,6 +478,7 @@ export default class UiManager extends BaseManager {
     const footerMessageCopy = document.createElement("div")
     footerMessageCopy.setAttribute("id", "hud-footer-message-copy")
     footerMessageCopy.innerText = this.presentation.hud?.moveHint ?? ""
+    this.copy.moveHint = footerMessageCopy
     footerMessage.appendChild(footerMessageCopy)
 
     footer.appendChild(footerMessage)
@@ -825,6 +837,29 @@ export default class UiManager extends BaseManager {
     this.footerReadEnd =
       this.footerReadStart + scrollableHeight * (this.presentation.footer?.scrollFeel ?? 0)
     return this.footerReadEnd
+  }
+
+  /** Re-apply the presentation strings to the live UI (tooling edits copy in place). */
+  public applyPresentation(presentation: Presentation): void {
+    const set = (key: string, text: string | undefined) => {
+      const el = this.copy[key]
+      if (el) el.innerText = text ?? ""
+    }
+    set("tagline", presentation.landing?.tagline)
+    set("description", presentation.landing?.description)
+    set("headphonesNote", presentation.landing?.headphonesNote)
+    set("scrollPrompt", presentation.landing?.scrollPrompt)
+    set("footerTitle", presentation.footer?.title)
+    set("footerCopy", presentation.footer?.copy)
+    set("creditsTitle", presentation.footer?.creditsTitle)
+    set("restartLabel", presentation.footer?.restartLabel ?? "Restart experience")
+    set("moveHint", presentation.hud?.moveHint)
+    if (this.copy.credits) {
+      this.copy.credits.innerHTML = (presentation.footer?.credits ?? [])
+        .map((line) => escapeHtml(line))
+        .join("<br/>")
+    }
+    this.calculateFooterEnd()
   }
 
   public dispose(): void {

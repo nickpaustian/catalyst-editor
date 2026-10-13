@@ -47,6 +47,10 @@
   <h2>Selected</h2>
   <SelectionFields />
 
+  <ContentSection />
+
+  <PresentationSection />
+
   <h2>Export</h2>
   <div class="buttons">
     <button @click="send('exportScene')">Scene files</button>
