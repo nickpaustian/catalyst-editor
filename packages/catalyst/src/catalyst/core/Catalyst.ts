@@ -53,6 +53,8 @@ export class Catalyst {
   private gameLoop: GameLoop
   private isRunning: boolean = false
   private _shouldUpdate: boolean = true
+  private _renderOnDemand: boolean = false
+  private _renderRequested: boolean = true
 
   // Core objects
   private canvas!: HTMLCanvasElement
@@ -141,6 +143,7 @@ export class Catalyst {
     // Only update renderer/camera if initialised
     if (this._renderer && this._camera) {
       updateOnResize(this._camera.view, this._renderer, this.width, this.height)
+      this._renderRequested = true
     }
 
     this._signals.onResize.emit({ width: this.width, height: this.height })
@@ -186,6 +189,24 @@ export class Catalyst {
     return this._renderer
   }
 
+  /**
+   * When on, a frame is only drawn if the camera moved, something called
+   * requestRender() since the last draw, or the pixel ratio changed. Update
+   * and the render signals still run every frame.
+   */
+  public get renderOnDemand(): boolean {
+    return this._renderOnDemand
+  }
+
+  public set renderOnDemand(on: boolean) {
+    this._renderOnDemand = on
+    this._renderRequested = true
+  }
+
+  public requestRender(): void {
+    this._renderRequested = true
+  }
+
   public get physics(): VeloraEnvironment | undefined {
     return this._physics
   }
@@ -227,6 +248,7 @@ export class Catalyst {
 
   public resume(): void {
     this._shouldUpdate = true
+    this._renderRequested = true
     this._input.resume()
     this.handleWindowResize()
   }
@@ -330,12 +352,22 @@ export class Catalyst {
   private render(deltaTime: number): void {
     this._signals.onRender.emit({ deltaTime })
     if (this._renderer && this._scene && this._camera) {
+      const cameraMoved = this._camera.isDirty
+      const ratioBefore = this._renderer.getPixelRatio()
       this._resolution.update(
         this._renderer,
-        this._camera.isDirty,
+        cameraMoved,
         this._frameInterval || 1000 / 60
       )
-      this._renderer.render(this._scene, this._camera.view)
+      const draw =
+        !this._renderOnDemand ||
+        this._renderRequested ||
+        cameraMoved ||
+        this._renderer.getPixelRatio() !== ratioBefore
+      if (draw) {
+        this._renderRequested = false
+        this._renderer.render(this._scene, this._camera.view)
+      }
     }
     this._signals.onPostRender.emit({ deltaTime })
   }

@@ -109,6 +109,9 @@ export class SplatRenderer extends THREE.Mesh {
   private _worker: Worker | null = null
   private _workerUrl: string | null = null
   private _sortPending = false
+  // Set whenever what the next draw would show has changed (uploads, sort
+  // order, slices shown/hidden); read with consumeChange() by on-demand rendering
+  private _changed = false
   private _benchmarkResolve: ((r: BenchmarkResult) => void) | null = null
   private _sortBuffer: ArrayBuffer | null = null
   private _sortFrustumCull: boolean
@@ -301,6 +304,7 @@ export class SplatRenderer extends THREE.Mesh {
     alloc.lastDesiredFrame = this._frame
     this._aliveCount += alloc.count
     this._sortCount = this._hwm
+    this._changed = true
     trace(
       `showSlice: allocId=${allocId} slotStart=${alloc.slotStart} count=${alloc.count} frame=${this._frame}`,
       "SPLAT",
@@ -318,6 +322,7 @@ export class SplatRenderer extends THREE.Mesh {
     alloc.hidden = true
     this._aliveCount -= alloc.count
     this._sortCount = this._hwm
+    this._changed = true
   }
 
   /**
@@ -344,6 +349,7 @@ export class SplatRenderer extends THREE.Mesh {
     alloc.evicted = true
     alloc.hidden = true
     this._sortCount = this._hwm
+    this._changed = true
     alloc.onEvict?.()
   }
 
@@ -409,6 +415,13 @@ export class SplatRenderer extends THREE.Mesh {
     const levelMultiplier = 1 + (alloc.sliceLevel ?? 0) * 0.5
 
     return staleness * sizeWeight * levelMultiplier
+  }
+
+  /** True once since the last call if the next draw would differ from the last. */
+  consumeChange(): boolean {
+    const changed = this._changed
+    this._changed = false
+    return changed
   }
 
   update(camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer): void {
@@ -592,6 +605,7 @@ export class SplatRenderer extends THREE.Mesh {
       attr.addUpdateRange(0, visibleCount)
       attr.needsUpdate = true
       this._instancedGeom.instanceCount = visibleCount
+      this._changed = true
 
       this._sortBuffer = indices.buffer as ArrayBuffer
       this._lastSortMs = msg.msSort ?? 0
@@ -753,6 +767,7 @@ export class SplatRenderer extends THREE.Mesh {
 
   private _applyPendingOps(renderer: THREE.WebGLRenderer): void {
     if (this._pendingUploads.length === 0) return
+    this._changed = true
 
     const t0 = performance.now()
 

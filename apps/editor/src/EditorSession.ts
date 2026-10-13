@@ -126,6 +126,11 @@ const EDITOR_RESOLUTION: ResolutionSettings = {
   settleMs: 300,
 }
 
+// With on-demand rendering the scene only redraws when the camera moves or
+// something asks; any interaction asks, since the gizmo and visualisers react
+// to pointer and keyboard input without the camera moving
+const INTERACTION_EVENTS = ["pointermove", "pointerdown", "pointerup", "wheel", "keydown", "keyup"] as const
+
 const MARKER_COLOUR = 0xffd54a
 const SELECTED_COLOUR = 0x4ad0ff
 
@@ -221,6 +226,7 @@ export class EditorSession {
     void this.exhibition.ready.then(() => {
       this.camera = new EditorCamera()
       Catalyst._.resolution = EDITOR_RESOLUTION
+      Catalyst._.renderOnDemand = true
       this.toggleVisualisers()
       this.setView("orbit")
       this.publishGroups()
@@ -230,12 +236,19 @@ export class EditorSession {
     this.pollTimer = window.setInterval(() => this.poll(), 250)
     window.addEventListener("blur", this.pauseWhileUnfocused)
     window.addEventListener("focus", this.resumeWhenFocused)
+    for (const type of INTERACTION_EVENTS) {
+      document.addEventListener(type, this.requestRender, { capture: true, passive: true })
+    }
   }
 
   public dispose(): void {
     window.clearInterval(this.pollTimer)
     window.removeEventListener("blur", this.pauseWhileUnfocused)
     window.removeEventListener("focus", this.resumeWhenFocused)
+    for (const type of INTERACTION_EVENTS) {
+      document.removeEventListener(type, this.requestRender, { capture: true })
+    }
+    Catalyst._.renderOnDemand = false
     this.unsubscribeCommands()
     this.input.deactivate()
     this.camera?.dispose()
@@ -589,6 +602,7 @@ export class EditorSession {
         break
       }
     }
+    this.requestRender()
   }
 
   // ---------------- view ----------------
@@ -771,8 +785,13 @@ export class EditorSession {
     if (!Modal._.isOpen) Catalyst._.resume()
   }
 
+  private requestRender = (): void => {
+    Catalyst._.requestRender()
+  }
+
   private poll(): void {
     const moving = this.exhibition.managers.state.moveNode
+    if (moving) this.requestRender()
     if (moving === this.lastMoveNode) {
       if (this.scene.isRecording !== (this.app.shared("editor:rail").value as any)?.recording) {
         this.publishRail()

@@ -905,6 +905,7 @@ export class VolumetricGaussianSplat extends Node3D {
     )
 
     this._splatRenderer.update(camera, renderer)
+    if (this._splatRenderer.consumeChange()) Catalyst._.requestRender()
   }
 
   //=========================
@@ -1013,6 +1014,7 @@ export class VolumetricGaussianSplat extends Node3D {
   //=========================
 
   private buildVisualisationMesh(desired: Map<string, number>): void {
+    Catalyst._.requestRender()
     if (this._visualisationMesh) {
       Catalyst._.scene.remove(this._visualisationMesh)
       this._visualisationMesh.geometry.dispose()
