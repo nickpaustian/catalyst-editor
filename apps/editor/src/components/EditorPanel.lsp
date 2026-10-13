@@ -1,8 +1,8 @@
 <view>
 <aside class="panel">
-  <RailSection />
-
   <SceneTree />
+
+  <RailSection />
 
   <h2>Selected</h2>
   <SelectionFields />
