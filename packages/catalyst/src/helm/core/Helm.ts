@@ -130,6 +130,15 @@ export class Helm {
     return this._mapper
   }
 
+  /** Wheel events this returns false for are left to the page (e.g. scrollable UI). */
+  public get scrollFilter(): ((event: WheelEvent) => boolean) | null {
+    return this._scroll.filter
+  }
+
+  public set scrollFilter(filter: ((event: WheelEvent) => boolean) | null) {
+    this._scroll.filter = filter
+  }
+
   /**
    * Bind one or more keys to an action.
    */

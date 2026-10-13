@@ -131,6 +131,9 @@ const EDITOR_RESOLUTION: ResolutionSettings = {
 // to pointer and keyboard input without the camera moving
 const INTERACTION_EVENTS = ["pointermove", "pointerdown", "pointerup", "wheel", "keydown", "keyup"] as const
 
+const isOverPanel = (target: EventTarget | null): boolean =>
+  target instanceof Node && !!document.getElementById("editor-panel")?.contains(target)
+
 const MARKER_COLOUR = 0xffd54a
 const SELECTED_COLOUR = 0x4ad0ff
 
@@ -199,8 +202,8 @@ export class EditorSession {
     const state = this.exhibition.managers.state
     state.pauseOnPointerUnlock = false
     state.autoPointerLock = false
-    state.lockPointerFilter = (target) =>
-      !(target instanceof Node && !!document.getElementById("editor-panel")?.contains(target))
+    state.lockPointerFilter = (target) => !isOverPanel(target)
+    Catalyst._.input!.scrollFilter = (event) => !isOverPanel(event.target)
 
     this.exhibition.managers.scene.onRecordingComplete = (baked) => {
       this.recordedPath = baked
@@ -249,6 +252,7 @@ export class EditorSession {
       document.removeEventListener(type, this.requestRender, { capture: true })
     }
     Catalyst._.renderOnDemand = false
+    Catalyst._.input!.scrollFilter = null
     this.unsubscribeCommands()
     this.input.deactivate()
     this.camera?.dispose()

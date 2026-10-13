@@ -12,6 +12,8 @@ export interface ScrollManagerConfig {
   scrollSignal: Signal<ScrollData>
   inputMapper?: InputMapper
   target?: HTMLElement | string | null
+  /** Return false to leave a wheel event alone (no preventDefault, not emitted). */
+  filter?: (event: WheelEvent) => boolean
 }
 
 export class ScrollManager {
@@ -20,11 +22,13 @@ export class ScrollManager {
   private _inputMapper: InputMapper | null = null
   private _target: HTMLElement | Document
   private _isActive: boolean = true
+  private _filter: ((event: WheelEvent) => boolean) | null = null
 
   constructor(config: ScrollManagerConfig) {
     this.scrollSignal = config.scrollSignal
     this._inputMapper = config?.inputMapper || null
     this._target = resolveTarget(config.target)
+    this._filter = config.filter ?? null
     this.scrollHandler = (event) => this.handleScroll(event)
     this.setupListeners()
   }
@@ -35,6 +39,14 @@ export class ScrollManager {
 
   public set inputMapper(inputMapper: InputMapper) {
     this._inputMapper = inputMapper
+  }
+
+  public set filter(filter: ((event: WheelEvent) => boolean) | null) {
+    this._filter = filter
+  }
+
+  public get filter(): ((event: WheelEvent) => boolean) | null {
+    return this._filter
   }
 
   //=========================
@@ -55,6 +67,7 @@ export class ScrollManager {
 
   private handleScroll(event: WheelEvent): void {
     if (!this._isActive) return
+    if (this._filter && !this._filter(event)) return
     event.preventDefault()
 
     if (this._inputMapper) {
