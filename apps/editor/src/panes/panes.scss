@@ -1,6 +1,6 @@
 .pane-root {
   position: fixed;
-  inset: 0;
+  inset: var(--menu-bar-height, 30px) 0 0 0;
   display: flex;
   background: #0a0a0a;
   --pane-gutter: 4px;

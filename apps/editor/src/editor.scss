@@ -1,3 +1,7 @@
+:root {
+  --menu-bar-height: 30px;
+}
+
 // Everything the panel owns is styled inside its Lightspeed components; this
 // only hides the visitor chrome while the editor is open.
 body.editor-panel-open #hud,

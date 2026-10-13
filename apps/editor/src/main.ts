@@ -61,6 +61,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // nothing and says nothing
   const panel = await app.mount("editorpanel", "#editor-panel")
   if (!panel) throw new Error("EditorPanel did not mount")
+  if (!(await app.mount("menubar", "#menu-bar"))) throw new Error("MenuBar did not mount")
 
   const player = new Player()
   window.player = player
