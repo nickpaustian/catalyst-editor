@@ -9,6 +9,7 @@ import {
   Node3D,
   PointOfInterest,
   type ControlPoint,
+  type ResolutionSettings,
 } from "@vitrine/catalyst"
 import {
   assets,
@@ -116,6 +117,15 @@ const download = (name: string, text: string) => {
   URL.revokeObjectURL(url)
 }
 
+// Authoring doesn't need Retina splats while the camera is moving: drop to 1x
+// as soon as it moves and go back to full resolution once it has settled
+const EDITOR_RESOLUTION: ResolutionSettings = {
+  mode: "adaptive",
+  movingPixelRatio: 1,
+  stillPixelRatio: 2,
+  settleMs: 300,
+}
+
 const MARKER_COLOUR = 0xffd54a
 const SELECTED_COLOUR = 0x4ad0ff
 
@@ -210,6 +220,7 @@ export class EditorSession {
 
     void this.exhibition.ready.then(() => {
       this.camera = new EditorCamera()
+      Catalyst._.resolution = EDITOR_RESOLUTION
       this.toggleVisualisers()
       this.setView("orbit")
       this.publishGroups()
