@@ -10,6 +10,7 @@
     "typecheck": "tsc"
   },
   "dependencies": {
+    "@lightspeed-js/core": "^0.4.8",
     "@vitrine/catalyst": "*",
     "@vitrine/runtime": "*",
     "three": "^0.183.2"

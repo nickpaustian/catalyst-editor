@@ -14,7 +14,11 @@ export class Exhibition {
 
   /** Stands the exhibition up in `#app`. Only one can be live at a time. */
   public static async load(manifestUrl: string): Promise<Exhibition> {
-    const manifest = await loadManifest(manifestUrl)
+    return Exhibition.loadFrom(await loadManifest(manifestUrl))
+  }
+
+  /** Same, from a manifest whose paths are already resolved (e.g. a folder). */
+  public static loadFrom(manifest: LoadedManifest): Exhibition {
     debug(`Loaded manifest for ${manifest.id}`, "init")
 
     document.title = manifest.title
@@ -60,11 +64,20 @@ export class Player {
   }
 
   /** Disposes whatever is loaded, then loads `manifestUrl`. */
-  public async load(manifestUrl: string): Promise<Exhibition> {
+  public load(manifestUrl: string): Promise<Exhibition> {
+    return this.swapTo(() => Exhibition.load(manifestUrl))
+  }
+
+  /** Disposes whatever is loaded, then loads an already-resolved manifest. */
+  public loadManifest(manifest: LoadedManifest): Promise<Exhibition> {
+    return this.swapTo(async () => Exhibition.loadFrom(manifest))
+  }
+
+  private async swapTo(make: () => Promise<Exhibition>): Promise<Exhibition> {
     const run = (async () => {
       await this.pending?.catch(() => undefined)
       await this.dispose()
-      const exhibition = await Exhibition.load(manifestUrl)
+      const exhibition = await make()
       this._current = exhibition
       return exhibition
     })()

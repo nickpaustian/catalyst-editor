@@ -2,21 +2,21 @@ import { JsonAsset, ResourceType } from "@vitrine/assets"
 import { assets } from "../assets/registry"
 import type { AudioSource, ExhibitionManifest, LoadedManifest } from "./types"
 
-const resolve = (base: string, path: string | undefined): string | undefined =>
-  path === undefined ? undefined : new URL(path, base).href
+/** Turns a path as written in the manifest into a URL the loader can fetch. */
+export type PathResolver = (path: string) => string
 
 const resolveRecord = (
-  base: string,
+  r: (path: string | undefined) => string | undefined,
   record: Record<string, string> | undefined
 ): Record<string, string> | undefined => {
   if (!record) return undefined
   return Object.fromEntries(
-    Object.entries(record).map(([key, path]) => [key, resolve(base, path)!])
+    Object.entries(record).map(([key, path]) => [key, r(path)!])
   )
 }
 
 const resolveAudio = (
-  base: string,
+  r: (path: string | undefined) => string | undefined,
   record: Record<string, AudioSource> | undefined
 ): Record<string, AudioSource> | undefined => {
   if (!record) return undefined
@@ -24,23 +24,28 @@ const resolveAudio = (
     Object.entries(record).map(([key, source]) => [
       key,
       typeof source === "string"
-        ? resolve(base, source)!
-        : { ...source, url: resolve(base, source.url)! },
+        ? r(source)!
+        : { ...source, url: r(source.url)! },
     ])
   )
 }
 
-/** Rewrites every path in the manifest to an absolute URL, relative to `baseUrl`. */
-export const resolveManifestUrls = (
+/**
+ * Rewrites every path in the manifest through `resolver`. `url` identifies the
+ * loaded manifest (its own URL, or anything unique for a folder-backed one).
+ */
+export const resolveManifestPaths = (
   manifest: ExhibitionManifest,
-  baseUrl: string
+  resolver: PathResolver,
+  url: string
 ): LoadedManifest => {
-  const r = (path: string | undefined) => resolve(baseUrl, path)
+  const r = (path: string | undefined) =>
+    path === undefined ? undefined : resolver(path)
   const presentation = manifest.presentation
 
   return {
     ...manifest,
-    url: baseUrl,
+    url,
     splat: {
       ...manifest.splat,
       source: r(manifest.splat.source)!,
@@ -66,8 +71,8 @@ export const resolveManifestUrls = (
       ])
     ),
     assets: manifest.assets && {
-      images: resolveRecord(baseUrl, manifest.assets.images),
-      audio: resolveAudio(baseUrl, manifest.assets.audio),
+      images: resolveRecord(r, manifest.assets.images),
+      audio: resolveAudio(r, manifest.assets.audio),
     },
     presentation: presentation && {
       ...presentation,
@@ -94,6 +99,16 @@ export const resolveManifestUrls = (
     },
   }
 }
+
+/** Rewrites every path in the manifest to an absolute URL, relative to `baseUrl`. */
+export const resolveManifestUrls = (
+  manifest: ExhibitionManifest,
+  baseUrl: string
+): LoadedManifest =>
+  resolveManifestPaths(manifest, (path) => new URL(path, baseUrl).href, baseUrl)
+
+/** Absolute URLs pass through a resolver unchanged, so folders can mix local files and CDN assets. */
+export const isAbsoluteUrl = (path: string): boolean => /^[a-z][a-z0-9+.-]*:/i.test(path)
 
 export const loadManifest = async (url: string): Promise<LoadedManifest> => {
   const absolute = new URL(url, window.location.href).href

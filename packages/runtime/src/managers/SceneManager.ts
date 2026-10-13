@@ -223,6 +223,9 @@ export default class SceneManager extends BaseManager {
     return this._isRecording
   }
 
+  /** When set, a finished recording goes here instead of being downloaded. */
+  public onRecordingComplete: ((baked: BakedCameraPath) => void) | null = null
+
   public get pathProgressValue(): number {
     return this.pathProgress
   }
@@ -809,14 +812,18 @@ export default class SceneManager extends BaseManager {
     const baked = this._recorder.export()
     console.log(`Recorded ${baked.frameCount} frames`)
 
-    const json = JSON.stringify(baked)
-    const blob = new Blob([json], { type: "application/json" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "camera-path.json"
-    a.click()
-    URL.revokeObjectURL(url)
+    if (this.onRecordingComplete) {
+      this.onRecordingComplete(baked)
+    } else {
+      const json = JSON.stringify(baked)
+      const blob = new Blob([json], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "camera-path.json"
+      a.click()
+      URL.revokeObjectURL(url)
+    }
 
     Catalyst._.input?.resume()
     this._recorder = null
