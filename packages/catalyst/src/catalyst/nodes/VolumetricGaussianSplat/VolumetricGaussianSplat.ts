@@ -137,6 +137,9 @@ export class VolumetricGaussianSplat extends Node3D {
 
   private _visualisationMesh: THREE.LineSegments | null = null
 
+  /** Resolves once the grid manifest is indexed (or failed), so partitions can wait for it. */
+  private _manifestReady: Promise<void>
+
   constructor(config: VolumetricGaussianSplatConfig) {
     super({ ...config, name: config.name ?? "vgs" })
     this._config = config
@@ -187,7 +190,7 @@ export class VolumetricGaussianSplat extends Node3D {
         Math.max(1, (navigator.hardwareConcurrency ?? 4) - 1),
     )
 
-    this.parseManifest(this._url)
+    this._manifestReady = this.parseManifest(this._url)
     debug(
       `VolumetricGaussianSplat initialised: ${config.url} ` +
         `(${this._processorPool.poolSize} workers, budget ${(
@@ -969,21 +972,40 @@ export class VolumetricGaussianSplat extends Node3D {
   // Bundle loading
   //=========================
 
-  public loadPartition(buffer: ArrayBuffer, onComplete?: () => void): void {
-    const renderer = Catalyst._.renderer
-    if (!renderer) return
+  public get manifestReady(): Promise<void> {
+    return this._manifestReady
+  }
 
-    const entries = parseVGSP(buffer)
-    entries.forEach((sliceBuffer, key) => {
-      const [cellId, sliceStr] = key.split(":")
-      const slice = parseInt(sliceStr)
-      const gridCell = this._cellIndex.get(cellId)
-      if (!gridCell) return
-      const cell = this.getOrCreateCell(gridCell)
-      cell.injectSlice(slice, sliceBuffer, renderer)
+  /**
+   * Inject a `.vgsp` partition's slices. Waits for the grid manifest, since a
+   * slice for a cell that isn't indexed yet has nowhere to go: partitions used
+   * to arrive first on a cold load and every slice was dropped, then fetched
+   * again one by one.
+   */
+  public loadPartition(buffer: ArrayBuffer, onComplete?: () => void): void {
+    void this._manifestReady.then(() => {
+      const renderer = Catalyst._.renderer
+      if (!renderer) return
+
+      const entries = parseVGSP(buffer)
+      let injected = 0
+      entries.forEach((sliceBuffer, key) => {
+        const [cellId, sliceStr] = key.split(":")
+        const slice = parseInt(sliceStr)
+        const gridCell = this._cellIndex.get(cellId)
+        if (!gridCell) return
+        const cell = this.getOrCreateCell(gridCell)
+        cell.injectSlice(slice, sliceBuffer, renderer)
+        injected++
+      })
+      const dropped = entries.size - injected
+      debug(
+        `Partition loaded: ${injected} slices injected` +
+          (dropped ? `, ${dropped} for cells not in the manifest` : ""),
+        dropped ? "warning" : "VGS",
+      )
+      onComplete?.()
     })
-    debug(`Partition loaded: ${entries.size} slices injected`, "VGS")
-    onComplete?.()
   }
 
   //=========================
