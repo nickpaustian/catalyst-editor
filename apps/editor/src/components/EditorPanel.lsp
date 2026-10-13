@@ -1,4 +1,5 @@
 <view>
+<div class="resize-handle" @pointerdown="startResize($event)"></div>
 <aside class="panel">
   <h1 class="title">Vitrine</h1>
 
@@ -66,6 +67,7 @@
 <logic lang="ts">
 import { shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
+import { preferences } from '../preferences.ts'
 
 // Every cell the view reads, declared so a cell that hasn't been published
 // yet renders as empty rather than throwing
@@ -73,6 +75,7 @@ shared('editor:exhibition', { id: '', title: '', catalogue: [] })
 shared('editor:folder', { name: null, status: '', supported: false })
 shared('editor:view', { view: 'guided', visualised: false, moveMode: false, gizmo: 'translate' })
 shared('editor:groups', [])
+shared('editor:preferences', { panelWidth: 320 })
 
 function send(type: string) {
   sendCommand({ type })
@@ -89,6 +92,19 @@ function setGizmo(mode: string) {
 function switchTo(event: Event) {
   sendCommand({ type: 'switch', id: (event.target as HTMLSelectElement).value })
 }
+
+function startResize(event: PointerEvent) {
+  event.preventDefault()
+  const resize = (move: PointerEvent) => preferences.setPanelWidth(window.innerWidth - move.clientX)
+  const stop = () => {
+    document.removeEventListener('pointermove', resize)
+    document.removeEventListener('pointerup', stop)
+    document.body.style.cursor = ''
+  }
+  document.body.style.cursor = 'ew-resize'
+  document.addEventListener('pointermove', resize)
+  document.addEventListener('pointerup', stop)
+}
 </logic>
 
 <style>
@@ -96,7 +112,7 @@ function switchTo(event: Event) {
   position: fixed;
   top: 0;
   right: 0;
-  width: 320px;
+  width: var(--editor-panel-width, 320px);
   height: 100vh;
   overflow-y: auto;
   box-sizing: border-box;
@@ -106,6 +122,20 @@ function switchTo(event: Event) {
   font: 12px/1.4 "IBM Plex Sans", system-ui, sans-serif;
   z-index: 1000;
   border-left: 1px solid #333;
+}
+
+.resize-handle {
+  position: fixed;
+  top: 0;
+  right: calc(var(--editor-panel-width, 320px) - 3px);
+  width: 6px;
+  height: 100vh;
+  cursor: ew-resize;
+  z-index: 1001;
+}
+
+.resize-handle:hover {
+  background: #6a8fd8;
 }
 
 .title {

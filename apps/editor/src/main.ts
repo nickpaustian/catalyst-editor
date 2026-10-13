@@ -6,6 +6,7 @@ import { Player, assets, type ExhibitionManifest } from "@vitrine/runtime"
 import { Catalyst } from "@vitrine/catalyst"
 import { EditorSession, type CatalogueEntry } from "./EditorSession"
 import { ExhibitionFolder } from "./ExhibitionFolder"
+import { preferences } from "./preferences"
 
 const CATALOGUE_URL = new URL("exhibitions/index.json", window.location.href)
 const PARAM = "exhibition"
@@ -31,6 +32,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const app = createLightspeedApp()
   app.useComponents(components)
   window.lightspeed = app
+  preferences.init()
   // Component ids are the file names lowercased; the PascalCase tag name mounts
   // nothing and says nothing
   const panel = await app.mount("editorpanel", "#editor-panel")
