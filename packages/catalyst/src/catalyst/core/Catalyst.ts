@@ -95,8 +95,8 @@ export class Catalyst {
       this.containerElement = resolveContainer(options.container)
       this.canvas = createCanvas(this.containerElement)
     }
-    this._width = this.containerWidth
-    this._height = this.containerHeight
+    this._width = this.containerWidth || window.innerWidth
+    this._height = this.containerHeight || window.innerHeight
     if (features.renderer) {
       this._renderer = createRenderer(this.canvas, this._width, this._height)
       this._scene = createScene()
@@ -145,6 +145,7 @@ export class Catalyst {
     if (!this._shouldUpdate) return
     const width = this.containerWidth
     const height = this.containerHeight
+    if (!width || !height) return
     if (width === this._width && height === this._height) return
     this._width = width
     this._height = height
@@ -161,11 +162,11 @@ export class Catalyst {
   // The canvas fills its container, which is the window unless the host
   // page puts the engine in a smaller element
   private get containerWidth(): number {
-    return this.containerElement?.clientWidth || window.innerWidth
+    return this.containerElement ? this.containerElement.clientWidth : window.innerWidth
   }
 
   private get containerHeight(): number {
-    return this.containerElement?.clientHeight || window.innerHeight
+    return this.containerElement ? this.containerElement.clientHeight : window.innerHeight
   }
 
   /** Current drawing area in CSS pixels. */

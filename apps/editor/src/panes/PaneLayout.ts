@@ -190,13 +190,51 @@ export class PaneLayout {
     event.preventDefault()
     const startX = event.clientX
     const startY = event.clientY
+    const paneElement = (event.currentTarget as HTMLElement).closest<HTMLElement>(".pane")!
+    const title = paneElement.querySelector(".pane-title")?.textContent ?? ""
     let dragging = false
     let target: { id: string; zone: DropZone } | null = null
     let highlight: HTMLElement | null = null
+    let ghost: HTMLElement | null = null
+    const siblingGrow = new Map<HTMLElement, string>()
 
     const clearHighlight = () => {
       highlight?.remove()
       highlight = null
+    }
+
+    // While it is being carried the pane leaves the layout, so the others
+    // show the arrangement a drop would produce; a ghost follows the pointer
+    const lift = () => {
+      paneElement.classList.add("pane-lifted")
+      const gutter = paneElement.previousElementSibling ?? paneElement.nextElementSibling
+      gutter?.classList.add("pane-lifted")
+      // Flex only hands out free space in proportion to grow factors that sum
+      // to at least 1, so the siblings' fractions are rescaled to sum to 1
+      const siblings = [...paneElement.parentElement!.children].filter(
+        (child) =>
+          child !== paneElement &&
+          (child.classList.contains("pane") || child.classList.contains("pane-split")),
+      ) as HTMLElement[]
+      const total = siblings.reduce((sum, sibling) => sum + (parseFloat(sibling.style.flexGrow) || 0), 0)
+      for (const sibling of siblings) {
+        siblingGrow.set(sibling, sibling.style.flexGrow)
+        sibling.style.flexGrow = String((parseFloat(sibling.style.flexGrow) || 0) / (total || 1))
+      }
+      ghost = document.createElement("div")
+      ghost.className = "pane-ghost"
+      ghost.textContent = title
+      document.body.appendChild(ghost)
+    }
+    const settle = () => {
+      paneElement.classList.remove("pane-lifted")
+      paneElement.parentElement
+        ?.querySelectorAll(".pane-gutter.pane-lifted")
+        .forEach((gutter) => gutter.classList.remove("pane-lifted"))
+      for (const [sibling, grow] of siblingGrow) sibling.style.flexGrow = grow
+      siblingGrow.clear()
+      ghost?.remove()
+      ghost = null
     }
 
     const move = (moveEvent: PointerEvent) => {
@@ -208,6 +246,11 @@ export class PaneLayout {
           return
         dragging = true
         document.body.classList.add("pane-dragging")
+        lift()
+      }
+      if (ghost) {
+        ghost.style.left = `${moveEvent.clientX + 12}px`
+        ghost.style.top = `${moveEvent.clientY + 12}px`
       }
       const under = document
         .elementFromPoint(moveEvent.clientX, moveEvent.clientY)
@@ -231,6 +274,7 @@ export class PaneLayout {
       document.removeEventListener("pointerup", stop)
       document.body.classList.remove("pane-dragging")
       clearHighlight()
+      settle()
       if (dragging && target) {
         this.layout = movePane(this._layout, id, target.id, target.zone)
       }
