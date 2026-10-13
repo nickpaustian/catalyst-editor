@@ -1,6 +1,13 @@
 import * as THREE from "three"
-import { Collider, Node3D } from "@vitrine/catalyst"
-import { assets, type Exhibition } from "@vitrine/runtime"
+import {
+  BoxCollider,
+  Collider,
+  FocalPoint,
+  FocalPointTrigger,
+  Node3D,
+  PointOfInterest,
+} from "@vitrine/catalyst"
+import { assets, Modal, type Exhibition } from "@vitrine/runtime"
 import type { JsonAsset } from "@vitrine/assets"
 import { EditorCamera, type GizmoMode } from "./EditorCamera"
 import { EditorInput } from "./EditorInput"
@@ -57,6 +64,10 @@ export class EditorPanel {
   private lastMoveNode: Node3D | null = null
   private camera: EditorCamera | null = null
   private rail: RailEditor
+  /** Nodes added in this session, with the config they were built from, for export. */
+  private created = new Map<Node3D, { type: string; config: Record<string, unknown> }>()
+  private contentSelect: HTMLSelectElement
+  private contentRow: HTMLElement
   private input = new EditorInput({ focusSelected: () => this.focusSelected() })
   private viewLabel: HTMLElement
 
@@ -109,7 +120,9 @@ export class EditorPanel {
     SCENE_KEYS.forEach((key) => {
       const list = el("div", { className: "node-list" })
       this.lists[key] = list
-      this.root.append(el("h2", { textContent: key }), list)
+      const header = el("h2", { textContent: key })
+      header.append(" ", this.button("+", () => this.addNode(key)))
+      this.root.append(header, list)
     })
 
     this.rail = new RailEditor(exhibition, () => this.camera)
@@ -119,8 +132,20 @@ export class EditorPanel {
     this.root.append(
       el("h2", { textContent: "Selected" }),
       this.selectionLabel,
-      el("div", {}, [this.button("Focus", () => this.focusSelected())])
+      el("div", {}, [
+        this.button("Focus", () => this.focusSelected()),
+        this.button("Delete", () => this.deleteSelected()),
+      ]),
+      (this.contentRow = el("div", { className: "row" }, [
+        el("span", { className: "hint", textContent: "content " }),
+        (this.contentSelect = el("select")),
+      ]))
     )
+    this.contentSelect.append(el("option", { value: "", textContent: "(none)" }))
+    Object.keys(exhibition.manifest.content).forEach((id) =>
+      this.contentSelect.append(el("option", { value: id, textContent: id }))
+    )
+    this.contentSelect.addEventListener("change", () => this.writeContent())
     this.root.append(this.transformFields())
 
     this.root.append(
@@ -231,8 +256,85 @@ export class EditorPanel {
       : "Nothing selected"
     this.refreshLists()
     this.readTransform()
+    this.readContent()
     if (node) this.attachGizmo(node)
     else this.camera?.detach()
+  }
+
+  private readContent(): void {
+    const poi = this.selected instanceof PointOfInterest ? this.selected : null
+    this.contentRow.style.display = poi ? "" : "none"
+    if (poi) this.contentSelect.value = poi.modalName ?? ""
+  }
+
+  private writeContent(): void {
+    const poi = this.selected
+    if (!(poi instanceof PointOfInterest)) return
+    poi.modalName = this.contentSelect.value || null
+    this.wireContent(poi)
+  }
+
+  // Same wiring the runtime does at load: interacting opens the content modal
+  private wireContent(poi: PointOfInterest): void {
+    poi.onInteract = () => {
+      const template = poi.modalName
+        ? this.exhibition.managers.content.byId[poi.modalName]
+        : undefined
+      if (template) void Modal._.openWithTemplate(template)
+    }
+  }
+
+  private addNode(key: SceneKey): void {
+    const root = this.scene.sceneRoots[key]
+    if (!root) return
+    const name = `${key}-${Date.now().toString(36)}`
+    const at = this.camera?.isActive
+      ? this.camera.orbitTarget
+      : new THREE.Vector3(0, 1, 0)
+
+    let node: Node3D
+    let type: string
+    let config: Record<string, unknown>
+    switch (key) {
+      case "colliders":
+        type = "BoxCollider"
+        config = { name, width: 1, height: 1, depth: 1, visualise: this.visualised }
+        node = new BoxCollider(config)
+        break
+      case "focalPoints":
+        type = "FocalPoint"
+        config = { name, visualise: this.visualised }
+        node = new FocalPoint(config)
+        break
+      case "focalPointTriggers": {
+        type = "FocalPointTrigger"
+        config = { name, width: 1, height: 2, depth: 1, visualise: this.visualised }
+        const focalPoints = (this.scene.sceneRoots.focalPoints?.getChildrenOfType(
+          FocalPoint
+        ) ?? []) as FocalPoint[]
+        node = new FocalPointTrigger({ ...config, focalPoints })
+        break
+      }
+      case "pointsOfInterest":
+        type = "PointOfInterest"
+        config = { name, visualise: this.visualised }
+        node = new PointOfInterest(config)
+        this.wireContent(node as PointOfInterest)
+        break
+    }
+    node.transform.position = at
+    root.addNode(node)
+    this.created.set(node, { type, config })
+    this.select(node, key)
+  }
+
+  private deleteSelected(): void {
+    const node = this.selected
+    if (!node) return
+    this.camera?.detach()
+    this.created.delete(node)
+    node.dispose()
+    this.select(null, null)
   }
 
   private transformFields(): HTMLElement {
@@ -311,18 +413,40 @@ export class EditorPanel {
     if (!asset?.isReady || !root) return null
 
     const json = structuredClone(asset.json)
-    for (const entry of json.children ?? []) {
-      const name = entry.config?.name ?? entry.name
-      const node = root.getNode<Node3D>(name)
-      if (!node) continue
-      const p = node.transform.position
-      const q = node.transform.rotation
-      entry.transform = {
-        ...entry.transform,
+    const originals = new Map<string, any>(
+      (json.children ?? []).map((entry: any) => [entry.config?.name ?? entry.name, entry])
+    )
+    // Live children in order: originals patched by name, new nodes serialised,
+    // deleted ones simply absent
+    json.children = root.getChildren().flatMap((child) => {
+      if (!(child instanceof Node3D)) return []
+      const p = child.transform.position
+      const q = child.transform.rotation
+      const transform = {
         position: [round(p.x), round(p.y), round(p.z)],
         rotation: [round(q.x), round(q.y), round(q.z), round(q.w)],
       }
-    }
+      const original = originals.get(child.name)
+      if (original) {
+        original.transform = { ...original.transform, ...transform }
+        if (child instanceof PointOfInterest) {
+          original.config = { ...original.config, modalName: child.modalName ?? undefined }
+        }
+        return [original]
+      }
+      const made = this.created.get(child)
+      if (!made) return []
+      const config: Record<string, unknown> = { ...made.config, visualise: false }
+      if (child instanceof PointOfInterest) config.modalName = child.modalName ?? undefined
+      return [
+        {
+          type: made.type,
+          config,
+          transform,
+          properties: { tags: child.tags, layers: [1], collidesWith: [] },
+        },
+      ]
+    })
     return json
   }
 

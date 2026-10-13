@@ -70,6 +70,11 @@ export class EditorCamera {
     return this.active
   }
 
+  /** Where the orbit is centred; a sensible place to drop new nodes. */
+  public get orbitTarget(): THREE.Vector3 {
+    return this.orbit.target.clone()
+  }
+
   /** Make this the rendering camera and start orbiting. */
   public activate(): void {
     if (this.active) return

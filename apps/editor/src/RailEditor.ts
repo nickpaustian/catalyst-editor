@@ -68,8 +68,8 @@ export class RailEditor {
       this.positionRow(),
       el("div", {}, [
         this.button("Add after", () => this.addAfter()),
-        this.button("Delete", () => this.remove()),
-        this.button("Focus", () => this.focus()),
+        this.button("Delete point", () => this.remove()),
+        this.button("Focus point", () => this.focus()),
       ]),
     ])
 

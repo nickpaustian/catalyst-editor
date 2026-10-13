@@ -100,6 +100,10 @@ export class PointOfInterest extends Node3D {
     return this._modalName
   }
 
+  public set modalName(name: string | null) {
+    this._modalName = name
+  }
+
   public set isFocused(focused: boolean) {
     this._isFocused = focused
 
