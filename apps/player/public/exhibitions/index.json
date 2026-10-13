@@ -3,6 +3,7 @@
     {
       "id": "beruk",
       "title": "Beruk",
+      "description": "An exhibition celebrating the life and legacy of William Barak.",
       "manifest": "beruk/manifest.json"
     }
   ]

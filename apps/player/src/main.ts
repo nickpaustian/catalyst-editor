@@ -1,9 +1,12 @@
 import "@vitrine/runtime/styles.scss"
+import { createLightspeedApp } from "@lightspeed-js/core"
+import { components } from "virtual:lightspeed/components"
 import { Player, assets } from "@vitrine/runtime"
 
 interface CatalogueEntry {
   id: string
   title: string
+  description?: string
   manifest: string
 }
 
@@ -30,23 +33,28 @@ const loadCatalogue = async (): Promise<Catalogue> => {
   return (await response.json()) as Catalogue
 }
 
-const entryFor = (catalogue: Catalogue, id: string | null): CatalogueEntry => {
-  const entry = id
-    ? catalogue.exhibitions.find((e) => e.id === id)
-    : catalogue.exhibitions[0]
-  if (!entry) throw new Error(`No exhibition "${id ?? ""}" in the catalogue`)
-  return entry
-}
-
 const requestedId = () => new URLSearchParams(window.location.search).get(PARAM)
 
 document.addEventListener("DOMContentLoaded", async () => {
   const catalogue = await loadCatalogue()
   const player = new Player()
 
-  const open = async (id: string | null) => {
-    const entry = entryFor(catalogue, id)
+  // The catalogue is a Lightspeed island over the canvas; it reads the entries
+  // from a cell and drops the visitor's choice into another
+  const app = createLightspeedApp()
+  app.useComponents(components)
+  window.lightspeed = app
+  app.shared("catalogue:entries").set(catalogue.exhibitions)
+  app.shared("catalogue:current").set(null)
+  app.shared("catalogue:open").set(true)
+  await app.mount("catalogue", "#catalogue")
+
+  const open = async (id: string) => {
+    const entry = catalogue.exhibitions.find((e) => e.id === id)
+    if (!entry) throw new Error(`No exhibition "${id}" in the catalogue`)
+    app.shared("catalogue:open").set(false)
     await player.load(new URL(entry.manifest, CATALOGUE_URL).href)
+    app.shared("catalogue:current").set(id)
   }
 
   // Swapping exhibitions is a URL change, so back/forward work and links share
@@ -56,12 +64,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     history.pushState(null, "", url)
     await open(id)
   }
-  window.addEventListener("popstate", () => void open(requestedId()))
+  window.addEventListener("popstate", () => {
+    const id = requestedId()
+    if (id) void open(id)
+    else app.shared("catalogue:open").set(true)
+  })
+
+  app.shared("catalogue:choice").subscribe((choice) => {
+    const id = (choice as { id?: string } | null)?.id
+    if (!id) return
+    if (id === app.shared("catalogue:current").value) {
+      app.shared("catalogue:open").set(false)
+      return
+    }
+    void window.openExhibition?.(id)
+  })
 
   if (__DEBUG__) {
     window.player = player
     window.assets = assets
   }
 
-  await open(requestedId())
+  const id = requestedId()
+  if (id) await open(id)
 })
