@@ -45,7 +45,7 @@ export class EditorCamera {
 
     this.view = new THREE.PerspectiveCamera(
       50,
-      window.innerWidth / window.innerHeight,
+      catalyst.width / catalyst.height,
       0.05,
       500
     )
@@ -84,14 +84,22 @@ export class EditorCamera {
 
     this.previousTarget = camera.target
     camera.target = this.view
-    this.view.aspect = window.innerWidth / window.innerHeight
+    this.view.aspect = catalyst.width / catalyst.height
     this.view.updateProjectionMatrix()
 
     this.orbit.enabled = true
     catalyst.scene.add(this.gizmo.getHelper())
-    this.unsubscribe = catalyst.signals.onRender.subscribe(() => {
+    const unsubscribeRender = catalyst.signals.onRender.subscribe(() => {
       this.orbit.update()
     })
+    const unsubscribeResize = catalyst.signals.onResize.subscribe(({ width, height }) => {
+      this.view.aspect = width / height
+      this.view.updateProjectionMatrix()
+    })
+    this.unsubscribe = () => {
+      unsubscribeRender()
+      unsubscribeResize()
+    }
     this.active = true
   }
 

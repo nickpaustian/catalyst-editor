@@ -45,7 +45,7 @@ export class Camera extends Node3D {
 
     this._view = new THREE.PerspectiveCamera(
       75,
-      window.innerWidth / window.innerHeight,
+      Catalyst._.width / Catalyst._.height,
       config.near ?? 0.1,
       config.far ?? 1000
     )

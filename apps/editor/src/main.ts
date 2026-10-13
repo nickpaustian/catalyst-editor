@@ -1,5 +1,6 @@
 import "@vitrine/runtime/styles.scss"
 import "./editor.scss"
+import "./panes/panes.scss"
 import { createLightspeedApp } from "@lightspeed-js/core"
 import { components } from "virtual:lightspeed/components"
 import { Player, assets, type ExhibitionManifest } from "@vitrine/runtime"
@@ -7,6 +8,7 @@ import { Catalyst } from "@vitrine/catalyst"
 import { EditorSession, type CatalogueEntry } from "./EditorSession"
 import { ExhibitionFolder } from "./ExhibitionFolder"
 import { preferences } from "./preferences"
+import { PaneLayout } from "./panes/PaneLayout"
 
 const CATALOGUE_URL = new URL("exhibitions/index.json", window.location.href)
 const PARAM = "exhibition"
@@ -19,6 +21,7 @@ declare global {
     openFolder?: (folder: ExhibitionFolder) => Promise<void>
     ExhibitionFolder?: typeof ExhibitionFolder
     editor?: EditorSession | null
+    panes?: PaneLayout
   }
 }
 
@@ -33,6 +36,27 @@ document.addEventListener("DOMContentLoaded", async () => {
   app.useComponents(components)
   window.lightspeed = app
   preferences.init()
+
+  // The viewport and the panel are the two pane kinds; the layout adopts
+  // their elements, so the canvas and the mounted panel survive rearranging
+  const panes = new PaneLayout({
+    root: document.getElementById("layout")!,
+    kinds: {
+      viewport: { title: "Viewport", element: document.getElementById("app")! },
+      panel: { title: "Editor", element: document.getElementById("editor-panel")! },
+    },
+    layout: preferences.layout,
+    onChange: preferences.setLayout,
+  })
+  window.panes = panes
+
+  // Slate hangs its overlay (points of interest, modal) off <body>; in the
+  // editor it belongs over the viewport pane
+  const adoptOverlay = () => {
+    const overlay = Catalyst._.ui?.canvas
+    const viewport = panes.bodyOf("viewport")
+    if (overlay && viewport && overlay.parentElement !== viewport) viewport.appendChild(overlay)
+  }
   // Component ids are the file names lowercased; the PascalCase tag name mounts
   // nothing and says nothing
   const panel = await app.mount("editorpanel", "#editor-panel")
@@ -57,6 +81,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     session?.dispose()
     const exhibition = await player.loadManifest(loaded)
     window.catalyst = Catalyst._
+    adoptOverlay()
     session = new EditorSession({
       app,
       exhibition,
@@ -79,6 +104,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const exhibition = await player.load(new URL(entry.manifest, CATALOGUE_URL).href)
   window.catalyst = Catalyst._
+  adoptOverlay()
   session = new EditorSession({
     app,
     exhibition,

@@ -74,32 +74,34 @@ export class Preference<T> {
   }
 }
 
-export const PANEL_WIDTH = { min: 240, max: 800, initial: 320 }
+import { isValidLayout, pane, split, type LayoutNode, type PaneKind } from "./panes/layout"
 
-const panelWidth = new Preference<number>({
-  key: "panelWidth",
-  initial: PANEL_WIDTH.initial,
-  onChange: (width) =>
-    document.documentElement.style.setProperty("--editor-panel-width", `${width}px`),
+export const PANE_KINDS: PaneKind[] = ["viewport", "panel"]
+
+export const defaultLayout = (): LayoutNode =>
+  split("row", [pane("viewport"), pane("panel")], [0.75, 0.25])
+
+const layout = new Preference<LayoutNode>({
+  key: "layout",
+  initial: defaultLayout(),
+  fallback: defaultLayout,
 })
 
-const clampPanelWidth = (width: number): number =>
-  Math.round(Math.min(PANEL_WIDTH.max, Math.max(PANEL_WIDTH.min, width)))
-
 export const preferences = {
-  get panelWidth(): number {
-    return panelWidth.value
+  /** The pane tree; a stored tree that no longer fits the known kinds falls back to the default. */
+  get layout(): LayoutNode {
+    return isValidLayout(layout.value, PANE_KINDS) ? layout.value : defaultLayout()
   },
-  setPanelWidth: (width: number) => panelWidth.set(clampPanelWidth(width)),
-  resetPanelWidth: panelWidth.reset,
+  setLayout: layout.set,
+  resetLayout: layout.reset,
 
   init: () => {
-    panelWidth.init()
+    layout.init()
     publish()
   },
 }
 
-const snapshot = () => ({ panelWidth: panelWidth.value })
+const snapshot = () => ({ layout: layout.value })
 
 function publish(): void {
   window.lightspeed?.shared(CELL).set(snapshot())

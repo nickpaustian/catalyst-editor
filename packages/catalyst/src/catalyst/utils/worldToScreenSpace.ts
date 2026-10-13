@@ -30,8 +30,8 @@ export function worldToScreenSpace(
   }
 
   // Convert NDC to screen space
-  const width = window.innerWidth
-  const height = window.innerHeight
+  const width = Catalyst._.width
+  const height = Catalyst._.height
 
   const screenX = (vector.x * width) / 2 + width / 2
   const screenY = -(vector.y * height) / 2 + height / 2

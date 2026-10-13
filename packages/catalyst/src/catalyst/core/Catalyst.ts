@@ -76,8 +76,9 @@ export class Catalyst {
   private _resolution = new ResolutionController()
 
   private containerElement!: HTMLElement
-  private width: number
-  private height: number
+  private _width: number
+  private _height: number
+  private _resizeObserver: ResizeObserver | null = null
 
   // Metrics
 
@@ -89,16 +90,17 @@ export class Catalyst {
   constructor(options: CatalystOptions = {}) {
     const features = { ...DEFAULT_FEATURES, ...options.features }
 
-    this.width = window.innerWidth
-    this.height = window.innerHeight
-
     // Renderer & canvas
     if (features.renderer) {
       this.containerElement = resolveContainer(options.container)
       this.canvas = createCanvas(this.containerElement)
-      this._renderer = createRenderer(this.canvas, this.width, this.height)
+    }
+    this._width = this.containerWidth
+    this._height = this.containerHeight
+    if (features.renderer) {
+      this._renderer = createRenderer(this.canvas, this._width, this._height)
       this._scene = createScene()
-      this._camera = new CatalystCamera(this.width, this.height)
+      this._camera = new CatalystCamera(this._width, this._height)
       if (options.resolution) this._resolution.settings = options.resolution
     }
 
@@ -128,6 +130,10 @@ export class Catalyst {
     this.gameLoop = new GameLoop()
 
     window.addEventListener("resize", this.handleWindowResize)
+    if (this.containerElement && typeof ResizeObserver !== "undefined") {
+      this._resizeObserver = new ResizeObserver(() => this.handleWindowResize())
+      this._resizeObserver.observe(this.containerElement)
+    }
 
     debug("Catalyst Engine created", "Catalyst")
   }
@@ -137,16 +143,38 @@ export class Catalyst {
    */
   private handleWindowResize = (): void => {
     if (!this._shouldUpdate) return
-    this.width = window.innerWidth
-    this.height = window.innerHeight
+    const width = this.containerWidth
+    const height = this.containerHeight
+    if (width === this._width && height === this._height) return
+    this._width = width
+    this._height = height
 
     // Only update renderer/camera if initialised
     if (this._renderer && this._camera) {
-      updateOnResize(this._camera.view, this._renderer, this.width, this.height)
+      updateOnResize(this._camera.view, this._renderer, this._width, this._height)
       this._renderRequested = true
     }
 
-    this._signals.onResize.emit({ width: this.width, height: this.height })
+    this._signals.onResize.emit({ width: this._width, height: this._height })
+  }
+
+  // The canvas fills its container, which is the window unless the host
+  // page puts the engine in a smaller element
+  private get containerWidth(): number {
+    return this.containerElement?.clientWidth || window.innerWidth
+  }
+
+  private get containerHeight(): number {
+    return this.containerElement?.clientHeight || window.innerHeight
+  }
+
+  /** Current drawing area in CSS pixels. */
+  public get width(): number {
+    return this._width
+  }
+
+  public get height(): number {
+    return this._height
   }
 
   //=========================
@@ -159,10 +187,26 @@ export class Catalyst {
   public static getInstance(options: CatalystOptions = {}): Catalyst {
     if (!Catalyst.instance) {
       Catalyst.instance = new Catalyst(options)
-    } else if (options.features) {
-      debug("Catalyst already initialised — feature flags ignored", "warning")
+    } else {
+      if (options.features) {
+        debug("Catalyst already initialised — feature flags ignored", "warning")
+      }
+      // Anything touching Catalyst._ before the host names a container gets
+      // the engine in <body>; the named container takes over from there
+      if (options.container) Catalyst.instance.setContainer(options.container)
     }
     return Catalyst.instance
+  }
+
+  /** Move the canvas into another element and size to it. */
+  public setContainer(container: HTMLElement | string): void {
+    const element = resolveContainer(container)
+    if (!this.canvas || element === this.containerElement) return
+    this._resizeObserver?.disconnect()
+    this.containerElement = element
+    element.appendChild(this.canvas)
+    this._resizeObserver?.observe(element)
+    this.handleWindowResize()
   }
 
   public static get _(): Catalyst {
@@ -386,6 +430,7 @@ export class Catalyst {
     debug("Catalyst Engine shutting down...", "Catalyst")
     this.stop()
     window.removeEventListener("resize", this.handleWindowResize)
+    this._resizeObserver?.disconnect()
     this.canvas.remove()
     this._signals.onUpdate.clear()
     this._signals.onRender.clear()
