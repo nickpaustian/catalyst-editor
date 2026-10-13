@@ -75,6 +75,8 @@ export interface AssetLoadItem {
   config: ResourceLoadConfig
   status: LoadStatus
   attempts: number
+  /** Read from the cache during the size pass, so the load pass needs no second read and no HEAD. */
+  cachedBuffer?: ArrayBuffer
 }
 
 export interface LoadedAsset {
@@ -424,6 +426,14 @@ export default class LoadGroup {
     }
 
     const sizePromises = Array.from(this.assets.values()).map(async (item) => {
+      // A cached asset's size is its buffer, and the buffer is needed anyway,
+      // so it is read now and kept rather than asking the server with HEAD
+      const cached = await this.readFromCache(item.config.key)
+      if (cached) {
+        item.cachedBuffer = cached
+        ;(item as any).knownSize = cached.byteLength
+        return cached.byteLength
+      }
       try {
         const response = await fetch(item.config.url, { method: "HEAD" })
         const contentLength = Number(response.headers.get("Content-Length"))
@@ -535,33 +545,33 @@ export default class LoadGroup {
       await this.fetchAsset(key, item)
     }
 
+  /** The cached buffer for a key, or null when there is none (or no cache). */
+  private async readFromCache(key: string): Promise<ArrayBuffer | null> {
+    if (!this.useIndexDb) return null
+    try {
+      await this.dbManager.ready
+      const buffer = (await this.dbManager.read(key)) as ArrayBuffer
+      if (!buffer || buffer.byteLength === 0) {
+        debug(`Invalid buffer in IndexedDB for ${key}`, "asset-cache-invalid")
+        return null
+      }
+      return buffer
+    } catch (error) {
+      debug(`IndexedDB read failed for ${key}: ${error}`, "asset-cache-error")
+      return null
+    }
+  }
+
   private fetchAssetFromIndex: (
     key: string,
     item: AssetLoadItem
   ) => Promise<boolean> = async (key, item) => {
-    try {
-      await this.dbManager.ready
-      const buffer = (await this.dbManager.read(key)) as ArrayBuffer
+    const buffer = item.cachedBuffer ?? (await this.readFromCache(key))
+    item.cachedBuffer = undefined
+    if (!buffer) return false
 
-      // Validate buffer exists and has data
-      if (!buffer || buffer.byteLength === 0) {
-        debug(`Invalid buffer in IndexedDB for ${key}`, "asset-cache-invalid")
-        return false
-      }
-
-      this.completeAssetLoad(
-        key,
-        item,
-        buffer,
-        "indexDB store",
-        buffer.byteLength
-      )
-
-      return true
-    } catch (error) {
-      debug(`IndexedDB read failed for ${key}: ${error}`, "asset-cache-error")
-      return false
-    }
+    this.completeAssetLoad(key, item, buffer, "indexDB store", buffer.byteLength)
+    return true
   }
 
   private loadAssetFromCachedBlob: (
