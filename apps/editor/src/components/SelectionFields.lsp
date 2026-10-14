@@ -2,7 +2,7 @@
 <div class="selection">
   <p class="hint" $if="!shared['editor:selection']">Nothing selected</p>
   <template $else>
-    <p class="hint">{{ shared['editor:selection']?.type }}</p>
+    <p class="hint">{{ shared['editor:selection'].type }}</p>
     <div class="row">
       <input class="name" type="text" $model="state.name" @change="rename" />
     </div>
@@ -10,15 +10,15 @@
       <button @click="send('focus')">Focus</button>
       <button @click="send('delete')">Delete</button>
     </div>
-    <div class="row" $if="shared['editor:selection']?.isPoi">
+    <div class="row" $if="shared['editor:selection'].isPoi">
       <span class="hint">content </span>
       <select @change="setContent($event)">
-        <option value="" $selected="!shared['editor:selection']?.contentId">(none)</option>
+        <option value="" $selected="!shared['editor:selection'].contentId">(none)</option>
         <option
-          $for="id in shared['editor:selection']?.contentOptions"
+          $for="id in shared['editor:selection'].contentOptions"
           $key="id"
           $value="id"
-          $selected="id === shared['editor:selection']?.contentId"
+          $selected="id === shared['editor:selection'].contentId"
         >{{ id }}</option>
       </select>
     </div>
