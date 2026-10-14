@@ -5,17 +5,18 @@
     <button $for="kind in state.kinds" $key="kind.kind" @click="add(kind.kind)">+ {{ kind.label }}</button>
   </div>
   <p class="hint">
-    New nodes go under the selected node. Drag a row onto another: its top edge puts it before,
-    its bottom edge after, the middle makes it a child. World position is kept.
+    New nodes go under the selected node. Shift-click selects a range, ctrl- or cmd-click adds
+    or removes one. Drag a row onto another: its top edge puts it before, its bottom edge after,
+    the middle makes it a child. World position is kept.
   </p>
   <div class="rows">
     <div
       class="row"
       $for="row in shared['editor:tree']"
       $key="row.id"
-      $class="{ selected: row.selected, root: row.isRoot }"
+      $class="{ selected: row.selected, active: row.active, root: row.isRoot }"
       @pointerdown="press($event, row)"
-      @click="select(row)"
+      @click="select($event, row)"
     >
       <span class="indent" $for="n in row.depth" $key="n"></span>
       <span class="twisty" $class="{ hidden: !row.hasChildren, open: row.expanded }" @click="toggle($event, row)">▸</span>
@@ -30,7 +31,7 @@
 import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 
-interface Row { id: number; name: string; type: string; depth: number; hasChildren: boolean; expanded: boolean; selected: boolean; isRoot: boolean }
+interface Row { id: number; name: string; type: string; depth: number; hasChildren: boolean; expanded: boolean; selected: boolean; active: boolean; isRoot: boolean }
 type Place = 'before' | 'after' | 'inside'
 
 shared('editor:tree', [])
@@ -47,7 +48,7 @@ const state = reactive({
 })
 
 const DRAG_THRESHOLD = 4
-let drag: { id: number; startX: number; startY: number; list: HTMLElement; active: boolean } | null = null
+let drag: { ids: number[]; startX: number; startY: number; list: HTMLElement; active: boolean } | null = null
 let dropTarget: { id: number; place: Place; element: HTMLElement } | null = null
 let justDragged = false
 
@@ -55,12 +56,19 @@ function add(kind: string) {
   sendCommand({ type: 'add', kind })
 }
 
-function select(row: Row) {
+function select(event: MouseEvent, row: Row) {
   if (justDragged) {
     justDragged = false
     return
   }
-  sendCommand({ type: 'select', id: row.id })
+  const mode = event.shiftKey ? 'range' : event.ctrlKey || event.metaKey ? 'toggle' : 'replace'
+  sendCommand({ type: 'select', id: row.id, mode })
+}
+
+// Dragging a selected row carries the whole selection; any other row moves alone
+function draggedIds(row: Row): number[] {
+  const rows = shared('editor:tree').value as Row[]
+  return row.selected ? rows.filter((r) => r.selected && !r.isRoot).map((r) => r.id) : [row.id]
 }
 
 function toggle(event: Event, row: Row) {
@@ -95,7 +103,7 @@ function press(event: PointerEvent, row: Row) {
   if (row.isRoot || (event.target as HTMLElement).closest('.twisty')) return
   const list = (event.currentTarget as HTMLElement).closest<HTMLElement>('.rows')
   if (!list) return
-  drag = { id: row.id, startX: event.clientX, startY: event.clientY, list, active: false }
+  drag = { ids: draggedIds(row), startX: event.clientX, startY: event.clientY, list, active: false }
   document.addEventListener('pointermove', move)
   document.addEventListener('pointerup', release)
 }
@@ -108,7 +116,7 @@ function move(event: PointerEvent) {
     document.body.classList.add('tree-dragging')
   }
   const hit = rowAt(drag.list, event.clientX, event.clientY)
-  if (!hit || hit.row.id === drag.id || hit.row.isRoot && placeFor(hit.element, event.clientY) !== 'inside') {
+  if (!hit || drag.ids.includes(hit.row.id) || hit.row.isRoot && placeFor(hit.element, event.clientY) !== 'inside') {
     clearDrop()
     return
   }
@@ -125,7 +133,7 @@ function release() {
   document.body.classList.remove('tree-dragging')
   const moved = drag?.active ? dropTarget : null
   if (drag?.active) justDragged = true
-  if (moved && drag) sendCommand({ type: 'move', id: drag.id, targetId: moved.id, place: moved.place })
+  if (moved && drag) sendCommand({ type: 'move', ids: drag.ids, targetId: moved.id, place: moved.place })
   clearDrop()
   drag = null
 }
@@ -185,6 +193,10 @@ function release() {
 
 .row.selected {
   background: #2a3650;
+}
+
+.row.active {
+  box-shadow: inset 2px 0 #6a8fd8;
 }
 
 .row.root {

@@ -23,7 +23,7 @@ import {
 } from "@vitrine/runtime"
 import type { JsonAsset } from "@vitrine/assets"
 import type { LightspeedRuntime } from "@lightspeed-js/core"
-import { EditorCamera, type GizmoMode } from "./EditorCamera"
+import { EditorCamera, groupTarget, type GizmoMode } from "./EditorCamera"
 import { EditorInput } from "./EditorInput"
 import { ExhibitionFolder } from "./ExhibitionFolder"
 
@@ -38,10 +38,15 @@ export interface TreeRow {
   hasChildren: boolean
   expanded: boolean
   selected: boolean
+  /** The one the fields panel and gizmo pivot follow; the last clicked. */
+  active: boolean
   isRoot: boolean
 }
 
 export type DropPlace = "before" | "after" | "inside"
+
+/** replace: plain click, toggle: ctrl/cmd click, range: shift click from the anchor. */
+export type SelectMode = "replace" | "toggle" | "range"
 
 /** An exposed property of the selected node with its current value. */
 export interface SelectionProperty extends ExposedProperty {
@@ -71,6 +76,8 @@ export interface EditorCells {
     id: number
     name: string
     type: string
+    /** How many nodes are selected; the rest of this cell describes the active one. */
+    count: number
     parent: string | null
     position: { x: number; y: number; z: number }
     rotation: { x: number; y: number; z: number }
@@ -106,10 +113,10 @@ export type EditorCommand =
   | { type: "toggleVisualisers" }
   | { type: "toggleMoveMode" }
   | { type: "setGizmo"; mode: GizmoMode }
-  | { type: "select"; id: number }
+  | { type: "select"; id: number; mode?: SelectMode }
   | { type: "add"; kind: NodeKind }
   | { type: "toggleExpand"; id: number }
-  | { type: "move"; id: number; targetId: number; place: DropPlace }
+  | { type: "move"; ids: number[]; targetId: number; place: DropPlace }
   | { type: "delete" }
   | { type: "focus" }
   | { type: "setTransform"; position: { x: number; y: number; z: number }; rotation: { x: number; y: number; z: number } }
@@ -186,7 +193,11 @@ export class EditorSession {
   private view: ViewMode = "guided"
   private visualised = false
   private gizmo: GizmoMode = "translate"
+  /** The active node: last clicked, what the fields and gizmo pivot follow. */
   private selected: Node3D | null = null
+  private selection = new Set<Node3D>()
+  /** Where a shift-click range starts: the last node picked without shift. */
+  private anchor: Node3D | null = null
   private lastMoveNode: Node3D | null = null
   private created = new Map<Node3D, { type: string; config: Record<string, unknown> }>()
   /** Each loaded node → its entry in the scene file, so a save keeps fields the editor doesn't know. */
@@ -354,24 +365,29 @@ export class EditorSession {
     return this.childNodes(node).filter((child) => this.originals.has(child) || this.created.has(child))
   }
 
-  private publishTree(): void {
-    const rows: TreeRow[] = []
+  /** The nodes the tree shows, in row order. */
+  private visibleNodes(): { node: Node3D; depth: number }[] {
+    const rows: { node: Node3D; depth: number }[] = []
     const visit = (node: Node3D, depth: number) => {
-      const children = this.ownedChildren(node)
-      const expanded = !this.collapsed.has(node)
-      rows.push({
-        id: this.idOf(node),
-        name: node.name,
-        type: node.constructor.name,
-        depth,
-        hasChildren: children.length > 0,
-        expanded,
-        selected: node === this.selected,
-        isRoot: node === this.root,
-      })
-      if (expanded) children.forEach((child) => visit(child, depth + 1))
+      rows.push({ node, depth })
+      if (!this.collapsed.has(node)) this.ownedChildren(node).forEach((child) => visit(child, depth + 1))
     }
     if (this.root) visit(this.root, 0)
+    return rows
+  }
+
+  private publishTree(): void {
+    const rows: TreeRow[] = this.visibleNodes().map(({ node, depth }) => ({
+      id: this.idOf(node),
+      name: node.name,
+      type: node.constructor.name,
+      depth,
+      hasChildren: this.ownedChildren(node).length > 0,
+      expanded: !this.collapsed.has(node),
+      selected: this.selection.has(node),
+      active: node === this.selected,
+      isRoot: node === this.root,
+    }))
     this.set("editor:tree", rows)
   }
 
@@ -388,6 +404,7 @@ export class EditorSession {
       id: this.idOf(node),
       name: node.name,
       type: node.constructor.name,
+      count: this.selection.size,
       parent: node.parent instanceof Node3D ? node.parent.name : null,
       position: { x: round(p.x), y: round(p.y), z: round(p.z) },
       rotation: {
@@ -586,7 +603,7 @@ export class EditorSession {
         this.publishView()
         break
       case "select":
-        this.select(this.nodesById.get(command.id) ?? null)
+        this.select(this.nodesById.get(command.id) ?? null, command.mode)
         break
       case "add":
         this.addNode(command.kind)
@@ -601,7 +618,7 @@ export class EditorSession {
         break
       }
       case "move":
-        this.moveNode(command.id, command.targetId, command.place)
+        this.moveNodes(command.ids, command.targetId, command.place)
         break
       case "delete":
         this.deleteSelected()
@@ -727,7 +744,40 @@ export class EditorSession {
 
   // ---------------- nodes ----------------
 
-  private select(node: Node3D | null): void {
+  private select(node: Node3D | null, mode: SelectMode = "replace"): void {
+    const root = this.root
+    if (node === root && mode !== "replace") return
+    if (!node) {
+      this.selection.clear()
+      this.anchor = null
+    } else if (mode === "toggle") {
+      if (this.selection.has(node)) {
+        this.selection.delete(node)
+        node = Array.from(this.selection).pop() ?? null
+      } else {
+        this.selection.delete(root!)
+        this.selection.add(node)
+      }
+      this.anchor = node
+    } else if (mode === "range" && this.anchor) {
+      const visible = this.visibleNodes().map((row) => row.node)
+      const from = visible.indexOf(this.anchor)
+      const to = visible.indexOf(node)
+      if (from >= 0 && to >= 0) {
+        const span = visible.slice(Math.min(from, to), Math.max(from, to) + 1)
+        this.selection = new Set(span.filter((n) => n !== root))
+      } else {
+        this.selection = new Set([node])
+        this.anchor = node
+      }
+    } else {
+      this.selection = new Set([node])
+      this.anchor = node
+    }
+    this.activate(node)
+  }
+
+  private activate(node: Node3D | null): void {
     this.selected = node
     if (node) {
       this.railSelected = -1
@@ -741,13 +791,29 @@ export class EditorSession {
     this.publishRail()
   }
 
+  /** Selected nodes with no selected ancestor: moving or deleting these covers the whole selection. */
+  private selectionRoots(): Node3D[] {
+    return Array.from(this.selection).filter(
+      (node) => node !== this.root && !Array.from(this.selection).some((other) => other !== node && other.contains(node))
+    )
+  }
+
   private attachGizmo(node: Node3D): void {
     if (!this.camera?.isActive) return
-    this.camera.attach(node, () => this.publishSelection())
+    const publish = () => this.publishSelection()
+    if (this.selection.size > 1) this.camera.attachTarget(groupTarget(this.selectionRoots(), node), publish)
+    else this.camera.attach(node, publish)
   }
 
   private focusSelected(): void {
-    if (this.selected && this.camera?.isActive) this.camera.focus(this.selected)
+    if (!this.selected || !this.camera?.isActive) return
+    if (this.selection.size <= 1) {
+      this.camera.focus(this.selected)
+      return
+    }
+    const centre = new THREE.Vector3()
+    this.selection.forEach((node) => centre.add(node.transform.getWorldPosition()))
+    this.camera.focusPoint(centre.divideScalar(this.selection.size))
   }
 
   private writeTransform(
@@ -866,48 +932,58 @@ export class EditorSession {
   }
 
   private deleteSelected(): void {
-    const node = this.selected
-    if (!node || node === this.root) return
+    const nodes = this.selectionRoots()
+    if (nodes.length === 0) return
     this.camera?.detach()
-    const hadFocalPoints = node.walk().some((n) => n instanceof FocalPoint)
-    node.walk().forEach((n) => {
-      if (n instanceof Node3D) {
-        this.created.delete(n)
-        this.originals.delete(n)
-        const id = this.ids.get(n)
-        if (id !== undefined) this.nodesById.delete(id)
-        this.ids.delete(n)
-      }
+    let hadFocalPoints = false
+    nodes.forEach((node) => {
+      node.walk().forEach((n) => {
+        if (n instanceof FocalPoint) hadFocalPoints = true
+        if (n instanceof Node3D) {
+          this.created.delete(n)
+          this.originals.delete(n)
+          const id = this.ids.get(n)
+          if (id !== undefined) this.nodesById.delete(id)
+          this.ids.delete(n)
+        }
+      })
+      node.dispose()
     })
-    node.dispose()
     if (hadFocalPoints) this.scene.refreshFocalPointTargets()
     this.select(null)
   }
 
-  /** Reparent or reorder a node, keeping its world transform. */
-  private moveNode(id: number, targetId: number, place: DropPlace): void {
-    const node = this.nodesById.get(id)
+  /** Reparent or reorder nodes, keeping their world transforms and tree order. */
+  private moveNodes(ids: number[], targetId: number, place: DropPlace): void {
     const target = this.nodesById.get(targetId)
     const root = this.root
-    if (!node || !target || !root || node === target || node === root) return
-    if (node.contains(target)) return
+    if (!target || !root) return
+    const order = this.visibleNodes().map((row) => row.node)
+    const nodes = ids
+      .map((id) => this.nodesById.get(id))
+      .filter((node): node is Node3D => node !== undefined && node !== root && node !== target)
+      .filter((node, _, all) => !all.some((other) => other !== node && other.contains(node)))
+      .sort((a, b) => order.indexOf(a) - order.indexOf(b))
+    if (nodes.length === 0 || nodes.some((node) => node.contains(target))) return
     const newParent = place === "inside" ? target : target.parent
     if (!(newParent instanceof Node3D)) return
-    const oldParent = node.parent
-    if (!(oldParent instanceof Node3D)) return
-    if (newParent !== oldParent && newParent.children.has(node.name)) {
-      this.publishFolder(`"${node.name}" already exists under ${newParent.name}`)
-      return
+    for (const node of nodes) {
+      if (node.parent !== newParent && newParent.children.has(node.name)) {
+        this.publishFolder(`"${node.name}" already exists under ${newParent.name}`)
+        return
+      }
     }
 
-    const world = node.transform.getWorldMatrix().clone()
-    oldParent.detach(node)
-    const index =
+    const worlds = new Map(nodes.map((node) => [node, node.transform.getWorldMatrix().clone()]))
+    nodes.forEach((node) => (node.parent as Node3D).detach(node))
+    let index =
       place === "inside" ? newParent.children.size : newParent.indexOf(target) + (place === "after" ? 1 : 0)
-    newParent.insertNode(node, index, node.name)
-    node.transform.setWorldMatrix(world)
-    node.walk().forEach((n) => {
-      if (n instanceof Collider) n.needsUpdate()
+    nodes.forEach((node) => {
+      newParent.insertNode(node, index++, node.name)
+      node.transform.setWorldMatrix(worlds.get(node)!)
+      node.walk().forEach((n) => {
+        if (n instanceof Collider) n.needsUpdate()
+      })
     })
     this.collapsed.delete(newParent)
     this.camera?.syncFromNode()
@@ -995,6 +1071,8 @@ export class EditorSession {
   private railSelect(index: number): void {
     this.railSelected = index
     this.selected = null
+    this.selection.clear()
+    this.anchor = null
     const cp = this.railPoints[index]
     if (cp && this.camera?.isActive) {
       this.camera.attachTarget(

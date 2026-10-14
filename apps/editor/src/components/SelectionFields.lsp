@@ -2,7 +2,7 @@
 <div class="selection">
   <p class="hint" $if="!shared['editor:selection']">Nothing selected</p>
   <template $else>
-    <p class="hint">{{ shared['editor:selection'].type }}</p>
+    <p class="hint">{{ shared['editor:selection'].type }}<span $if="shared['editor:selection'].count > 1"> · {{ shared['editor:selection'].count }} selected</span></p>
     <div class="row">
       <input class="name" type="text" $model="state.name" @change="rename" />
     </div>

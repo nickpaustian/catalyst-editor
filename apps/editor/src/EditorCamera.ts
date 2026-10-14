@@ -22,6 +22,26 @@ export const nodeTarget = (node: Node3D): GizmoTarget => ({
 })
 
 /**
+ * The gizmo sits on the active node and the whole group follows it: every
+ * change to the pivot's world matrix is applied as the same delta to each node.
+ */
+export const groupTarget = (nodes: Node3D[], pivot: Node3D): GizmoTarget => ({
+  position: () => pivot.transform.getWorldPosition(),
+  rotation: () => pivot.transform.getWorldRotation(),
+  apply: (position, rotation) => {
+    const previous = pivot.transform.getWorldMatrix().clone()
+    const next = new THREE.Matrix4().compose(position, rotation, pivot.transform.getWorldScale())
+    const delta = next.multiply(previous.invert())
+    nodes.forEach((node) => {
+      node.transform.setWorldMatrix(delta.clone().multiply(node.transform.getWorldMatrix()))
+      node.walk().forEach((n) => {
+        if (n instanceof Collider) n.needsUpdate()
+      })
+    })
+  },
+})
+
+/**
  * Authoring camera: orbit around a point of interest, with a transform gizmo
  * on a proxy object that writes back to the selected Catalyst node. Catalyst
  * renders through whatever camera is its target, so this bypasses the Camera
