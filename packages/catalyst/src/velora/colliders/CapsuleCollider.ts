@@ -64,8 +64,33 @@ export class CapsuleCollider extends Collider {
     return this._radius
   }
 
+  public set radius(radius: number) {
+    this._radius = radius
+    this.rebuildGeometry()
+  }
+
   public get height(): number {
     return this._height
+  }
+
+  public set height(height: number) {
+    this._height = height
+    this.rebuildGeometry()
+  }
+
+  private rebuildGeometry(): void {
+    this._geometry?.dispose()
+    this._geometry = new THREE.CapsuleGeometry(
+      this._radius,
+      this._height - this._radius * 2,
+      4,
+      8
+    )
+    if (this._mesh) {
+      this._mesh.geometry.dispose()
+      this._mesh.geometry = this._geometry.clone()
+    }
+    this.needsUpdate()
   }
 
   /**

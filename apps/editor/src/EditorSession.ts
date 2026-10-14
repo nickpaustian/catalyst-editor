@@ -8,7 +8,9 @@ import {
   FocalPointTrigger,
   Node3D,
   PointOfInterest,
+  exposedProperties,
   type ControlPoint,
+  type ExposedProperty,
   type ResolutionSettings,
 } from "@vitrine/catalyst"
 import {
@@ -41,6 +43,12 @@ export interface TreeRow {
 
 export type DropPlace = "before" | "after" | "inside"
 
+/** An exposed property of the selected node with its current value. */
+export interface SelectionProperty extends ExposedProperty {
+  label: string
+  value: number | boolean | string
+}
+
 /** Where a hierarchy saved from a legacy four-file exhibition goes. */
 const SCENE_FILE = "scene/scene.json"
 
@@ -69,6 +77,7 @@ export interface EditorCells {
     isPoi: boolean
     contentId: string
     contentOptions: string[]
+    properties: SelectionProperty[]
   } | null
   /** The editable presentation strings; paths are dotted keys into the manifest's presentation. */
   "editor:presentation": { path: string; label: string; value: string; multiline: boolean }[]
@@ -105,6 +114,7 @@ export type EditorCommand =
   | { type: "focus" }
   | { type: "setTransform"; position: { x: number; y: number; z: number }; rotation: { x: number; y: number; z: number } }
   | { type: "setContent"; id: string }
+  | { type: "setProperty"; key: string; value: unknown }
   | { type: "rename"; name: string }
   | { type: "exportScene" }
   | { type: "exportManifest" }
@@ -388,6 +398,15 @@ export class EditorSession {
       isPoi: poi !== null,
       contentId: poi?.modalName ?? "",
       contentOptions: this.contentEntries().map((entry) => entry.id),
+      properties: this.selectionProperties(node),
+    })
+  }
+
+  private selectionProperties(node: Node3D): SelectionProperty[] {
+    return exposedProperties(node).map((property) => {
+      const raw = (node as any)[property.key]
+      const value = property.type === "number" ? round(Number(raw)) : raw
+      return { ...property, label: property.label ?? property.key, value }
     })
   }
 
@@ -596,6 +615,9 @@ export class EditorSession {
       case "setContent":
         this.writeContent(command.id)
         break
+      case "setProperty":
+        this.writeProperty(command.key, command.value)
+        break
       case "rename":
         this.renameSelected(command.name)
         break
@@ -760,6 +782,26 @@ export class EditorSession {
     const made = this.created.get(node)
     if (made) made.config.name = clean
     this.publishTree()
+    this.publishSelection()
+  }
+
+  private writeProperty(key: string, value: unknown): void {
+    const node = this.selected
+    if (!node) return
+    const property = exposedProperties(node).find((p) => p.key === key)
+    if (!property) return
+    let next: unknown = value
+    if (property.type === "number") {
+      next = Number(value)
+      if (!Number.isFinite(next)) return
+      if (property.min !== undefined) next = Math.max(property.min, next as number)
+      if (property.max !== undefined) next = Math.min(property.max, next as number)
+    } else if (property.type === "boolean") {
+      next = Boolean(value)
+    } else {
+      next = String(value)
+    }
+    ;(node as any)[key] = next
     this.publishSelection()
   }
 
@@ -1095,6 +1137,15 @@ export class EditorSession {
       if (type !== "Node3D") entry.properties = { tags: node.tags, layers: [1], collidesWith: [] }
     }
     if (node instanceof PointOfInterest) entry.config.modalName = node.modalName ?? undefined
+    for (const property of exposedProperties(node)) {
+      const raw = (node as any)[property.key]
+      const value = property.type === "number" ? round(Number(raw)) : raw
+      if (property.save === "properties") {
+        entry.properties = { ...(entry.properties ?? {}), [property.key]: value }
+      } else if (property.save !== false) {
+        entry.config[property.key] = value
+      }
+    }
     if (children.length) entry.children = children
     return entry
   }

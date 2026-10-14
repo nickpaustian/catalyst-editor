@@ -1,5 +1,6 @@
 import * as THREE from "three"
 import { Collider, Debug, type ColliderConfig } from "@vitrine/catalyst"
+import type { ExposedProperty } from "./exposed"
 import { BoxCollider as VeloraBoxCollider } from "@vitrine/catalyst/velora/colliders/BoxCollider"
 import { DebugShapes } from "../debug/DebugShapes"
 
@@ -13,6 +14,12 @@ export interface BoxColliderConfig extends ColliderConfig {
  * BoxCollider - A node wrapper for Velora's BoxCollider.
  */
 export class BoxCollider extends Collider<BoxColliderConfig> {
+  static exposed: ExposedProperty[] = [
+    { key: "width", type: "number", min: 0.01, step: 0.1 },
+    { key: "height", type: "number", min: 0.01, step: 0.1 },
+    { key: "depth", type: "number", min: 0.01, step: 0.1 },
+  ]
+
   protected declare _collider: VeloraBoxCollider
 
   constructor(config: BoxColliderConfig = {}) {
@@ -41,6 +48,11 @@ export class BoxCollider extends Collider<BoxColliderConfig> {
     return this?._collider?.width
   }
 
+  public set width(width: number) {
+    this._collider.width = width
+    this.refreshVisualisation()
+  }
+
   /**
    * Get the height of the box.
    */
@@ -48,11 +60,21 @@ export class BoxCollider extends Collider<BoxColliderConfig> {
     return this?._collider?.height
   }
 
+  public set height(height: number) {
+    this._collider.height = height
+    this.refreshVisualisation()
+  }
+
   /**
    * Get the depth of the box.
    */
   public get depth(): number {
     return this?._collider?.depth
+  }
+
+  public set depth(depth: number) {
+    this._collider.depth = depth
+    this.refreshVisualisation()
   }
 
   /**
@@ -77,5 +99,21 @@ export class BoxCollider extends Collider<BoxColliderConfig> {
     this.setVisualisationColour(0xff00ff)
 
     this.visualisation.setDebugShape(box)
+  }
+
+  private refreshVisualisation(): void {
+    if (!this.visualisation) return
+    const previous = this._wireframe as THREE.LineSegments
+    const colour = (previous.material as THREE.LineBasicMaterial).color.getHex()
+    const box = DebugShapes.box({
+      width: this.width,
+      height: this.height,
+      depth: this.depth,
+      color: colour,
+    })
+    this._wireframe = box
+    this.visualisation.setDebugShape(box)
+    previous.geometry.dispose()
+    ;(previous.material as THREE.Material).dispose()
   }
 }

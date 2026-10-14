@@ -34,6 +34,27 @@
       <label>y</label><input type="number" step="1" $model="state.ry" @change="apply" />
       <label>z</label><input type="number" step="1" $model="state.rz" @change="apply" />
     </div>
+    <div class="properties">
+      <div class="row property" $for="field in state.fields" $key="field.key">
+        <label class="property-label">{{ field.label }}</label>
+        <input
+          $if="field.type === 'number'"
+          type="number"
+          $step="field.step"
+          $min="field.min"
+          $max="field.max"
+          $model="field.value"
+          @change="applyField(field)"
+        />
+        <input
+          $else-if="field.type === 'boolean'"
+          type="checkbox"
+          $model="field.value"
+          @change="applyField(field)"
+        />
+        <input $else type="text" $model="field.value" @change="applyField(field)" />
+      </div>
+    </div>
   </template>
 </div>
 </view>
@@ -46,7 +67,9 @@ const selection = shared('editor:selection', null)
 
 // Local copies of the fields, so typing doesn't fight the scene publishing
 // the same values back on every gizmo move
-const state = reactive({ name: '', px: 0, py: 0, pz: 0, rx: 0, ry: 0, rz: 0 })
+interface Field { key: string; label: string; type: string; value: number | boolean | string; min?: number; max?: number; step?: number }
+
+const state = reactive({ name: '', px: 0, py: 0, pz: 0, rx: 0, ry: 0, rz: 0, fields: [] as Field[] })
 
 selection.subscribe((next: any) => {
   if (!next) return
@@ -57,6 +80,7 @@ selection.subscribe((next: any) => {
   state.rx = next.rotation.x
   state.ry = next.rotation.y
   state.rz = next.rotation.z
+  state.fields = (next.properties ?? []).map((field: Field) => ({ ...field }))
 })
 
 function send(type: string) {
@@ -71,6 +95,10 @@ function rename() {
 
 function setContent(event: Event) {
   sendCommand({ type: 'setContent', id: (event.target as HTMLSelectElement).value })
+}
+
+function applyField(field: Field) {
+  sendCommand({ type: 'setProperty', key: field.key, value: field.value })
 }
 
 function apply() {
@@ -117,6 +145,15 @@ input[type="number"] {
 input.name {
   width: 100%;
   box-sizing: border-box;
+}
+
+.property-label {
+  width: 56px;
+  text-transform: capitalize;
+}
+
+.property input[type="text"] {
+  width: 120px;
 }
 
 button {

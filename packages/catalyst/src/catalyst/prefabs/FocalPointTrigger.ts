@@ -1,5 +1,5 @@
 import { Catalyst } from "../core"
-import { Node3D, BoxCollider } from "../nodes"
+import { Node3D, BoxCollider, type ExposedProperty } from "../nodes"
 import type { FocalPoint } from "./FocalPoint"
 
 interface FocalPointTriggerConfig {
@@ -12,6 +12,12 @@ interface FocalPointTriggerConfig {
 }
 
 export class FocalPointTrigger extends Node3D {
+  static exposed: ExposedProperty[] = [
+    { key: "width", type: "number", min: 0.01, step: 0.1 },
+    { key: "height", type: "number", min: 0.01, step: 0.1 },
+    { key: "depth", type: "number", min: 0.01, step: 0.1 },
+  ]
+
   private _collider: BoxCollider
   private _containedFocalPoints: FocalPoint[] = []
   private _allFocalPoints: FocalPoint[]
@@ -66,6 +72,37 @@ export class FocalPointTrigger extends Node3D {
 
   public get collider(): BoxCollider {
     return this._collider
+  }
+
+  public get width(): number {
+    return this._collider.width
+  }
+
+  public set width(width: number) {
+    this._collider.width = width
+    this.resized()
+  }
+
+  public get height(): number {
+    return this._collider.height
+  }
+
+  public set height(height: number) {
+    this._collider.height = height
+    this.resized()
+  }
+
+  public get depth(): number {
+    return this._collider.depth
+  }
+
+  public set depth(depth: number) {
+    this._collider.depth = depth
+    this.resized()
+  }
+
+  private resized(): void {
+    if (Catalyst._.getIsRunning()) this.getFocalPoints()
   }
 
   public set focalPoints(fps: FocalPoint[]) {

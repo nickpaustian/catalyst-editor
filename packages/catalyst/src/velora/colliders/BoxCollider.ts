@@ -67,11 +67,36 @@ export class BoxCollider extends Collider {
     return this._width
   }
 
+  public set width(width: number) {
+    this._width = width
+    this.rebuildGeometry()
+  }
+
   public get height(): number {
     return this._height
   }
 
+  public set height(height: number) {
+    this._height = height
+    this.rebuildGeometry()
+  }
+
   public get depth(): number {
     return this._depth
+  }
+
+  public set depth(depth: number) {
+    this._depth = depth
+    this.rebuildGeometry()
+  }
+
+  private rebuildGeometry(): void {
+    this._geometry?.dispose()
+    this._geometry = new THREE.BoxGeometry(this._width, this._height, this._depth)
+    if (this._mesh) {
+      this._mesh.geometry.dispose()
+      this._mesh.geometry = this._geometry.clone()
+    }
+    this.needsUpdate()
   }
 }

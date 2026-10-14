@@ -6,6 +6,7 @@ import {
   type RaycastIntersection,
 } from "@vitrine/catalyst/velora/colliders/Collider"
 import { type PhysicsLayer, PhysicsLayerSet } from "@vitrine/catalyst/velora/utils"
+import type { ExposedProperty } from "./exposed"
 
 export interface ColliderConfig {
   name?: string
@@ -18,6 +19,10 @@ export interface ColliderConfig {
 export abstract class Collider<
   T extends ColliderConfig = ColliderConfig
 > extends Node3D {
+  static exposed: ExposedProperty[] = [
+    { key: "isTrigger", label: "Trigger", type: "boolean", save: "properties" },
+  ]
+
   protected _collider!: VeloraCollider
   protected _config: T
   private _initialised: boolean = false

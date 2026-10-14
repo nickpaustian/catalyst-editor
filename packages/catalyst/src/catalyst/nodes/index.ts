@@ -19,3 +19,5 @@ export * from "./Mesh"
 
 export * from "./GaussianSplat"
 export * from "./VolumetricGaussianSplat"
+
+export * from "./exposed"

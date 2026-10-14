@@ -1,5 +1,6 @@
 import * as THREE from "three"
 import { Collider, type ColliderConfig } from "./Collider"
+import type { ExposedProperty } from "./exposed"
 import { CapsuleCollider as VeloraCapsuleCollider } from "@vitrine/catalyst/velora/colliders/CapsuleCollider"
 
 export interface CapsuleColliderConfig extends ColliderConfig {
@@ -11,6 +12,11 @@ export interface CapsuleColliderConfig extends ColliderConfig {
  * CapsuleCollider - A node wrapper for Velora's CapsuleCollider.
  */
 export class CapsuleCollider extends Collider<CapsuleColliderConfig> {
+  static exposed: ExposedProperty[] = [
+    { key: "radius", type: "number", min: 0.01, step: 0.05 },
+    { key: "height", type: "number", min: 0.01, step: 0.1 },
+  ]
+
   protected declare _collider: VeloraCapsuleCollider
 
   constructor(config: CapsuleColliderConfig = {}) {
@@ -39,11 +45,19 @@ export class CapsuleCollider extends Collider<CapsuleColliderConfig> {
     return this._collider.radius
   }
 
+  public set radius(radius: number) {
+    this._collider.radius = radius
+  }
+
   /**
    * Get the height of the capsule.
    */
   public get height(): number {
     return this._collider.height
+  }
+
+  public set height(height: number) {
+    this._collider.height = height
   }
 
   /**
