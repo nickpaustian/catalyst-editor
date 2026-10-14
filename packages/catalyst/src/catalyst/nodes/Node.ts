@@ -1,5 +1,6 @@
 import { svgIcon } from "./icon"
 import { Signal } from "../signals"
+import type { ExposedProperty } from "./exposed"
 
 interface GetNodesByTagOptions {
   matchMode?: "all" | "any"
@@ -12,6 +13,7 @@ export class Node {
   static icon = svgIcon(
     '<circle cx="8" cy="8" r="2.5"/>'
   )
+  static exposed: ExposedProperty[] = [{ key: "tags", type: "tags", save: "properties" }]
 
   protected _parent: Node | null = null
   public children: Map<string, Node> = new Map()

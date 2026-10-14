@@ -12,6 +12,7 @@ import {
   exposedProperties,
   type ControlPoint,
   type ExposedProperty,
+  type ExposedType,
   type ResolutionSettings,
 } from "@vitrine/catalyst"
 import {
@@ -47,6 +48,9 @@ export interface TreeRow {
 
 export type DropPlace = "before" | "after" | "inside"
 
+const toStrings = (value: unknown): string[] =>
+  Array.isArray(value) ? value.map(String) : String(value ?? "").split(",")
+
 const ADDABLE: { kind: NodeKind; label: string; cls: object }[] = [
   { kind: "Group", label: "Group", cls: Node3D },
   { kind: "BoxCollider", label: "Collider", cls: BoxCollider },
@@ -61,8 +65,19 @@ export type SelectMode = "replace" | "toggle" | "range"
 /** An exposed property of the selected node with its current value. */
 export interface SelectionProperty extends ExposedProperty {
   label: string
-  value: number | boolean | string
+  value: number | boolean | string | string[] | number[]
 }
+
+/** Tags and layers are lists, so a property's current value depends on its type. */
+const readProperty = (node: object, property: ExposedProperty): SelectionProperty["value"] => {
+  const raw = (node as any)[property.key]
+  if (property.type === "number") return round(Number(raw))
+  if (property.type === "tags") return [...(raw as string[])]
+  if (property.type === "layers") return [...(raw?.list ?? [])] as number[]
+  return raw
+}
+
+const LIST_TYPES: ExposedType[] = ["tags", "layers"]
 
 /** Where a hierarchy saved from a legacy four-file exhibition goes. */
 const SCENE_FILE = "scene/scene.json"
@@ -442,12 +457,11 @@ export class EditorSession {
     })
   }
 
+  // Scalars first, then the list editors, which take more room
   private selectionProperties(node: Node3D): SelectionProperty[] {
-    return exposedProperties(node).map((property) => {
-      const raw = (node as any)[property.key]
-      const value = property.type === "number" ? round(Number(raw)) : raw
-      return { ...property, label: property.label ?? property.key, value }
-    })
+    return exposedProperties(node)
+      .map((property) => ({ ...property, label: property.label ?? property.key, value: readProperty(node, property) }))
+      .sort((a, b) => Number(LIST_TYPES.includes(a.type)) - Number(LIST_TYPES.includes(b.type)))
   }
 
   private publishRail(): void {
@@ -887,6 +901,16 @@ export class EditorSession {
       if (property.max !== undefined) next = Math.min(property.max, next as number)
     } else if (property.type === "boolean") {
       next = Boolean(value)
+    } else if (property.type === "tags") {
+      const tags = Array.from(new Set(toStrings(value).map((tag) => tag.trim()).filter(Boolean)))
+      node.clearTags()
+      node.addTag(tags)
+      this.publishSelection()
+      return
+    } else if (property.type === "layers") {
+      next = Array.from(new Set(toStrings(value).map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n < 32))).sort(
+        (a, b) => a - b
+      )
     } else {
       next = String(value)
     }
@@ -1239,8 +1263,8 @@ export class EditorSession {
     }
     if (node instanceof PointOfInterest) entry.config.modalName = node.modalName ?? undefined
     for (const property of exposedProperties(node)) {
-      const raw = (node as any)[property.key]
-      const value = property.type === "number" ? round(Number(raw)) : raw
+      const value = readProperty(node, property)
+      if (property.type === "tags" && (value as string[]).length === 0) continue
       if (property.save === "properties") {
         entry.properties = { ...(entry.properties ?? {}), [property.key]: value }
       } else if (property.save !== false) {

@@ -26,6 +26,8 @@ export abstract class Collider<
 
   static exposed: ExposedProperty[] = [
     { key: "isTrigger", label: "Trigger", type: "boolean", save: "properties" },
+    { key: "layers", type: "layers", save: "properties" },
+    { key: "collidesWith", label: "Collides with", type: "layers", save: "properties" },
   ]
 
   protected _collider!: VeloraCollider

@@ -53,6 +53,27 @@
           $model="field.value"
           @change="applyField(field)"
         />
+        <div class="tags" $else-if="field.type === 'tags'">
+          <span class="chip" $for="tag in field.value" $key="tag">
+            {{ tag }}<button class="remove" title="Remove tag" @click="removeTag(field, tag)">×</button>
+          </span>
+          <input
+            class="tag-input"
+            type="text"
+            placeholder="add tag"
+            @keydown="tagKey($event, field)"
+            @blur="addTagFrom($event.target, field)"
+          />
+        </div>
+        <div class="layers" $else-if="field.type === 'layers'">
+          <button
+            class="layer"
+            $for="n in state.layerNumbers"
+            $key="n"
+            $class="{ on: field.value.includes(n) }"
+            @click="toggleLayer(field, n)"
+          >{{ n }}</button>
+        </div>
         <input $else type="text" $model="field.value" @change="applyField(field)" />
       </div>
     </div>
@@ -68,9 +89,14 @@ const selection = shared('editor:selection', null)
 
 // Local copies of the fields, so typing doesn't fight the scene publishing
 // the same values back on every gizmo move
-interface Field { key: string; label: string; type: string; value: number | boolean | string; min?: number; max?: number; step?: number }
+interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number }
 
-const state = reactive({ name: '', px: 0, py: 0, pz: 0, rx: 0, ry: 0, rz: 0, fields: [] as Field[] })
+const state = reactive({
+  name: '',
+  px: 0, py: 0, pz: 0, rx: 0, ry: 0, rz: 0,
+  fields: [] as Field[],
+  layerNumbers: Array.from({ length: 32 }, (_, n) => n),
+})
 
 selection.subscribe((next: any) => {
   if (!next) return
@@ -100,6 +126,34 @@ function setContent(event: Event) {
 
 function applyField(field: Field) {
   sendCommand({ type: 'setProperty', key: field.key, value: field.value })
+}
+
+function removeTag(field: Field, tag: string) {
+  field.value = (field.value as string[]).filter((t) => t !== tag)
+  applyField(field)
+}
+
+function addTagFrom(input: HTMLInputElement, field: Field) {
+  const tag = input.value.trim()
+  input.value = ''
+  const tags = field.value as string[]
+  if (!tag || tags.includes(tag)) return
+  field.value = [...tags, tag]
+  applyField(field)
+}
+
+function tagKey(event: KeyboardEvent, field: Field) {
+  if (event.key !== 'Enter' && event.key !== ',') return
+  event.preventDefault()
+  addTagFrom(event.target as HTMLInputElement, field)
+}
+
+function toggleLayer(field: Field, layer: number) {
+  const layers = field.value as number[]
+  field.value = layers.includes(layer)
+    ? layers.filter((l) => l !== layer)
+    : [...layers, layer].sort((a, b) => a - b)
+  applyField(field)
 }
 
 interface Scrub {
@@ -279,6 +333,78 @@ input.name {
 
 .property input[type="text"] {
   width: 120px;
+}
+
+.row.property:has(.tags),
+.row.property:has(.layers) {
+  display: flex;
+  align-items: flex-start;
+}
+
+.row.property:has(.tags) .property-label,
+.row.property:has(.layers) .property-label {
+  flex: 0 0 56px;
+  padding-top: 4px;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  flex: 1 1 auto;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: #2a3650;
+  border-radius: 3px;
+  padding: 1px 2px 1px 6px;
+  font-size: 11px;
+}
+
+.chip .remove {
+  background: none;
+  border: none;
+  padding: 0 3px;
+  margin: 0;
+  color: #9ab;
+  line-height: 1;
+}
+
+.chip .remove:hover {
+  color: #fff;
+}
+
+.tag-input {
+  width: 64px;
+  padding: 2px 4px;
+  font-size: 11px;
+}
+
+.layers {
+  display: grid;
+  grid-template-columns: repeat(8, 22px);
+  gap: 2px;
+}
+
+.layer {
+  width: 22px;
+  height: 18px;
+  padding: 0;
+  margin: 0;
+  font-size: 9px;
+  color: #777;
+  background: #1c1c1c;
+  border-color: #333;
+}
+
+.layer.on {
+  color: #fff;
+  background: #3b5aa0;
+  border-color: #6a8fd8;
 }
 
 button {

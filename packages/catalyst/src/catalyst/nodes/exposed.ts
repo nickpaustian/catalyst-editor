@@ -1,4 +1,5 @@
-export type ExposedType = "number" | "boolean" | "string"
+/** tags: a list of strings; layers: a list of physics layer numbers (0-31). */
+export type ExposedType = "number" | "boolean" | "string" | "tags" | "layers"
 
 /**
  * A property a node class offers to editors. Declared on the class as
@@ -7,7 +8,11 @@ export type ExposedType = "number" | "boolean" | "string"
  * or Blender's RNA properties work.
  */
 export interface ExposedProperty {
-  /** The instance property read and written; it needs a getter and a setter. */
+  /**
+   * The instance property read and written; it needs a getter and a setter.
+   * `tags` reads `tags` and writes through `clearTags`/`addTag`; `layers`
+   * reads a PhysicsLayerSet's `list` and writes an array to its setter.
+   */
   key: string
   label?: string
   type: ExposedType
