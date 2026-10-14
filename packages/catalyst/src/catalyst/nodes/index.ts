@@ -21,3 +21,4 @@ export * from "./GaussianSplat"
 export * from "./VolumetricGaussianSplat"
 
 export * from "./exposed"
+export * from "./icon"

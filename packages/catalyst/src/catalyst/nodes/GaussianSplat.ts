@@ -1,3 +1,4 @@
+import { svgIcon } from "./icon"
 import * as THREE from "three"
 import { Catalyst } from "../core"
 import { Node3D } from "./Node3D"
@@ -26,6 +27,10 @@ export interface GaussianSplatLod {
 export class GaussianSplat<
   T extends GaussianSplatConfig = GaussianSplatConfig
 > extends Node3D {
+  static icon = svgIcon(
+    '<circle cx="4" cy="5" r="1.4"/><circle cx="9" cy="3.5" r="1.1"/><circle cx="12" cy="7" r="1.6"/><circle cx="6" cy="10" r="1.8"/><circle cx="11" cy="12" r="1.2"/>'
+  )
+
   protected _collider!: VeloraCollider
   protected _config: T
   protected _lods: Map<number, GaussianSplatLod> = new Map()

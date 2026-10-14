@@ -1,3 +1,4 @@
+import { svgIcon } from "./icon"
 import * as THREE from "three"
 import { Node } from "./Node"
 import { Transform3D } from "./Transform3D"
@@ -15,6 +16,10 @@ interface Node3DConfig {
  * Node3D - A spatial node with transform capabilities.
  */
 export class Node3D extends Node {
+  static icon = svgIcon(
+    '<rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/>'
+  )
+
   private _transform: Transform3D
 
   // Debug Visualisation

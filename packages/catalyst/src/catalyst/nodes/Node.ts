@@ -1,3 +1,4 @@
+import { svgIcon } from "./icon"
 import { Signal } from "../signals"
 
 interface GetNodesByTagOptions {
@@ -8,6 +9,10 @@ interface GetNodesByTagOptions {
  * Node - Base class for the hierarchical node system.
  */
 export class Node {
+  static icon = svgIcon(
+    '<circle cx="8" cy="8" r="2.5"/>'
+  )
+
   protected _parent: Node | null = null
   public children: Map<string, Node> = new Map()
   public childCounters: Map<string, number> = new Map()

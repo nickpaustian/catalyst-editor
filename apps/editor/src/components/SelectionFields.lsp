@@ -2,7 +2,7 @@
 <div class="selection">
   <p class="hint" $if="!shared['editor:selection']">Nothing selected</p>
   <template $else>
-    <p class="hint">{{ shared['editor:selection'].type }}<span $if="shared['editor:selection'].count > 1"> · {{ shared['editor:selection'].count }} selected</span></p>
+    <p class="hint type"><span class="icon" $html="shared['editor:selection'].icon"></span>{{ shared['editor:selection'].type }}<span $if="shared['editor:selection'].count > 1"> · {{ shared['editor:selection'].count }} selected</span></p>
     <div class="row">
       <input class="name" type="text" $model="state.name" @change="rename" />
     </div>
@@ -203,6 +203,24 @@ function apply() {
 
 .row {
   margin: 2px 0;
+}
+
+.type {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.icon {
+  width: 14px;
+  height: 14px;
+  color: #8fa3c7;
+}
+
+.icon :global(svg) {
+  display: block;
+  width: 14px;
+  height: 14px;
 }
 
 label {

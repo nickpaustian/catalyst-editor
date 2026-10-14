@@ -8,6 +8,7 @@ import {
   FocalPointTrigger,
   Node3D,
   PointOfInterest,
+  editorIcon,
   exposedProperties,
   type ControlPoint,
   type ExposedProperty,
@@ -34,6 +35,7 @@ export interface TreeRow {
   id: number
   name: string
   type: string
+  icon: string
   depth: number
   hasChildren: boolean
   expanded: boolean
@@ -44,6 +46,14 @@ export interface TreeRow {
 }
 
 export type DropPlace = "before" | "after" | "inside"
+
+const ADDABLE: { kind: NodeKind; label: string; cls: object }[] = [
+  { kind: "Group", label: "Group", cls: Node3D },
+  { kind: "BoxCollider", label: "Collider", cls: BoxCollider },
+  { kind: "FocalPoint", label: "Focal point", cls: FocalPoint },
+  { kind: "FocalPointTrigger", label: "Trigger", cls: FocalPointTrigger },
+  { kind: "PointOfInterest", label: "Point of interest", cls: PointOfInterest },
+]
 
 /** replace: plain click, toggle: ctrl/cmd click, range: shift click from the anchor. */
 export type SelectMode = "replace" | "toggle" | "range"
@@ -72,10 +82,13 @@ export interface EditorCells {
   "editor:view": { view: ViewMode; visualised: boolean; moveMode: boolean; gizmo: GizmoMode }
   /** The scene hierarchy flattened in tree order, collapsed subtrees left out. */
   "editor:tree": TreeRow[]
+  /** What the tree can add: a kind for the `add` command with its label and icon. */
+  "editor:kinds": { kind: NodeKind; label: string; icon: string }[]
   "editor:selection": {
     id: number
     name: string
     type: string
+    icon: string
     /** How many nodes are selected; the rest of this cell describes the active one. */
     count: number
     parent: string | null
@@ -262,6 +275,7 @@ export class EditorSession {
       })
 
     this.publishExhibition()
+    this.publishKinds()
     this.publishFolder()
     this.publishView()
     this.publishTree()
@@ -313,6 +327,13 @@ export class EditorSession {
 
   private get scene() {
     return this.exhibition.managers.scene
+  }
+
+  private publishKinds(): void {
+    this.set(
+      "editor:kinds",
+      ADDABLE.map(({ kind, label, cls }) => ({ kind, label, icon: editorIcon(cls) }))
+    )
   }
 
   private publishExhibition(): void {
@@ -381,6 +402,7 @@ export class EditorSession {
       id: this.idOf(node),
       name: node.name,
       type: node.constructor.name,
+      icon: editorIcon(node),
       depth,
       hasChildren: this.ownedChildren(node).length > 0,
       expanded: !this.collapsed.has(node),
@@ -404,6 +426,7 @@ export class EditorSession {
       id: this.idOf(node),
       name: node.name,
       type: node.constructor.name,
+      icon: editorIcon(node),
       count: this.selection.size,
       parent: node.parent instanceof Node3D ? node.parent.name : null,
       position: { x: round(p.x), y: round(p.y), z: round(p.z) },

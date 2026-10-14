@@ -1,3 +1,4 @@
+import { svgIcon } from "./icon"
 import * as THREE from "three"
 import { Catalyst } from "../core"
 import { Node3D } from "./Node3D"
@@ -19,6 +20,10 @@ export interface ColliderConfig {
 export abstract class Collider<
   T extends ColliderConfig = ColliderConfig
 > extends Node3D {
+  static icon = svgIcon(
+    '<rect x="2.5" y="2.5" width="11" height="11" rx="2" stroke-dasharray="2.5 2"/>'
+  )
+
   static exposed: ExposedProperty[] = [
     { key: "isTrigger", label: "Trigger", type: "boolean", save: "properties" },
   ]

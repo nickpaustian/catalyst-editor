@@ -1,3 +1,4 @@
+import { svgIcon } from "../nodes/icon"
 import { Catalyst } from "../core"
 import { Node3D, BoxCollider, type ExposedProperty } from "../nodes"
 import type { FocalPoint } from "./FocalPoint"
@@ -12,6 +13,10 @@ interface FocalPointTriggerConfig {
 }
 
 export class FocalPointTrigger extends Node3D {
+  static icon = svgIcon(
+    '<rect x="1.8" y="1.8" width="12.4" height="12.4" rx="2" stroke-dasharray="2.5 2"/><circle cx="8" cy="8" r="2.5"/><circle cx="8" cy="8" r="0.8" fill="currentColor"/>'
+  )
+
   static exposed: ExposedProperty[] = [
     { key: "width", type: "number", min: 0.01, step: 0.1 },
     { key: "height", type: "number", min: 0.01, step: 0.1 },

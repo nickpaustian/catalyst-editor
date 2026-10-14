@@ -1,3 +1,4 @@
+import { svgIcon } from "../nodes/icon"
 import { Node3D, Debug } from "../nodes"
 import { DebugShapes } from "../debug/DebugShapes"
 
@@ -7,6 +8,10 @@ interface FocalPointConfig {
 }
 
 export class FocalPoint extends Node3D {
+  static icon = svgIcon(
+    '<circle cx="8" cy="8" r="4.5"/><circle cx="8" cy="8" r="1" fill="currentColor"/><path d="M8 1v2.5M8 12.5V15M1 8h2.5M12.5 8H15"/>'
+  )
+
   private _active: boolean = true
   private _activeColour: number = 0x00ff00
   private _element: HTMLElement | null = null

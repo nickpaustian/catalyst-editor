@@ -1,3 +1,4 @@
+import { svgIcon } from "./icon"
 import * as THREE from "three"
 import { Collider, Debug, type ColliderConfig } from "@vitrine/catalyst"
 import type { ExposedProperty } from "./exposed"
@@ -14,6 +15,10 @@ export interface BoxColliderConfig extends ColliderConfig {
  * BoxCollider - A node wrapper for Velora's BoxCollider.
  */
 export class BoxCollider extends Collider<BoxColliderConfig> {
+  static icon = svgIcon(
+    '<path d="M8 1.8 14 4.9v6.2L8 14.2 2 11.1V4.9z"/><path d="M2 4.9 8 8l6-3.1M8 8v6.2"/>'
+  )
+
   static exposed: ExposedProperty[] = [
     { key: "width", type: "number", min: 0.01, step: 0.1 },
     { key: "height", type: "number", min: 0.01, step: 0.1 },

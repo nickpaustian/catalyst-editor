@@ -1,3 +1,4 @@
+import { svgIcon } from "./icon"
 import * as THREE from "three"
 import { Node3D } from "./Node3D"
 import { Debug } from "./Debug"
@@ -30,6 +31,10 @@ export interface CameraConfig {
  * Camera - A spatial node wrapping a Three.js PerspectiveCamera.
  */
 export class Camera extends Node3D {
+  static icon = svgIcon(
+    '<rect x="1.8" y="4.5" width="8.7" height="7"/><path d="m10.5 7 3.7-2v6l-3.7-2z"/>'
+  )
+
   private _view: THREE.PerspectiveCamera
   public syncRotation: boolean = true
 

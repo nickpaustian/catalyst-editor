@@ -1,3 +1,4 @@
+import { svgIcon } from "./icon"
 import * as THREE from "three"
 import { Collider, type ColliderConfig } from "./Collider"
 import type { ExposedProperty } from "./exposed"
@@ -12,6 +13,10 @@ export interface CapsuleColliderConfig extends ColliderConfig {
  * CapsuleCollider - A node wrapper for Velora's CapsuleCollider.
  */
 export class CapsuleCollider extends Collider<CapsuleColliderConfig> {
+  static icon = svgIcon(
+    '<rect x="4.5" y="1.8" width="7" height="12.4" rx="3.5"/>'
+  )
+
   static exposed: ExposedProperty[] = [
     { key: "radius", type: "number", min: 0.01, step: 0.05 },
     { key: "height", type: "number", min: 0.01, step: 0.1 },

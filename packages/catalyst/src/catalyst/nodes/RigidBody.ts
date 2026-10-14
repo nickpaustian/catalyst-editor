@@ -1,3 +1,4 @@
+import { svgIcon } from "./icon"
 import * as THREE from "three"
 import { Catalyst } from "../core"
 import { Node3D } from "./Node3D"
@@ -20,6 +21,10 @@ interface RigidBodyNodeConfig {
  * RigidBody - A spatial node wrapping Velora's RigidBody.
  */
 export class RigidBody extends Node3D {
+  static icon = svgIcon(
+    '<path d="M8 1.8 14 4.9v6.2L8 14.2 2 11.1V4.9z" fill="currentColor" fill-opacity="0.35"/><path d="M2 4.9 8 8l6-3.1M8 8v6.2"/>'
+  )
+
   private static readonly COLLIDER_KEY = "__collider__"
   private _rigidBody: VeloraRigidBody
   private _collider: Collider | null = null

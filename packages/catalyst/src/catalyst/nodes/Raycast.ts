@@ -1,3 +1,4 @@
+import { svgIcon } from "./icon"
 import * as THREE from "three"
 import { Node3D } from "./Node3D"
 import { Catalyst } from "../core/Catalyst"
@@ -15,6 +16,10 @@ export interface RaycastConfig {
  * Raycast - A spatial node for raycasting against scene objects.
  */
 export class Raycast extends Node3D {
+  static icon = svgIcon(
+    '<path d="M2 14 13 3M13 3H8M13 3v5"/>'
+  )
+
   private direction: THREE.Vector3 = new THREE.Vector3(0, 0, -1)
   private length: number = 1
   private raycaster: THREE.Raycaster = new THREE.Raycaster()

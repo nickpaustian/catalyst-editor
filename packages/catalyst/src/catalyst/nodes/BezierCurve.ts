@@ -1,3 +1,4 @@
+import { svgIcon } from "./icon"
 import * as THREE from "three"
 import { Node3D } from "./Node3D"
 import { Catalyst } from "../core"
@@ -34,6 +35,10 @@ export interface ControlPoint {
  * const tangent = path.getTangentAtT(0.5) // Get direction at point
  */
 export class BezierCurve extends Node3D {
+  static icon = svgIcon(
+    '<path d="M2 13C2 6 14 10 14 3"/><circle cx="2" cy="13" r="1.3"/><circle cx="14" cy="3" r="1.3"/>'
+  )
+
   private controlPoints: ControlPoint[] = []
   private curve: THREE.CatmullRomCurve3 | null = null
   private _closed: boolean = false

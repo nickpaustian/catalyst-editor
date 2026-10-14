@@ -1,3 +1,4 @@
+import { svgIcon } from "../nodes/icon"
 import * as THREE from "three"
 import { PointerLockControls } from "three/examples/jsm/Addons.js"
 import { Catalyst } from "../core/Catalyst"
@@ -20,6 +21,10 @@ interface FirstPersonControllerConfig {
  * FirstPersonController node prefab.
  */
 export class FirstPersonController extends Node3D {
+  static icon = svgIcon(
+    '<circle cx="8" cy="4" r="2.2"/><path d="M4 14.5v-3a4 4 0 0 1 8 0v3"/>'
+  )
+
   public camera: Camera
   public rigidBody: RigidBody
   public raycast: Raycast

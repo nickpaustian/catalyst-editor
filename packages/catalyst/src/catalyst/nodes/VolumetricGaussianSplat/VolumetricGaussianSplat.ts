@@ -1,3 +1,4 @@
+import { svgIcon } from "../icon"
 import * as THREE from "three"
 import { Catalyst } from "../../core"
 import { Node3D } from "../Node3D"
@@ -69,6 +70,10 @@ const shBandsForCapacity = (gpuCapacity = 0): number => {
 }
 
 export class VolumetricGaussianSplat extends Node3D {
+  static icon = svgIcon(
+    '<rect x="2" y="2" width="12" height="12" rx="1" stroke-dasharray="2 1.5"/><circle cx="5.5" cy="5.5" r="1.2"/><circle cx="10.5" cy="6" r="1"/><circle cx="7" cy="10.5" r="1.4"/><circle cx="11" cy="11" r="0.9"/>'
+  )
+
   protected _config: VolumetricGaussianSplatConfig
 
   private _manifest!: GridManifest

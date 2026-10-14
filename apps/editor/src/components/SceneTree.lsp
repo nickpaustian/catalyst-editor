@@ -2,7 +2,9 @@
 <section class="tree">
   <h2 class="heading">Scene</h2>
   <div class="adders">
-    <button $for="kind in state.kinds" $key="kind.kind" @click="add(kind.kind)">+ {{ kind.label }}</button>
+    <button $for="kind in shared['editor:kinds']" $key="kind.kind" @click="add(kind.kind)">
+      <span class="icon" $html="kind.icon"></span>{{ kind.label }}
+    </button>
   </div>
   <p class="hint">
     New nodes go under the selected node. Shift-click selects a range, ctrl- or cmd-click adds
@@ -20,6 +22,7 @@
     >
       <span class="indent" $for="n in row.depth" $key="n"></span>
       <span class="twisty" $class="{ hidden: !row.hasChildren, open: row.expanded }" @click="toggle($event, row)">▸</span>
+      <span class="icon" $html="row.icon"></span>
       <span class="name">{{ row.name }}</span>
       <span class="type">{{ row.type }}</span>
     </div>
@@ -28,24 +31,14 @@
 </view>
 
 <logic lang="ts">
-import { reactive, shared } from '@lightspeed-js/core'
+import { shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 
-interface Row { id: number; name: string; type: string; depth: number; hasChildren: boolean; expanded: boolean; selected: boolean; active: boolean; isRoot: boolean }
+interface Row { id: number; name: string; type: string; icon: string; depth: number; hasChildren: boolean; expanded: boolean; selected: boolean; active: boolean; isRoot: boolean }
 type Place = 'before' | 'after' | 'inside'
 
 shared('editor:tree', [])
-
-// Only `state` (and handlers) reach the template, so even fixed lists live here
-const state = reactive({
-  kinds: [
-    { kind: 'Group', label: 'Group' },
-    { kind: 'BoxCollider', label: 'Collider' },
-    { kind: 'FocalPoint', label: 'Focal point' },
-    { kind: 'FocalPointTrigger', label: 'Trigger' },
-    { kind: 'PointOfInterest', label: 'Point of interest' },
-  ],
-})
+shared('editor:kinds', [])
 
 const DRAG_THRESHOLD = 4
 let drag: { ids: number[]; startX: number; startY: number; list: HTMLElement; active: boolean } | null = null
@@ -149,6 +142,9 @@ function release() {
 }
 
 .adders button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font: inherit;
   color: inherit;
   background: #222;
@@ -206,6 +202,20 @@ function release() {
 
 .indent {
   flex: 0 0 12px;
+}
+
+.icon {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  margin-right: 5px;
+  color: #8fa3c7;
+}
+
+.icon :global(svg) {
+  display: block;
+  width: 14px;
+  height: 14px;
 }
 
 .twisty {

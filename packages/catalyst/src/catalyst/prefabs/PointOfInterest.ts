@@ -1,3 +1,4 @@
+import { svgIcon } from "../nodes/icon"
 import { Node3D, Debug, BoxCollider, type BoxColliderConfig } from "../nodes"
 import { DebugShapes } from "../debug/DebugShapes"
 import { Catalyst } from "../core"
@@ -18,6 +19,10 @@ export interface PointOfInterestSignals {
 }
 
 export class PointOfInterest extends Node3D {
+  static icon = svgIcon(
+    '<path d="M8 14.5s4.5-4.3 4.5-8a4.5 4.5 0 0 0-9 0c0 3.7 4.5 8 4.5 8z"/><circle cx="8" cy="6.5" r="1.5"/>'
+  )
+
   private _active: boolean = true
   private _activeColour: number = 0x00ff00
   private _element: HTMLElement

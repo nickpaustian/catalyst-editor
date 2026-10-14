@@ -1,3 +1,4 @@
+import { svgIcon } from "../icon"
 import * as THREE from "three"
 import { Node3D } from "../Node3D"
 import { Catalyst } from "../../core"
@@ -7,6 +8,10 @@ import { Catalyst } from "../../core"
  * Provides mesh management and transform syncing.
  */
 export abstract class Mesh extends Node3D {
+  static icon = svgIcon(
+    '<path d="M2 12 6 3l4 5 4-3-2 8z"/><path d="M6 3l6 10M10 8l-8 4"/>'
+  )
+
   protected _mesh: THREE.Mesh | null = null
 
   constructor(name: string = "meshNode") {
