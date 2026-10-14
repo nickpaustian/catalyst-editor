@@ -24,15 +24,15 @@
     </div>
     <div class="row">
       <span class="hint">pos </span>
-      <label>x</label><input type="number" step="0.01" $model="state.px" @change="apply" />
-      <label>y</label><input type="number" step="0.01" $model="state.py" @change="apply" />
-      <label>z</label><input type="number" step="0.01" $model="state.pz" @change="apply" />
+      <label>x</label><input type="number" step="0.01" $model="state.px" @change="apply" @pointerdown="scrubTransform($event, 'px', 0.01)" />
+      <label>y</label><input type="number" step="0.01" $model="state.py" @change="apply" @pointerdown="scrubTransform($event, 'py', 0.01)" />
+      <label>z</label><input type="number" step="0.01" $model="state.pz" @change="apply" @pointerdown="scrubTransform($event, 'pz', 0.01)" />
     </div>
     <div class="row">
       <span class="hint">rot° </span>
-      <label>x</label><input type="number" step="1" $model="state.rx" @change="apply" />
-      <label>y</label><input type="number" step="1" $model="state.ry" @change="apply" />
-      <label>z</label><input type="number" step="1" $model="state.rz" @change="apply" />
+      <label>x</label><input type="number" step="1" $model="state.rx" @change="apply" @pointerdown="scrubTransform($event, 'rx', 1)" />
+      <label>y</label><input type="number" step="1" $model="state.ry" @change="apply" @pointerdown="scrubTransform($event, 'ry', 1)" />
+      <label>z</label><input type="number" step="1" $model="state.rz" @change="apply" @pointerdown="scrubTransform($event, 'rz', 1)" />
     </div>
     <div class="properties">
       <div class="row property" $for="field in state.fields" $key="field.key">
@@ -45,6 +45,7 @@
           $max="field.max"
           $model="field.value"
           @change="applyField(field)"
+          @pointerdown="scrubField($event, field)"
         />
         <input
           $else-if="field.type === 'boolean'"
@@ -101,6 +102,89 @@ function applyField(field: Field) {
   sendCommand({ type: 'setProperty', key: field.key, value: field.value })
 }
 
+interface Scrub {
+  read: () => number
+  write: (value: number) => void
+  step: number
+  min?: number
+  max?: number
+}
+
+const DRAG_THRESHOLD = 3
+
+// Press and drag sideways to slide the value; a plain click still focuses the
+// input for typing. Shift scrubs ten times faster, alt ten times finer.
+function scrub(event: PointerEvent, { read, write, step, min, max }: Scrub) {
+  if (event.button !== 0) return
+  const input = event.currentTarget as HTMLInputElement
+  event.preventDefault()
+
+  const decimals = Math.max(0, Math.ceil(-Math.log10(step)) + 1)
+  const startX = event.clientX
+  let lastX = startX
+  let value = Number(read()) || 0
+  let dragging = false
+
+  const move = (e: PointerEvent) => {
+    if (!dragging) {
+      if (Math.abs(e.clientX - startX) < DRAG_THRESHOLD) return
+      dragging = true
+      lastX = e.clientX
+      input.classList.add('scrubbing')
+      document.body.classList.add('scrubbing')
+    }
+    const scale = e.shiftKey ? 10 : e.altKey ? 0.1 : 1
+    value += (e.clientX - lastX) * step * scale
+    lastX = e.clientX
+    if (min !== undefined) value = Math.max(min, value)
+    if (max !== undefined) value = Math.min(max, value)
+    write(Number(value.toFixed(decimals)))
+  }
+
+  const end = () => {
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', end)
+    window.removeEventListener('pointercancel', end)
+    if (dragging) {
+      input.classList.remove('scrubbing')
+      document.body.classList.remove('scrubbing')
+    } else {
+      input.focus()
+      input.select()
+    }
+  }
+
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', end)
+  window.addEventListener('pointercancel', end)
+}
+
+type TransformKey = 'px' | 'py' | 'pz' | 'rx' | 'ry' | 'rz'
+
+function scrubTransform(event: PointerEvent, key: TransformKey, step: number) {
+  scrub(event, {
+    read: () => state[key],
+    write: (value) => {
+      state[key] = value
+      apply()
+    },
+    step,
+  })
+}
+
+function scrubField(event: PointerEvent, field: Field) {
+  scrub(event, {
+    read: () => Number(field.value),
+    write: (value) => {
+      field.value = value
+      applyField(field)
+    },
+    step: field.step ?? 0.01,
+    min: field.min,
+    max: field.max,
+  })
+}
+
 function apply() {
   sendCommand({
     type: 'setTransform',
@@ -140,6 +224,29 @@ button {
 
 input[type="number"] {
   width: 64px;
+  cursor: ew-resize;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+input[type="number"]:focus {
+  cursor: text;
+}
+
+input[type="number"].scrubbing {
+  user-select: none;
+  border-color: #6a8bd0;
+}
+
+:global(body.scrubbing) {
+  cursor: ew-resize;
+  user-select: none;
 }
 
 input.name {
