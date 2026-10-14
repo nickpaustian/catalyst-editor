@@ -11,7 +11,7 @@
     "typecheck": "tsc"
   },
   "dependencies": {
-    "@lightspeed-js/core": "^0.4.8",
+    "@lightspeed-js/core": "^0.4.9",
     "@vitrine/runtime": "*"
   }
 }
