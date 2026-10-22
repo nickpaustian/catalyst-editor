@@ -6,5 +6,5 @@
 let seq = 0
 
 export const sendCommand = (command: Record<string, unknown>): void => {
-  window.lightspeed?.shared("editor:command").set({ ...command, seq: ++seq })
+  ;(window as any).lightspeed?.shared("editor:command").set({ ...command, seq: ++seq })
 }

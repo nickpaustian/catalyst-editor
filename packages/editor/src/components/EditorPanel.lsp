@@ -2,20 +2,16 @@
 <aside class="panel">
   <SceneTree />
 
-  <RailSection />
-
   <h2>Selected</h2>
   <SelectionFields />
 
-  <ContentSection />
-
-  <PresentationSection />
-
+  <div id="recipe-sections"></div>
 </aside>
 </view>
 
 <logic lang="ts">
-// The shell only arranges the sections; each reads its own cells
+// The shell only arranges the sections; each reads its own cells. A recipe's
+// sections are mounted into #recipe-sections by the app.
 export {}
 </logic>
 

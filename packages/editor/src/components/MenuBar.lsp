@@ -6,26 +6,22 @@
     <div class="menu" $class="{ open: state.open === 'file' }">
       <button class="menu-title" @click="toggle('file')" @pointerenter="hover('file')">File</button>
       <div class="menu-items" $if="state.open === 'file'">
-        <button @click="run('openFolder')">Open folder…</button>
-        <button @click="run('reopenLast')">Reopen last</button>
+        <button @click="run('newProject')">New project</button>
+        <button @click="run('openFolder')" $disabled="!shared['editor:project'].supported">Open folder…</button>
+        <button @click="run('reopenLast')" $disabled="!shared['editor:project'].supported">Reopen last</button>
         <hr />
         <button @click="run('save')">Save</button>
         <button @click="run('saveAs')">Save as…</button>
         <hr />
-        <button @click="run('exportScene')">Export scene file</button>
-        <button @click="run('exportManifest')">Export manifest</button>
+        <button @click="run('download')">Download scene file</button>
       </div>
     </div>
 
     <div class="menu" $class="{ open: state.open === 'view' }">
       <button class="menu-title" @click="toggle('view')" @pointerenter="hover('view')">View</button>
       <div class="menu-items" $if="state.open === 'view'">
-        <button $class="{ on: shared['editor:view'].view === 'orbit' }" @click="setView('orbit')">Orbit</button>
-        <button $class="{ on: shared['editor:view'].view === 'firstPerson' }" @click="setView('firstPerson')">First person</button>
-        <button $class="{ on: shared['editor:view'].view === 'guided' }" @click="setView('guided')">Guided</button>
-        <hr />
         <button $class="{ on: shared['editor:view'].visualised }" @click="run('toggleVisualisers')">Visualisers</button>
-        <button $class="{ on: shared['editor:view'].moveMode }" @click="run('toggleMoveMode')">Move mode <kbd>o</kbd></button>
+        <button $class="{ on: shared['editor:view'].physics }" @click="run('togglePhysics')">Physics running</button>
         <hr />
         <button $class="{ on: shared['editor:view'].gizmo === 'translate' }" @click="setGizmo('translate')">Gizmo: translate</button>
         <button $class="{ on: shared['editor:view'].gizmo === 'rotate' }" @click="setGizmo('rotate')">Gizmo: rotate</button>
@@ -37,27 +33,19 @@
     <div class="menu" $class="{ open: state.open === 'help' }">
       <button class="menu-title" @click="toggle('help')" @pointerenter="hover('help')">Help</button>
       <div class="menu-items help" $if="state.open === 'help'">
-        <p><b>Orbit:</b> drag to orbit, right-drag to pan, wheel to zoom. <kbd>F</kbd> focuses the selected node. Drag the gizmo to move it.</p>
-        <p><b>First person:</b> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>, click to look.</p>
-        <p><b>Move mode:</b> look at a node and press <kbd>F</kbd> to pick it up, <kbd>F</kbd> again to drop.</p>
+        <p><b>Orbit:</b> drag to orbit, right-drag to pan, wheel to zoom. <kbd>F</kbd> focuses the selected node, <kbd>Delete</kbd> removes it. Drag the gizmo to move it.</p>
+        <p><b>Tree:</b> shift-click selects a range, ctrl- or cmd-click adds or removes one. Drag a row onto another to reparent it.</p>
         <p><b>Panes:</b> drag a gutter to resize, a pane title to move it; <b>+</b> adds a pane, <b>×</b> closes one.</p>
       </div>
     </div>
   </nav>
 
   <span class="status">
-    <span $if="shared['editor:folder'].name">{{ shared['editor:folder'].name }}</span>
-    <span class="dim" $if="shared['editor:folder'].status">{{ shared['editor:folder'].status }}</span>
+    <span>{{ shared['editor:project'].name ?? 'untitled' }}</span>
+    <span class="dim">{{ shared['editor:project'].recipe }}</span>
+    <span class="dim" $if="shared['editor:project'].status">{{ shared['editor:project'].status }}</span>
+    <span class="dim" $if="shared['editor:project'].dirty && !shared['editor:project'].status">unsaved changes</span>
   </span>
-
-  <select class="picker" @change="switchTo($event)">
-    <option
-      $for="entry in shared['editor:exhibition'].catalogue"
-      $key="entry.id"
-      $value="entry.id"
-      $selected="entry.id === shared['editor:exhibition'].id"
-    >{{ entry.title }}</option>
-  </select>
 </header>
 </view>
 
@@ -66,9 +54,8 @@ import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { preferences } from '../preferences.ts'
 
-shared('editor:exhibition', { id: '', title: '', catalogue: [] })
-shared('editor:folder', { name: null, status: '', supported: false })
-shared('editor:view', { view: 'guided', visualised: false, moveMode: false, gizmo: 'translate' })
+shared('editor:project', { name: null, recipe: '', status: '', supported: false, dirty: false })
+shared('editor:view', { view: 'orbit', visualised: true, gizmo: 'translate', physics: false })
 
 const state = reactive({ open: null as string | null })
 
@@ -90,18 +77,9 @@ function run(type: string) {
   sendCommand({ type })
 }
 
-function setView(view: string) {
-  state.open = null
-  sendCommand({ type: 'setView', view })
-}
-
 function setGizmo(mode: string) {
   state.open = null
   sendCommand({ type: 'setGizmo', mode })
-}
-
-function switchTo(event: Event) {
-  sendCommand({ type: 'switch', id: (event.target as HTMLSelectElement).value })
 }
 
 function resetLayout() {
@@ -135,16 +113,6 @@ function resetLayout() {
 .brand {
   font-weight: 600;
   letter-spacing: 0.04em;
-}
-
-.picker {
-  font: inherit;
-  color: inherit;
-  background: #222;
-  border: 1px solid #444;
-  border-radius: 3px;
-  padding: 2px 4px;
-  max-width: 220px;
 }
 
 .menus {

@@ -1,0 +1,20 @@
+{
+  "name": "@vitrine/editor",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.scss": "./src/editor.scss"
+  },
+  "dependencies": {
+    "@lightspeed-js/core": "^0.4.9",
+    "@nickpaustian/catalyst": "file:../../../catalyst",
+    "@nickpaustian/helm": "file:../../../helm",
+    "@nickpaustian/requester": "file:../../../requester",
+    "@nickpaustian/signal": "file:../../../signal",
+    "@nickpaustian/velora": "file:../../../velora",
+    "@stelligra/core": "file:../../../stelligra/packages/stelligra",
+    "three": "^0.183.2"
+  }
+}

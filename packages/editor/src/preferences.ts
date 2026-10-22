@@ -104,5 +104,5 @@ export const preferences = {
 const snapshot = () => ({ layout: layout.value })
 
 function publish(): void {
-  window.lightspeed?.shared(CELL).set(snapshot())
+  ;(window as any).lightspeed?.shared(CELL).set(snapshot())
 }

@@ -10,18 +10,6 @@
       <button @click="send('focus')">Focus</button>
       <button @click="send('delete')">Delete</button>
     </div>
-    <div class="row" $if="shared['editor:selection'].isPoi">
-      <span class="hint">content </span>
-      <select @change="setContent($event)">
-        <option value="" $selected="!shared['editor:selection'].contentId">(none)</option>
-        <option
-          $for="id in shared['editor:selection'].contentOptions"
-          $key="id"
-          $value="id"
-          $selected="id === shared['editor:selection'].contentId"
-        >{{ id }}</option>
-      </select>
-    </div>
     <div class="row">
       <span class="hint">pos </span>
       <label>x</label><input type="number" step="0.01" $model="state.px" @change="apply" @pointerdown="scrubTransform($event, 'px', 0.01)" />
@@ -74,7 +62,7 @@
             @click="toggleLayer(field, n)"
           >{{ n }}</button>
         </div>
-        <input $else type="text" $model="field.value" @change="applyField(field)" />
+        <input $else type="text" $model="field.value" $disabled="field.readonly" @change="applyField(field)" />
       </div>
     </div>
   </template>
@@ -89,7 +77,7 @@ const selection = shared('editor:selection', null)
 
 // Local copies of the fields, so typing doesn't fight the scene publishing
 // the same values back on every gizmo move
-interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number }
+interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number; readonly?: boolean }
 
 const state = reactive({
   name: '',
@@ -118,10 +106,6 @@ function send(type: string) {
 // so a rename has to be a deliberate change
 function rename() {
   sendCommand({ type: 'rename', name: state.name })
-}
-
-function setContent(event: Event) {
-  sendCommand({ type: 'setContent', id: (event.target as HTMLSelectElement).value })
 }
 
 function applyField(field: Field) {

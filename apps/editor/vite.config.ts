@@ -1,20 +1,18 @@
 import { defineConfig } from "vite"
-import { catalystViteConfig } from "@vitrine/catalyst/vite"
 import { lightspeedPlugin } from "@lightspeed-js/core/vite"
 
-const catalyst = catalystViteConfig()
+const crossOriginIsolation = {
+  "Cross-Origin-Embedder-Policy": "require-corp",
+  "Cross-Origin-Opener-Policy": "same-origin",
+}
 
-// The editor is a debug build by nature: debug() output, the move mode behind
-// the `o` key and the benchmark harness all stay in.
+// Lightspeed compiles the panel's components, the editor package's and any
+// recipe's; host mode leaves this app's index.html alone. The engine packages
+// are file links, so three is pinned to one copy.
 export default defineConfig({
-  ...catalyst,
-  publicDir: "../player/public",
-  define: {
-    __DEBUG__: true,
-  },
-  // Lightspeed compiles the panel's .lsp components; host mode leaves this
-  // app's own index.html and routing alone
-  plugins: [lightspeedPlugin({ typescript: true, host: true })],
-  server: { ...catalyst.server, port: 3100 },
-  preview: { ...catalyst.preview, port: 4174 },
+  plugins: [lightspeedPlugin({ typescript: true, host: true, componentDirs: ["../../packages/editor/src/components"] })],
+  resolve: { dedupe: ["three"] },
+  server: { headers: crossOriginIsolation, port: 3100, fs: { allow: ["../.."] } },
+  preview: { headers: crossOriginIsolation, port: 4174 },
+  worker: { format: "es" },
 })

@@ -13,12 +13,12 @@
     "build": "cd apps/player && tsc && vite build",
     "build:editor": "cd apps/editor && tsc && vite build",
     "preview": "cd apps/player && vite preview",
-    "typecheck": "cd apps/player && tsc && cd ../editor && tsc",
+    "typecheck": "cd apps/editor && tsc && cd ../player && tsc",
     "build:wasm": "cd packages/stelligra/stelligra-wasm && wasm-pack build --target web --release"
   },
   "devDependencies": {
     "@types/node": "^24.6.2",
-    "@types/three": "^0.182.0",
+    "@types/three": "^0.183.0",
     "sass": "^1.93.2",
     "typescript": "~5.9.3",
     "vite": "^8.0.3"

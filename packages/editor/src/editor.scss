@@ -1,0 +1,58 @@
+@use "./panes/panes.scss";
+
+:root {
+  --menu-bar-height: 30px;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #0a0a0a;
+  color: #eee;
+  font: 12px/1.4 "IBM Plex Sans", system-ui, sans-serif;
+  overflow: hidden;
+}
+
+#app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+#app canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.poi {
+  position: absolute;
+  transform: translate(-50%, -50%) scale(var(--poi-scale, 1));
+  opacity: var(--poi-opacity, 1);
+  pointer-events: none;
+}
+
+.poi.hidden {
+  display: none;
+}
+
+.poi-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ffd36b;
+  box-shadow: 0 0 6px #ffd36b;
+  position: relative;
+}
+
+.poi.focused .poi-dot {
+  background: #fff;
+}
+
+.poi-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid #ffd36b;
+}
