@@ -45,7 +45,7 @@ export class Runner {
     const root = made instanceof Node3DClass ? made : new Node3DClass("scene").addNode(made).parent as Node3D
     this.root = root
     this.engine.add(root)
-    this.teardown = await this.recipe.run({ engine: this.engine, root, folder })
+    this.teardown = await this.recipe.run({ engine: this.engine, root, scene: message.scene, folder })
     document.title = `${folder?.name ?? "untitled"} · running`
   }
 

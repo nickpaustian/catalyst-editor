@@ -27,7 +27,7 @@ The dev server sends cross-origin isolation headers for the splat worker pipelin
 
 ## A project
 
-The scene recipe adds boxes, spheres and capsules (a mesh with a matching collider, for blocking in), colliders on their own, interactables, points of interest, focal points and triggers, cameras, groups and a player start. Its project is a folder with `scene.json`, a node tree in Catalyst's scene file format, plus whatever files it names (relative paths are read from the folder, absolute URLs from the network). File → New project starts one in memory; Save as… picks the folder.
+The scene recipe adds boxes, spheres and capsules (a mesh with a matching collider, for blocking in), colliders on their own, interactables, points of interest, focal points and triggers, cameras, groups and a player start. Its project is a folder with `scene.json`, a node tree in Catalyst's scene file format, plus whatever files it names (relative paths are read from the folder, absolute URLs from the network). The file also carries the scene's **environment**: a physics floor (on by default at y 0, so nothing needs a floor plane to stand on), gravity and drag, edited in the panel's Environment section. File → New project starts one in memory; Save as… picks the folder.
 
 ## Running a project
 
@@ -43,6 +43,8 @@ interface Recipe {
   panel?: string[]                // Lightspeed component ids mounted under the scene sections
   load(folder, engine): Promise<Node3D>
   save(folder, root, engine): Promise<string[]>
+  settings?: { title, fields, read, write }  // project-wide values shown as fields
+  serialise?(root, engine): NodeJSON  // the whole document; what a run is sent
   download?(root, engine): { name, text }
   run(context): Promise<() => void>  // play it in the runner window
 }

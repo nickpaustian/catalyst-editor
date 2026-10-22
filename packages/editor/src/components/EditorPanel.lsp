@@ -5,6 +5,8 @@
   <h2>Selected</h2>
   <SelectionFields />
 
+  <SceneSettings />
+
   <div id="recipe-sections"></div>
 </aside>
 </view>

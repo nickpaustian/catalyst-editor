@@ -1,4 +1,4 @@
-import { Camera, Node3D, type NodeJSON } from "@nickpaustian/catalyst"
+import { Camera, Node3D, type Catalyst, type NodeJSON } from "@nickpaustian/catalyst"
 import { Interactable } from "@nickpaustian/catalyst/interaction"
 import { BoxCollider, CapsuleCollider, SphereCollider } from "@nickpaustian/catalyst/physics"
 import { Box, Capsule, FirstPersonController, FocalPoint, FocalPointTrigger, PointOfInterest, Sphere } from "@nickpaustian/catalyst/prefabs"
@@ -8,6 +8,32 @@ import type { Recipe } from "../recipe"
 import { PlayerStart } from "./playerStart"
 
 export const SCENE_FILE = "scene.json"
+
+export interface SceneEnvironment {
+  /** A y no body falls below, or null for none. Default 0, so a scene needs no floor to stand on. */
+  floor: number | null
+  gravity: number
+  drag: number
+}
+
+const DEFAULT_ENVIRONMENT: SceneEnvironment = { floor: 0, gravity: 9.8, drag: 0.1 }
+
+const readEnvironment = (engine: Catalyst): SceneEnvironment => {
+  const world = engine.find(Physics)?.world
+  return world ? { floor: world.floor, gravity: world.gravity, drag: world.drag } : { ...DEFAULT_ENVIRONMENT }
+}
+
+const applyEnvironment = (engine: Catalyst, environment: Partial<SceneEnvironment> | undefined): void => {
+  const world = engine.find(Physics)?.world
+  if (!world) return
+  const next = { ...DEFAULT_ENVIRONMENT, ...environment }
+  world.floor = next.floor
+  world.gravity = next.gravity
+  world.drag = next.drag
+}
+
+/** The scene file with the environment beside the nodes. */
+const toFile = (engine: Catalyst, root: Node3D): NodeJSON & { environment: SceneEnvironment } => ({ ...engine.serialise(root), environment: readEnvironment(engine) })
 
 /** A plain Catalyst scene: a folder holding `scene.json` and whatever it names. */
 export const sceneRecipe: Recipe = {
@@ -27,14 +53,35 @@ export const sceneRecipe: Recipe = {
     { kind: "FocalPoint", label: "Focal point", cls: FocalPoint, make: (o) => new FocalPoint(o) },
     { kind: "FocalPointTrigger", label: "Trigger", cls: FocalPointTrigger, make: (o) => new FocalPointTrigger({ ...o, width: 1, height: 2, depth: 1 }) },
   ],
+  settings: {
+    title: "Environment",
+    fields: [
+      { key: "floored", label: "Floor", type: "boolean" },
+      { key: "floor", label: "Floor height", type: "number", step: 0.1 },
+      { key: "gravity", type: "number", min: 0, step: 0.1 },
+      { key: "drag", type: "number", min: 0, max: 1, step: 0.01 },
+    ],
+    read: (engine) => {
+      const environment = readEnvironment(engine)
+      return { floored: environment.floor !== null, floor: environment.floor ?? 0, gravity: environment.gravity, drag: environment.drag }
+    },
+    write: (engine, _root, key, value) => {
+      const current = readEnvironment(engine)
+      if (key === "floored") applyEnvironment(engine, { ...current, floor: value ? (current.floor ?? 0) : null })
+      else if (key === "floor") applyEnvironment(engine, { ...current, floor: Number(value) })
+      else applyEnvironment(engine, { ...current, [key]: value })
+    },
+  },
   load: async (folder, engine) => {
+    applyEnvironment(engine, undefined)
     if (folder && (await folder.exists(SCENE_FILE))) {
-      const json = await folder.readJSON<NodeJSON | NodeJSON[]>(SCENE_FILE)
+      const json = await folder.readJSON<(NodeJSON & { environment?: Partial<SceneEnvironment> }) | NodeJSON[]>(SCENE_FILE)
       if (Array.isArray(json)) {
         const root = new Node3D("scene")
         for (const entry of json) root.addNode(engine.create(entry))
         return root
       }
+      applyEnvironment(engine, json.environment)
       const root = engine.create(json)
       if (root instanceof Node3D) return root
       const wrapped = new Node3D("scene")
@@ -43,12 +90,14 @@ export const sceneRecipe: Recipe = {
     }
     return new Node3D("scene")
   },
+  serialise: (root, engine) => toFile(engine, root),
   save: async (folder, root, engine) => {
-    await folder.writeJSON(SCENE_FILE, engine.serialise(root))
+    await folder.writeJSON(SCENE_FILE, toFile(engine, root))
     return [SCENE_FILE]
   },
-  download: (root, engine) => ({ name: SCENE_FILE, text: JSON.stringify(engine.serialise(root), null, 2) + "\n" }),
-  run: async ({ engine, root }) => {
+  download: (root, engine) => ({ name: SCENE_FILE, text: JSON.stringify(toFile(engine, root), null, 2) + "\n" }),
+  run: async ({ engine, root, scene }) => {
+    applyEnvironment(engine, (scene as { environment?: Partial<SceneEnvironment> }).environment)
     let start: Node3D | null = null
     root.walk((node) => {
       if (!start && node instanceof PlayerStart) start = node

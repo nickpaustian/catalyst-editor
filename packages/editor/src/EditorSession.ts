@@ -39,6 +39,8 @@ export type ViewMode = "orbit"
 export interface EditorCells {
   "editor:project": { name: string | null; recipe: string; status: string; supported: boolean; dirty: boolean }
   "editor:history": { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
+  /** The recipe's project-wide settings, or null when it has none. */
+  "editor:settings": { title: string; fields: SelectionProperty[] } | null
   "editor:view": { view: ViewMode; visualised: boolean; gizmo: GizmoMode; physics: boolean }
   "editor:tree": TreeRow[]
   "editor:kinds": { kind: string; label: string; icon: string }[]
@@ -78,6 +80,7 @@ export type EditorCommand =
   | { type: "setTransform"; position: { x: number; y: number; z: number }; rotation: { x: number; y: number; z: number } }
   | { type: "setProperty"; key: string; value: unknown }
   | { type: "rename"; name: string }
+  | { type: "setSetting"; key: string; value: unknown }
 
 const round = (n: number, places = 4) => Number(n.toFixed(places))
 const toStrings = (value: unknown): string[] => (Array.isArray(value) ? value.map(String) : String(value ?? "").split(","))
@@ -180,6 +183,7 @@ export class EditorSession {
     this.publishKinds()
     this.publishProject()
     this.publishHistory()
+    this.publishSettings()
     this.publishView()
     this.publishTree()
     this.publishSelection()
@@ -201,6 +205,7 @@ export class EditorSession {
     this.engine.add(root)
     this.setVisualised(this.visualised)
     this.history.clear()
+    this.publishSettings()
     this.publishProject(folder ? "" : "unsaved")
     this.publishTree()
     this.select(null)
@@ -239,6 +244,13 @@ export class EditorSession {
   private publishProject(status?: string): void {
     const dirty = this.history.isDirty
     this.set("editor:project", { name: this.folder?.name ?? null, recipe: this.recipe.name, status: status ?? (dirty ? "unsaved changes" : ""), supported: ProjectFolder.isSupported, dirty })
+  }
+
+  private publishSettings(): void {
+    const settings = this.recipe.settings
+    if (!settings || !this._root) return this.set("editor:settings", null)
+    const values = settings.read(this.engine, this._root)
+    this.set("editor:settings", { title: settings.title, fields: settings.fields.map((field) => ({ ...field, label: field.label ?? field.key, value: values[field.key] })) })
   }
 
   private publishHistory(): void {
@@ -452,6 +464,9 @@ export class EditorSession {
       case "rename":
         this.renameSelected(command.name)
         break
+      case "setSetting":
+        this.writeSetting(command.key, command.value)
+        break
     }
   }
 
@@ -480,7 +495,8 @@ export class EditorSession {
 
   private sendToRunner(): void {
     if (!this.runner || this.runner.closed || !this._root) return
-    this.runner.postMessage({ type: "vitrine:run", recipe: this.recipe.name, scene: this.engine.serialise(this._root), folder: this.folder?.handle ?? null }, location.origin)
+    const scene = this.recipe.serialise?.(this._root, this.engine) ?? this.engine.serialise(this._root)
+    this.runner.postMessage({ type: "vitrine:run", recipe: this.recipe.name, scene, folder: this.folder?.handle ?? null }, location.origin)
     this.publishProject("running")
   }
 
@@ -626,20 +642,8 @@ export class EditorSession {
     if (!node) return
     const property = exposedProperties(node).find((p) => p.key === key)
     if (!property || property.readonly) return
-    let next: unknown = value
-    if (property.type === "number") {
-      next = Number(value)
-      if (!Number.isFinite(next)) return
-      if (property.min !== undefined) next = Math.max(property.min, next as number)
-      if (property.max !== undefined) next = Math.min(property.max, next as number)
-    } else if (property.type === "boolean") next = Boolean(value)
-    else if (property.type === "colour") {
-      next = typeof value === "string" ? parseInt(value.replace("#", ""), 16) : Number(value)
-      if (!Number.isFinite(next)) return
-    }
-    else if (property.type === "tags") next = [...new Set(toStrings(value).map((tag) => tag.trim()).filter(Boolean))]
-    else if (property.type === "layers") next = [...new Set(toStrings(value).map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n < 32))].sort((a, b) => a - b)
-    else next = String(value)
+    const next = this.coerce(property, value)
+    if (next === undefined) return
     const before = readExposed(node, property)
     if (JSON.stringify(before) === JSON.stringify(next)) return
     const after = Array.isArray(next) ? [...next] : next
@@ -648,6 +652,46 @@ export class EditorSession {
     this.record(property.label ?? key, () => writeExposed(node, property, previous), () => writeExposed(node, property, after), `property:${this.idOf(node)}:${key}`)
     this.publishSelection()
     if (key === "active" || key === "visible") this.publishTree()
+  }
+
+  private writeSetting(key: string, value: unknown): void {
+    const settings = this.recipe.settings
+    const root = this._root
+    if (!settings || !root) return
+    const field = settings.fields.find((f) => f.key === key)
+    if (!field || field.readonly) return
+    const next = this.coerce(field, value)
+    if (next === undefined) return
+    const before = settings.read(this.engine, root)
+    if (JSON.stringify(before[key]) === JSON.stringify(next)) return
+    settings.write(this.engine, root, key, next)
+    const after = settings.read(this.engine, root)
+    const changed = Object.keys(after).filter((k) => JSON.stringify(after[k]) !== JSON.stringify(before[k]))
+    const restore = (values: Record<string, unknown>) => () => {
+      for (const k of changed) settings.write(this.engine, root, k, values[k])
+      this.publishSettings()
+    }
+    this.record(field.label ?? key, restore(before), restore(after), `setting:${key}`)
+    this.publishSettings()
+  }
+
+  /** A value from the panel in the property's type, or undefined when it is not one. */
+  private coerce(property: ExposedProperty, value: unknown): unknown {
+    if (property.type === "number") {
+      let n = Number(value)
+      if (!Number.isFinite(n)) return undefined
+      if (property.min !== undefined) n = Math.max(property.min, n)
+      if (property.max !== undefined) n = Math.min(property.max, n)
+      return n
+    }
+    if (property.type === "boolean") return Boolean(value)
+    if (property.type === "colour") {
+      const n = typeof value === "string" ? parseInt(value.replace("#", ""), 16) : Number(value)
+      return Number.isFinite(n) ? n : undefined
+    }
+    if (property.type === "tags") return [...new Set(toStrings(value).map((tag) => tag.trim()).filter(Boolean))]
+    if (property.type === "layers") return [...new Set(toStrings(value).map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n < 32))].sort((a, b) => a - b)
+    return String(value)
   }
 
   /** New nodes go under the selected node (or the root), at the orbit target in world space. */

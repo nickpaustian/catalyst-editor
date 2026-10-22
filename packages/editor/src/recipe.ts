@@ -1,10 +1,24 @@
-import type { Catalyst, Module, Node3D } from "@nickpaustian/catalyst"
+import type { Catalyst, ExposedProperty, Module, Node3D, NodeJSON } from "@nickpaustian/catalyst"
 import type { ProjectFolder } from "./ProjectFolder"
 
 export interface RunContext {
   engine: Catalyst
   root: Node3D
+  /** The scene as it was sent, for anything the recipe keeps beside the nodes. */
+  scene: NodeJSON
   folder: ProjectFolder | null
+}
+
+/**
+ * Project-wide settings a recipe keeps beside the node tree: the physics
+ * floor, gravity, a sky. Shown in the panel as fields, read and written
+ * through the recipe, saved however the recipe saves.
+ */
+export interface RecipeSettings {
+  title: string
+  fields: ExposedProperty[]
+  read: (engine: Catalyst, root: Node3D) => Record<string, unknown>
+  write: (engine: Catalyst, root: Node3D, key: string, value: unknown) => void
 }
 
 /** Something the tree can add: a label, and how to make one. */
@@ -29,10 +43,13 @@ export interface Recipe {
   kinds: NodeKind[]
   /** Lightspeed component ids mounted in the panel after the scene sections. */
   panel?: string[]
+  settings?: RecipeSettings
   /** Read the folder into a scene root. A folder without a project in it gets a fresh one. */
   load: (folder: ProjectFolder | null, engine: Catalyst) => Promise<Node3D>
   /** Write the project to the folder; the paths written come back for the status line. */
   save: (folder: ProjectFolder, root: Node3D, engine: Catalyst) => Promise<string[]>
+  /** The project as one JSON document: the node tree plus whatever the recipe keeps beside it. What a run is sent. Default `engine.serialise(root)`. */
+  serialise?: (root: Node3D, engine: Catalyst) => NodeJSON
   /** The one file to offer as a download when there is no folder to write to. */
   download?: (root: Node3D, engine: Catalyst) => { name: string; text: string }
   /** Play the project in the runner: put a player in, let physics go. Returns the teardown. */
