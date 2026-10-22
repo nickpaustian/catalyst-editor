@@ -1,4 +1,6 @@
-import { Camera, Node3D, type Catalyst, type NodeJSON } from "@nickpaustian/catalyst"
+import { Camera, Model, Node3D, type Catalyst, type NodeJSON } from "@nickpaustian/catalyst"
+import { GaussianSplat } from "@nickpaustian/catalyst/splats"
+import { pickFile } from "../ProjectFolder"
 import { Interactable } from "@nickpaustian/catalyst/interaction"
 import { BoxCollider, CapsuleCollider, SphereCollider } from "@nickpaustian/catalyst/physics"
 import { Box, Capsule, FirstPersonController, FocalPoint, FocalPointTrigger, PointOfInterest, Sphere } from "@nickpaustian/catalyst/prefabs"
@@ -44,6 +46,28 @@ export const sceneRecipe: Recipe = {
     { kind: "Box", label: "Box", cls: Box, description: "A block with a mesh and a matching collider: floors, walls, crates.", make: (o) => new Box(o) },
     { kind: "Sphere", label: "Sphere", cls: Sphere, description: "A ball with a mesh and a matching collider.", make: (o) => new Sphere(o) },
     { kind: "Capsule", label: "Capsule", cls: Capsule, description: "A pillar or a stand-in body with a mesh and a matching collider.", make: (o) => new Capsule(o) },
+    {
+      kind: "Model",
+      label: "Model",
+      cls: Model,
+      description: "A glTF model (.glb) imported into the project's assets and placed at the node.",
+      pick: async (folder) => {
+        const file = await pickFile(".glb,.gltf,model/gltf-binary,model/gltf+json")
+        return file ? { url: await folder.importFile(file), name: file.name.replace(/\.[^.]+$/, "") } : null
+      },
+      make: (o) => new Model({ ...o, url: String(o.url ?? "") }),
+    },
+    {
+      kind: "Splat",
+      label: "Gaussian splat",
+      cls: GaussianSplat,
+      description: "A Gaussian splat file (.sog or .ply) imported into the project's assets, drawn through the shared splat renderer.",
+      pick: async (folder) => {
+        const file = await pickFile(".sog,.ply,.splat")
+        return file ? { url: await folder.importFile(file), name: file.name.replace(/\.[^.]+$/, "") } : null
+      },
+      make: (o) => new GaussianSplat({ ...o, url: String(o.url ?? "") }),
+    },
     { kind: "Camera", label: "Camera", cls: Camera, description: "A perspective camera with a real lens: a focal length over a sensor.", make: (o) => new Camera(o) },
     { kind: "BoxCollider", label: "Box collider", cls: BoxCollider, description: "An invisible box the physics world collides with, or a trigger volume.", make: (o) => new BoxCollider({ ...o, width: 1, height: 1, depth: 1 }) },
     { kind: "SphereCollider", label: "Sphere collider", cls: SphereCollider, description: "An invisible sphere the physics world collides with, or a trigger volume.", make: (o) => new SphereCollider({ ...o, radius: 0.5 }) },

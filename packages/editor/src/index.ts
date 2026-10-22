@@ -1,7 +1,7 @@
 export { EditorSession, type EditorCells, type EditorCommand, type TreeRow, type KindNode, type SelectMode, type DropPlace, type ViewMode, type SelectionProperty } from "./EditorSession"
 export { EditorCamera, nodeTarget, groupTarget, type GizmoMode, type GizmoTarget } from "./EditorCamera"
 export { EditorInput } from "./EditorInput"
-export { ProjectFolder, folderLoader } from "./ProjectFolder"
+export { ProjectFolder, folderLoader, pickFile, type ProjectStorage } from "./ProjectFolder"
 export type { Recipe, NodeKind, RunContext, RecipeSettings } from "./recipe"
 export { sceneRecipe, SCENE_FILE, type SceneEnvironment } from "./recipes/scene"
 export { PlayerStart } from "./recipes/playerStart"

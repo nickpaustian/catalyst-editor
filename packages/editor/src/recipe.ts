@@ -29,7 +29,9 @@ export interface NodeKind {
   cls: object
   /** A sentence for the add dialog. */
   description?: string
-  make: (options: { name: string; visualise: boolean }) => Node3D
+  /** Asked before `make`, for a kind that needs a file: import it into the project and give back the options; null cancels. */
+  pick?: (folder: ProjectFolder) => Promise<Record<string, unknown> | null>
+  make: (options: { name: string; visualise: boolean } & Record<string, unknown>) => Node3D
 }
 
 /**

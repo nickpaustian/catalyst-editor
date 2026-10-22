@@ -48,7 +48,7 @@ export type ViewMode = "orbit"
 
 /** What the panel shows. Each key is a Lightspeed shared cell. */
 export interface EditorCells {
-  "editor:project": { name: string | null; recipe: string; status: string; supported: boolean; dirty: boolean }
+  "editor:project": { name: string | null; recipe: string; storage: "disk" | "browser" | null; status: string; supported: boolean; dirty: boolean }
   "editor:history": { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
   /** The recipe's project-wide settings, or null when it has none. */
   "editor:settings": { title: string; fields: SelectionProperty[] } | null
@@ -87,7 +87,7 @@ export type EditorCommand =
   | { type: "setGizmo"; mode: GizmoMode }
   | { type: "setSnap"; snap: Partial<SnapSettings> }
   | { type: "select"; id: number; mode?: SelectMode }
-  | { type: "add"; kind: string }
+  | { type: "add"; kind: string; options?: Record<string, unknown> }
   | { type: "toggleExpand"; id: number }
   | { type: "move"; ids: number[]; targetId: number; place: DropPlace }
   | { type: "delete" }
@@ -224,6 +224,10 @@ export class EditorSession {
   /** Put a project in the viewport: the folder's, or a fresh one when there is no folder. */
   async open(folder: ProjectFolder | null): Promise<void> {
     this.close()
+    if (!folder && ProjectFolder.hasBrowserStorage) {
+      folder = await ProjectFolder.inBrowser("untitled")
+      await folder.clear()
+    }
     this.folder = folder
     this.engine.loader = folder ? folderLoader(folder) : this.engine.loader
     this.publishProject(folder ? `opening ${folder.name}` : "new project")
@@ -294,7 +298,7 @@ export class EditorSession {
 
   private publishProject(status?: string): void {
     const dirty = this.history.isDirty
-    this.set("editor:project", { name: this.folder?.name ?? null, recipe: this.recipe.name, status: status ?? (dirty ? "unsaved changes" : ""), supported: ProjectFolder.isSupported, dirty })
+    this.set("editor:project", { name: this.folder?.name ?? null, recipe: this.recipe.name, storage: this.folder?.storage ?? null, status: status ?? (dirty ? "unsaved changes" : ""), supported: ProjectFolder.isSupported, dirty })
   }
 
   private publishSettings(): void {
@@ -493,7 +497,7 @@ export class EditorSession {
         this.select(this.nodesById.get(command.id) ?? null, command.mode)
         break
       case "add":
-        this.addNode(command.kind)
+        await this.addNode(command.kind, command.options)
         break
       case "toggleExpand": {
         const node = this.nodesById.get(command.id)
@@ -763,12 +767,20 @@ export class EditorSession {
     return String(value)
   }
 
-  /** New nodes go under the selected node (or the root), at the orbit target in world space. */
-  private addNode(kind: string): void {
+  /** New nodes go under the selected node (or the root), at the orbit target in world space. A kind that needs a file asks for it first. */
+  private async addNode(kind: string, given?: Record<string, unknown>): Promise<void> {
     const parent = this.selected ?? this._root
     const definition = this.recipe.kinds.find((k) => k.kind === kind)
     if (!parent || !definition) return
-    const node = definition.make({ name: `${kind.charAt(0).toLowerCase()}${kind.slice(1)}`, visualise: this.visualised })
+    let picked: Record<string, unknown> = given ?? {}
+    if (!given && definition.pick) {
+      if (!this.folder) return this.publishProject("the project needs a folder before files can be imported")
+      const result = await definition.pick(this.folder)
+      if (!result) return
+      picked = result
+    }
+    if (parent !== (this.selected ?? this._root)) return
+    const node = definition.make({ name: `${kind.charAt(0).toLowerCase()}${kind.slice(1)}`, visualise: this.visualised, ...picked })
     parent.addNode(node)
     node.transform.setWorldPosition(this.camera.isActive ? this.camera.orbitTarget : new THREE.Vector3(0, 1, 0))
     if (this.visualised) node.visualised = true

@@ -6,7 +6,7 @@
     <div class="menu" $class="{ open: state.open === 'file' }">
       <button class="menu-title" @click="toggle('file')" @pointerenter="hover('file')">File</button>
       <div class="menu-items" $if="state.open === 'file'">
-        <button @click="run('newProject')">New project</button>
+        <button @click="run('newProject')">New project <span class="dim">in the browser</span></button>
         <button @click="run('openFolder')" $disabled="!shared['editor:project'].supported">Open folder…</button>
         <button @click="run('reopenLast')" $disabled="!shared['editor:project'].supported">Reopen last</button>
         <hr />
@@ -66,6 +66,7 @@
 
   <span class="status">
     <span>{{ shared['editor:project'].name ?? 'untitled' }}</span>
+    <span class="dim">{{ shared['editor:project'].storage === 'browser' ? 'in browser' : shared['editor:project'].storage === 'disk' ? 'on disk' : '' }}</span>
     <span class="dim">{{ shared['editor:project'].recipe }}</span>
     <span class="dim" $if="shared['editor:project'].status">{{ shared['editor:project'].status }}</span>
     <span class="dim" $if="shared['editor:project'].dirty && !shared['editor:project'].status">unsaved changes</span>
@@ -78,7 +79,7 @@ import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { preferences } from '../preferences.ts'
 
-shared('editor:project', { name: null, recipe: '', status: '', supported: false, dirty: false })
+shared('editor:project', { name: null, recipe: '', storage: null, status: '', supported: false, dirty: false })
 shared('editor:view', { view: 'orbit', visualised: true, gizmo: 'translate', physics: false, snap: { enabled: true, move: 0.25, rotate: 15 } })
 shared('editor:history', { canUndo: false, canRedo: false, undoLabel: null, redoLabel: null })
 

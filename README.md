@@ -27,7 +27,14 @@ The dev server sends cross-origin isolation headers for the splat worker pipelin
 
 ## A project
 
-The scene recipe adds boxes, spheres and capsules (a mesh with a matching collider, for blocking in), colliders on their own, interactables, points of interest, focal points and triggers, cameras, groups and a player start. Its project is a folder with `scene.json`, a node tree in Catalyst's scene file format, plus whatever files it names (relative paths are read from the folder, absolute URLs from the network). The file also carries the scene's **environment**: a physics floor (on by default at y 0, so nothing needs a floor plane to stand on), gravity and drag, edited in the panel's Environment section. File → New project starts one in memory; Save as… picks the folder.
+A project is a folder. It lives in one of two places:
+
+- **In the browser.** File → New project makes one in the browser's own storage (the origin private file system), which every current browser has. Files you import are copied into it, and the runner reads them from there. Nothing touches your disk; an export will bundle it up when the time comes.
+- **On disk.** File → Open folder… and Save as… use the File System Access API, which Chrome, Edge and other Chromium browsers have and Safari and Firefox do not. The folder is yours: `scene.json` and an `assets/` directory beside whatever else you keep there, readable by the runner and by any other tool.
+
+Either way the scene recipe's project holds `scene.json`, a node tree in Catalyst's scene file format with the scene's **environment** beside it (a physics floor, on by default at y 0, gravity and drag), and the files it names, read from the folder by relative path and from the network by URL.
+
+The scene recipe adds boxes, spheres and capsules (a mesh with a matching collider, for blocking in), **models** (a `.glb` imported into `assets/` and placed at the node) and **Gaussian splats** (a `.sog` or `.ply`, likewise), colliders on their own, interactables, points of interest, focal points and triggers, cameras, groups and a player start. A kind that needs a file asks for it when added and copies it into the project.
 
 ## Running a project
 
@@ -39,7 +46,7 @@ The scene recipe adds boxes, spheres and capsules (a mesh with a matching collid
 interface Recipe {
   name: string
   modules?: () => Module[]        // installed on the engine beyond the core set
-  kinds: NodeKind[]               // what the tree can add: { kind, label, cls, description, make }
+  kinds: NodeKind[]               // what the tree can add: { kind, label, cls, description, pick?, make }
   panel?: string[]                // Lightspeed component ids mounted under the scene sections
   load(folder, engine): Promise<Node3D>
   save(folder, root, engine): Promise<string[]>
