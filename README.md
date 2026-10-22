@@ -27,7 +27,7 @@ The dev server sends cross-origin isolation headers for the splat worker pipelin
 
 ## A project
 
-The scene recipe's project is a folder with `scene.json`, a node tree in Catalyst's scene file format, plus whatever files it names (relative paths are read from the folder, absolute URLs from the network). File → New project starts one in memory; Save as… picks the folder.
+The scene recipe adds boxes, spheres and capsules (a mesh with a matching collider, for blocking in), colliders on their own, interactables, points of interest, focal points and triggers, cameras, groups and a player start. Its project is a folder with `scene.json`, a node tree in Catalyst's scene file format, plus whatever files it names (relative paths are read from the folder, absolute URLs from the network). File → New project starts one in memory; Save as… picks the folder.
 
 ## Running a project
 

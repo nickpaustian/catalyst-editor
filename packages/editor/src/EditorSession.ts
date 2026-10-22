@@ -633,6 +633,10 @@ export class EditorSession {
       if (property.min !== undefined) next = Math.max(property.min, next as number)
       if (property.max !== undefined) next = Math.min(property.max, next as number)
     } else if (property.type === "boolean") next = Boolean(value)
+    else if (property.type === "colour") {
+      next = typeof value === "string" ? parseInt(value.replace("#", ""), 16) : Number(value)
+      if (!Number.isFinite(next)) return
+    }
     else if (property.type === "tags") next = [...new Set(toStrings(value).map((tag) => tag.trim()).filter(Boolean))]
     else if (property.type === "layers") next = [...new Set(toStrings(value).map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n < 32))].sort((a, b) => a - b)
     else next = String(value)

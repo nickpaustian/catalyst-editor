@@ -62,6 +62,10 @@
             @click="toggleLayer(field, n)"
           >{{ n }}</button>
         </div>
+        <span class="colour" $else-if="field.type === 'colour'">
+          <input type="color" $value="field.hex" @input="applyColour($event, field)" />
+          <span class="hex">{{ field.hex }}</span>
+        </span>
         <input $else type="text" $model="field.value" $disabled="field.readonly" @change="applyField(field)" />
       </div>
     </div>
@@ -77,7 +81,7 @@ const selection = shared('editor:selection', null)
 
 // Local copies of the fields, so typing doesn't fight the scene publishing
 // the same values back on every gizmo move
-interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number; readonly?: boolean }
+interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number; readonly?: boolean; hex?: string }
 
 const state = reactive({
   name: '',
@@ -95,7 +99,7 @@ selection.subscribe((next: any) => {
   state.rx = next.rotation.x
   state.ry = next.rotation.y
   state.rz = next.rotation.z
-  state.fields = (next.properties ?? []).map((field: Field) => ({ ...field }))
+  state.fields = (next.properties ?? []).map((field: Field) => ({ ...field, hex: field.type === 'colour' ? toHex(field.value) : undefined }))
 })
 
 function send(type: string) {
@@ -110,6 +114,16 @@ function rename() {
 
 function applyField(field: Field) {
   sendCommand({ type: 'setProperty', key: field.key, value: field.value })
+}
+
+function toHex(value: unknown): string {
+  return `#${(Number(value) >>> 0 & 0xffffff).toString(16).padStart(6, '0')}`
+}
+
+function applyColour(event: Event, field: Field) {
+  field.hex = (event.target as HTMLInputElement).value
+  field.value = parseInt(field.hex.slice(1), 16)
+  applyField(field)
 }
 
 function removeTag(field: Field, tag: string) {
@@ -365,6 +379,25 @@ input.name {
 .tag-input {
   width: 64px;
   padding: 2px 4px;
+  font-size: 11px;
+}
+
+.colour {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.colour input[type="color"] {
+  width: 32px;
+  height: 22px;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.hex {
+  color: #999;
+  font-family: ui-monospace, Menlo, monospace;
   font-size: 11px;
 }
 

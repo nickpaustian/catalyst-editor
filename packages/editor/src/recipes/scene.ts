@@ -1,7 +1,7 @@
 import { Camera, Node3D, type NodeJSON } from "@nickpaustian/catalyst"
 import { Interactable } from "@nickpaustian/catalyst/interaction"
 import { BoxCollider, CapsuleCollider, SphereCollider } from "@nickpaustian/catalyst/physics"
-import { FirstPersonController, FocalPoint, FocalPointTrigger, PointOfInterest } from "@nickpaustian/catalyst/prefabs"
+import { Box, Capsule, FirstPersonController, FocalPoint, FocalPointTrigger, PointOfInterest, Sphere } from "@nickpaustian/catalyst/prefabs"
 import { Physics } from "@nickpaustian/catalyst/physics"
 import { Vector3 } from "three"
 import type { Recipe } from "../recipe"
@@ -15,6 +15,9 @@ export const sceneRecipe: Recipe = {
   kinds: [
     { kind: "Group", label: "Group", cls: Node3D, make: ({ name }) => new Node3D(name) },
     { kind: "PlayerStart", label: "Player start", cls: PlayerStart, make: (o) => new PlayerStart(o) },
+    { kind: "Box", label: "Box", cls: Box, make: (o) => new Box(o) },
+    { kind: "Sphere", label: "Sphere", cls: Sphere, make: (o) => new Sphere(o) },
+    { kind: "Capsule", label: "Capsule", cls: Capsule, make: (o) => new Capsule(o) },
     { kind: "Camera", label: "Camera", cls: Camera, make: (o) => new Camera(o) },
     { kind: "BoxCollider", label: "Box collider", cls: BoxCollider, make: (o) => new BoxCollider({ ...o, width: 1, height: 1, depth: 1 }) },
     { kind: "SphereCollider", label: "Sphere collider", cls: SphereCollider, make: (o) => new SphereCollider({ ...o, radius: 0.5 }) },
