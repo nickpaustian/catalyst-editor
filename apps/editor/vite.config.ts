@@ -15,4 +15,5 @@ export default defineConfig({
   server: { headers: crossOriginIsolation, port: 3100, fs: { allow: ["../.."] } },
   preview: { headers: crossOriginIsolation, port: 4174 },
   worker: { format: "es" },
+  build: { rollupOptions: { input: { editor: "index.html", play: "play.html" } } },
 })

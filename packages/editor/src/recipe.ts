@@ -1,6 +1,12 @@
 import type { Catalyst, Module, Node3D } from "@nickpaustian/catalyst"
 import type { ProjectFolder } from "./ProjectFolder"
 
+export interface RunContext {
+  engine: Catalyst
+  root: Node3D
+  folder: ProjectFolder | null
+}
+
 /** Something the tree can add: a label, and how to make one. */
 export interface NodeKind {
   kind: string
@@ -29,4 +35,6 @@ export interface Recipe {
   save: (folder: ProjectFolder, root: Node3D, engine: Catalyst) => Promise<string[]>
   /** The one file to offer as a download when there is no folder to write to. */
   download?: (root: Node3D, engine: Catalyst) => { name: string; text: string }
+  /** Play the project in the runner: put a player in, let physics go. Returns the teardown. */
+  run: (context: RunContext) => Promise<() => void>
 }

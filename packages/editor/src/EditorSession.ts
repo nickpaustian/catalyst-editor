@@ -60,6 +60,7 @@ export type EditorCommand =
   | { type: "save" }
   | { type: "saveAs" }
   | { type: "download" }
+  | { type: "run" }
   | { type: "setView"; view: ViewMode }
   | { type: "toggleVisualisers" }
   | { type: "togglePhysics" }
@@ -115,6 +116,19 @@ export class EditorSession {
   private collapsed = new Set<Node3D>()
   private unsubscribeCommands: () => void
   private unsubscribeBlur: () => void
+  private runner: Window | null = null
+  private runnerReady = false
+  private readonly onMessage = (event: MessageEvent): void => {
+    if (event.origin !== location.origin || event.data?.type !== "vitrine:ready") return
+    this.runnerReady = true
+    this.sendToRunner()
+  }
+  private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "r" && !event.shiftKey && !event.altKey) {
+      event.preventDefault()
+      void this.run()
+    }
+  }
 
   constructor(options: { app: LightspeedRuntime; engine: Catalyst; recipe: Recipe }) {
     this.app = options.app
@@ -133,9 +147,13 @@ export class EditorSession {
     const resume = () => this.engine.resume()
     window.addEventListener("blur", pause)
     window.addEventListener("focus", resume)
+    window.addEventListener("message", this.onMessage)
+    window.addEventListener("keydown", this.onKeyDown)
     this.unsubscribeBlur = () => {
       window.removeEventListener("blur", pause)
       window.removeEventListener("focus", resume)
+      window.removeEventListener("message", this.onMessage)
+      window.removeEventListener("keydown", this.onKeyDown)
     }
     this.publishKinds()
     this.publishProject()
@@ -310,6 +328,9 @@ export class EditorSession {
         if (file && this._root) download(file.name, file.text)
         break
       }
+      case "run":
+        await this.run()
+        break
       case "setView":
         this.setView(command.view)
         break
@@ -360,6 +381,35 @@ export class EditorSession {
         this.renameSelected(command.name)
         break
     }
+  }
+
+  //=========================
+  // Running
+  //=========================
+
+  /**
+   * Play the project in the runner window: the scene as it is now, unsaved
+   * edits included, and the folder for what it names. One named window is
+   * reused, so a second run swaps the scene there rather than opening another.
+   */
+  async run(): Promise<void> {
+    if (!this._root) return
+    if (this.runner && !this.runner.closed && this.runnerReady) {
+      this.sendToRunner()
+      this.runner.focus()
+      return
+    }
+    this.runnerReady = false
+    const url = new URL("play.html", location.href)
+    url.searchParams.set("recipe", this.recipe.name)
+    this.runner = window.open(url.href, "vitrine-run")
+    if (!this.runner) this.publishProject("the browser blocked the runner window")
+  }
+
+  private sendToRunner(): void {
+    if (!this.runner || this.runner.closed || !this._root) return
+    this.runner.postMessage({ type: "vitrine:run", recipe: this.recipe.name, scene: this.engine.serialise(this._root), folder: this.folder?.handle ?? null }, location.origin)
+    this.publishProject("running")
   }
 
   private async save(folder: ProjectFolder): Promise<void> {

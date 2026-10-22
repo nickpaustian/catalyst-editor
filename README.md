@@ -29,6 +29,10 @@ The dev server sends cross-origin isolation headers for the splat worker pipelin
 
 The scene recipe's project is a folder with `scene.json`, a node tree in Catalyst's scene file format, plus whatever files it names (relative paths are read from the folder, absolute URLs from the network). File → New project starts one in memory; Save as… picks the folder.
 
+## Running a project
+
+**Run** in the menu bar, or ⌘R / Ctrl+R while the editor has focus (Safari keeps that key for reload; use the button there), opens `play.html` in a window of its own and plays the scene as it is in the editor, unsaved edits included. The editor sends the serialised scene and the project folder's handle, so the runner reads the same files; a second run swaps the scene in the same window. The scene recipe puts a first person player at the **Player start** node, or the first camera, or the origin, and lets physics go. A recipe's `run(context)` does whatever playing means for it and returns a teardown.
+
 ## A recipe
 
 ```ts
@@ -40,6 +44,7 @@ interface Recipe {
   load(folder, engine): Promise<Node3D>
   save(folder, root, engine): Promise<string[]>
   download?(root, engine): { name, text }
+  run(context): Promise<() => void>  // play it in the runner window
 }
 ```
 

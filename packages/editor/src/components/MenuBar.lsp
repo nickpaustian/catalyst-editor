@@ -14,6 +14,8 @@
         <button @click="run('saveAs')">Save as…</button>
         <hr />
         <button @click="run('download')">Download scene file</button>
+        <hr />
+        <button @click="run('run')">Run <kbd>⌘R</kbd></button>
       </div>
     </div>
 
@@ -39,6 +41,8 @@
       </div>
     </div>
   </nav>
+
+  <button class="run" title="Run (⌘R / Ctrl+R)" @click="run('run')">▶ Run</button>
 
   <span class="status">
     <span>{{ shared['editor:project'].name ?? 'untitled' }}</span>
@@ -113,6 +117,20 @@ function resetLayout() {
 .brand {
   font-weight: 600;
   letter-spacing: 0.04em;
+}
+
+.run {
+  font: inherit;
+  color: #dfe8ff;
+  background: #2a3650;
+  border: 1px solid #6a8fd8;
+  border-radius: 3px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.run:hover {
+  background: #3b5aa0;
 }
 
 .menus {
