@@ -180,7 +180,6 @@ function release() {
 }
 
 .rows {
-  max-height: 320px;
   overflow-y: auto;
   border: 1px solid #333;
   margin-bottom: 6px;

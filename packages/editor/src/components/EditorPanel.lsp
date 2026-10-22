@@ -1,7 +1,5 @@
 <view>
 <aside class="panel">
-  <SceneTree />
-
   <h2>Selected</h2>
   <SelectionFields />
 
@@ -9,12 +7,12 @@
 
   <div id="recipe-sections"></div>
 </aside>
-<AddNodeDialog />
 </view>
 
 <logic lang="ts">
-// The shell only arranges the sections; each reads its own cells. A recipe's
-// sections are mounted into #recipe-sections by the app.
+// The inspector: what is selected, the project's settings, and a recipe's own
+// sections, mounted into #recipe-sections by the app. The scene tree is its
+// own pane (ScenePane).
 export {}
 </logic>
 

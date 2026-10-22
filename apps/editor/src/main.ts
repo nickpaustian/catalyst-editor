@@ -14,14 +14,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   const panes = new PaneLayout({
     root: document.getElementById("layout")!,
     kinds: {
+      scene: { title: "Scene", element: document.getElementById("scene-panel")! },
       viewport: { title: "Viewport", element: document.getElementById("app")! },
-      panel: { title: "Editor", element: document.getElementById("editor-panel")! },
+      inspector: { title: "Inspector", element: document.getElementById("editor-panel")! },
     },
     layout: preferences.layout,
     onChange: preferences.setLayout,
   })
   ;(window as any).panes = panes
 
+  if (!(await app.mount("scenepane", "#scene-panel"))) throw new Error("ScenePane did not mount")
   if (!(await app.mount("editorpanel", "#editor-panel"))) throw new Error("EditorPanel did not mount")
   if (!(await app.mount("menubar", "#menu-bar"))) throw new Error("MenuBar did not mount")
 

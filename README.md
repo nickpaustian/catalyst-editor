@@ -9,7 +9,7 @@ npm workspace. The editor packages are consumed from source; the engine packages
 | Path | Package | What it is |
 | --- | --- | --- |
 | `packages/editor` | `@vitrine/editor` | The editor: `EditorSession` (tree, selection, fields, add, delete, move, rename, save), `EditorCamera` (orbit and gizmo), `ProjectFolder` and `folderLoader` (File System Access), the `Recipe` interface and the `sceneRecipe`, the pane layout, preferences, and the Lightspeed panel components |
-| `apps/editor` | `@vitrine/editor-app` | The app: makes the engine with the core modules (physics, input, interaction, resources, splats), mounts the panel and menu bar, and runs a session under a recipe |
+| `apps/editor` | `@vitrine/editor-app` | The app: makes the engine with the core modules (physics, input, interaction, resources, splats), mounts the scene pane, the inspector and the menu bar, and runs a session under a recipe |
 | `apps/editor/exhibition` | | The exhibition editor's sections and session as they were, kept as the reference for the exhibition recipe |
 | `packages/runtime`, `apps/player`, and the vendored `packages/catalyst`, `stelligra`, `spektra`, `telemetry`, `assets`, `debug` | | The exhibition player and its copies of the engine, as ported from Beruk. They go once the exhibition recipe runs on the published packages |
 
@@ -53,5 +53,7 @@ interface Recipe {
 A recipe's kinds are registered with the engine under their names, so a scene file can name them. Its panel components live in a `componentDirs` entry of the app's Lightspeed plugin and talk to the session the same way the built-in ones do: read the `editor:*` shared cells, send commands through `sendCommand`.
 
 ## Editing
+
+Three panes: the scene tree on the left, the viewport, and the inspector on the right with the selected node's fields, the environment and any recipe sections. Drag a gutter to resize, a pane's title to move it; + adds a closed pane back, × closes one; View → Reset pane layout restores the default.
 
 Orbit: drag to orbit, right-drag to pan, wheel to zoom. F focuses the selected node, Delete removes it, the gizmo moves or rotates it (View menu). Snapping is on by default, a quarter unit and 15°, with the steps in the View menu; holding Shift during a drag gives the opposite of the setting, and the setting is remembered per browser. Add node (⌘⇧A) opens a dialog with the kinds laid out as their class hierarchy, like Godot's: search, arrow keys and Enter, a recent list, a description for each, double-click to create; base classes that are not kinds show greyed as groups. Shift-click in the tree selects a range, ctrl- or cmd-click toggles one, and a dragged row drops before, after or inside another with its world transform kept. Fields come from each node class's exposed properties; number fields scrub sideways. Every change can be undone and redone (Edit menu, ⌘Z and ⌘⇧Z): a gizmo drag is one step, a scrub is one step, and the project counts as clean again when undo reaches the saved state. Physics is held still while editing (View → Physics running lets it go).
