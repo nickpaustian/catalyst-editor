@@ -2,9 +2,7 @@
 <section class="tree">
   <h2 class="heading">Scene</h2>
   <div class="adders">
-    <button $for="kind in shared['editor:kinds']" $key="kind.kind" @click="add(kind.kind)">
-      <span class="icon" $html="kind.icon"></span>{{ kind.label }}
-    </button>
+    <button class="add" @click="openAdd()"><span class="plus">+</span> Add node <kbd>⌘⇧A</kbd></button>
   </div>
   <p class="hint">
     New nodes go under the selected node. Shift-click selects a range, ctrl- or cmd-click adds
@@ -38,15 +36,15 @@ interface Row { id: number; name: string; type: string; icon: string; depth: num
 type Place = 'before' | 'after' | 'inside'
 
 shared('editor:tree', [])
-shared('editor:kinds', [])
+const addDialog = shared('editor:addDialog', false)
 
 const DRAG_THRESHOLD = 4
 let drag: { ids: number[]; startX: number; startY: number; list: HTMLElement; active: boolean } | null = null
 let dropTarget: { id: number; place: Place; element: HTMLElement } | null = null
 let justDragged = false
 
-function add(kind: string) {
-  sendCommand({ type: 'add', kind })
+function openAdd() {
+  addDialog.set(true)
 }
 
 function select(event: MouseEvent, row: Row) {
@@ -157,6 +155,22 @@ function release() {
 
 .adders button:hover {
   background: #333;
+}
+
+.adders .plus {
+  font-weight: 600;
+  color: #8fa3c7;
+}
+
+.adders kbd {
+  font: 10px/1 ui-monospace, Menlo, monospace;
+  padding: 1px 4px;
+  border: 1px solid #555;
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  background: #1a1a1a;
+  color: #999;
+  margin-left: 4px;
 }
 
 .hint {

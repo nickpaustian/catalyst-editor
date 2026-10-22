@@ -1,4 +1,4 @@
-export { EditorSession, type EditorCells, type EditorCommand, type TreeRow, type SelectMode, type DropPlace, type ViewMode, type SelectionProperty } from "./EditorSession"
+export { EditorSession, type EditorCells, type EditorCommand, type TreeRow, type KindNode, type SelectMode, type DropPlace, type ViewMode, type SelectionProperty } from "./EditorSession"
 export { EditorCamera, nodeTarget, groupTarget, type GizmoMode, type GizmoTarget } from "./EditorCamera"
 export { EditorInput } from "./EditorInput"
 export { ProjectFolder, folderLoader } from "./ProjectFolder"

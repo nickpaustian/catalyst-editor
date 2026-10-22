@@ -25,8 +25,10 @@ export interface RecipeSettings {
 export interface NodeKind {
   kind: string
   label: string
-  /** The class, for its icon. */
+  /** The class: its icon, and its place in the hierarchy the add dialog shows. */
   cls: object
+  /** A sentence for the add dialog. */
+  description?: string
   make: (options: { name: string; visualise: boolean }) => Node3D
 }
 

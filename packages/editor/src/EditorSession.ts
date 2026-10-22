@@ -26,6 +26,16 @@ export interface TreeRow {
 
 export type DropPlace = "before" | "after" | "inside"
 
+export interface KindNode {
+  id: string
+  label: string
+  icon: string
+  description: string
+  /** The kind to send with `add`, or null for a base class that only groups. */
+  kind: string | null
+  children: KindNode[]
+}
+
 /** replace: plain click, toggle: ctrl/cmd click, range: shift click from the anchor. */
 export type SelectMode = "replace" | "toggle" | "range"
 
@@ -44,7 +54,10 @@ export interface EditorCells {
   "editor:settings": { title: string; fields: SelectionProperty[] } | null
   "editor:view": { view: ViewMode; visualised: boolean; gizmo: GizmoMode; physics: boolean; snap: SnapSettings }
   "editor:tree": TreeRow[]
-  "editor:kinds": { kind: string; label: string; icon: string }[]
+  /** The kinds the tree can add, as the class hierarchy they sit in: bases that are not kinds are shown but cannot be added. */
+  "editor:kinds": KindNode[]
+  /** Set true to open the add dialog; the dialog sets it back. */
+  "editor:addDialog": boolean
   "editor:selection": {
     id: number
     name: string
@@ -149,7 +162,10 @@ export class EditorSession {
     }
     const target = event.target as HTMLElement | null
     if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return
-    if (key === "z" && !event.shiftKey) {
+    if (key === "a" && event.shiftKey) {
+      event.preventDefault()
+      this.app.shared("editor:addDialog").set(true)
+    } else if (key === "z" && !event.shiftKey) {
       event.preventDefault()
       this.undo()
     } else if ((key === "z" && event.shiftKey) || key === "y") {
@@ -249,7 +265,31 @@ export class EditorSession {
   }
 
   private publishKinds(): void {
-    this.set("editor:kinds", this.recipe.kinds.map(({ kind, label, cls }) => ({ kind, label, icon: editorIcon(cls) })))
+    const nodes = new Map<object, KindNode>()
+    const roots: KindNode[] = []
+    const nodeFor = (cls: any): KindNode => {
+      let node = nodes.get(cls)
+      if (node) return node
+      node = { id: cls.name, label: cls.name, icon: editorIcon(cls), description: "", kind: null, children: [] }
+      nodes.set(cls, node)
+      const base = Object.getPrototypeOf(cls)
+      if (base && base !== Function.prototype && base.name) nodeFor(base).children.push(node)
+      else roots.push(node)
+      return node
+    }
+    for (const { kind, label, cls, description } of this.recipe.kinds) {
+      const node = nodeFor(cls)
+      node.kind = kind
+      node.label = label
+      node.description = description ?? ""
+    }
+    const sort = (list: KindNode[]) => {
+      list.sort((a, b) => a.label.localeCompare(b.label))
+      for (const node of list) sort(node.children)
+    }
+    sort(roots)
+    this.set("editor:kinds", roots)
+    this.set("editor:addDialog", false)
   }
 
   private publishProject(status?: string): void {

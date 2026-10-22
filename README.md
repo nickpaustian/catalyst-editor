@@ -39,7 +39,7 @@ The scene recipe adds boxes, spheres and capsules (a mesh with a matching collid
 interface Recipe {
   name: string
   modules?: () => Module[]        // installed on the engine beyond the core set
-  kinds: NodeKind[]               // what the tree can add: { kind, label, cls, make }
+  kinds: NodeKind[]               // what the tree can add: { kind, label, cls, description, make }
   panel?: string[]                // Lightspeed component ids mounted under the scene sections
   load(folder, engine): Promise<Node3D>
   save(folder, root, engine): Promise<string[]>
@@ -54,4 +54,4 @@ A recipe's kinds are registered with the engine under their names, so a scene fi
 
 ## Editing
 
-Orbit: drag to orbit, right-drag to pan, wheel to zoom. F focuses the selected node, Delete removes it, the gizmo moves or rotates it (View menu). Snapping is on by default, a quarter unit and 15°, with the steps in the View menu; holding Shift during a drag gives the opposite of the setting, and the setting is remembered per browser. Shift-click in the tree selects a range, ctrl- or cmd-click toggles one, and a dragged row drops before, after or inside another with its world transform kept. Fields come from each node class's exposed properties; number fields scrub sideways. Every change can be undone and redone (Edit menu, ⌘Z and ⌘⇧Z): a gizmo drag is one step, a scrub is one step, and the project counts as clean again when undo reaches the saved state. Physics is held still while editing (View → Physics running lets it go).
+Orbit: drag to orbit, right-drag to pan, wheel to zoom. F focuses the selected node, Delete removes it, the gizmo moves or rotates it (View menu). Snapping is on by default, a quarter unit and 15°, with the steps in the View menu; holding Shift during a drag gives the opposite of the setting, and the setting is remembered per browser. Add node (⌘⇧A) opens a dialog with the kinds laid out as their class hierarchy, like Godot's: search, arrow keys and Enter, a recent list, a description for each, double-click to create; base classes that are not kinds show greyed as groups. Shift-click in the tree selects a range, ctrl- or cmd-click toggles one, and a dragged row drops before, after or inside another with its world transform kept. Fields come from each node class's exposed properties; number fields scrub sideways. Every change can be undone and redone (Edit menu, ⌘Z and ⌘⇧Z): a gizmo drag is one step, a scrub is one step, and the project counts as clean again when undo reaches the saved state. Physics is held still while editing (View → Physics running lets it go).

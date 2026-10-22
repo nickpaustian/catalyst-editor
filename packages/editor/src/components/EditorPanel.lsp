@@ -9,6 +9,7 @@
 
   <div id="recipe-sections"></div>
 </aside>
+<AddNodeDialog />
 </view>
 
 <logic lang="ts">
