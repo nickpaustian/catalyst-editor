@@ -66,35 +66,79 @@ export const removePane = (node: LayoutNode, id: string): LayoutNode | null => {
   return { ...node, children, sizes: normalise(sizes) }
 }
 
-/** Put `leaf` beside the pane `targetId`, on the side `zone` names. */
+/**
+ * A pane's share of the whole root along one axis: the product of its
+ * ancestors' fractions in splits of that direction. Splits the other way
+ * pass the full extent down. Null when the pane is not in the tree.
+ */
+export const extentOf = (node: LayoutNode, id: string, direction: PaneSplit["direction"], carried = 1): number | null => {
+  if (node.type === "pane") return node.id === id ? carried : null
+  for (let i = 0; i < node.children.length; i++) {
+    const found = extentOf(node.children[i], id, direction, node.direction === direction ? carried * node.sizes[i] : carried)
+    if (found !== null) return found
+  }
+  return null
+}
+
+/** Whether a pane sits under any split of a direction, so it has a size of its own along that axis. */
+export const inSplitOf = (node: LayoutNode, id: string, direction: PaneSplit["direction"], under = false): boolean | null => {
+  if (node.type === "pane") return node.id === id ? under : null
+  for (const child of node.children) {
+    const found = inSplitOf(child, id, direction, under || node.direction === direction)
+    if (found !== null) return found
+  }
+  return null
+}
+
+const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value))
+
+/**
+ * Put `leaf` beside the pane `targetId`, on the side `zone` names. With
+ * `extent`, the share of the root the leaf had along the split's axis, it
+ * keeps that size and the target gives up the difference; without it, or
+ * when the target has no room, the two share the target's space equally.
+ */
 export const insertBeside = (
   node: LayoutNode,
   targetId: string,
   zone: Exclude<DropZone, "centre">,
   leaf: PaneLeaf,
+  extent?: number | null,
+  root: LayoutNode = node,
 ): LayoutNode => {
   const direction = zone === "left" || zone === "right" ? "row" : "column"
   const before = zone === "left" || zone === "top"
+  const targetExtent = extentOf(root, targetId, direction) ?? 1
 
   if (node.type === "pane") {
     if (node.id !== targetId) return node
-    return split(direction, before ? [leaf, node] : [node, leaf])
+    const share = extent ? clamp(extent / targetExtent, MIN_SIZE, 1 - MIN_SIZE) : 0.5
+    return split(direction, before ? [leaf, node] : [node, leaf], before ? [share, 1 - share] : [1 - share, share])
   }
 
   const index = node.children.findIndex((child) => child.type === "pane" && child.id === targetId)
   if (index !== -1 && node.direction === direction) {
     const children = [...node.children]
-    const sizes = [...node.sizes]
-    const half = sizes[index] / 2
-    sizes[index] = half
+    let sizes = [...node.sizes]
+    const parentExtent = targetExtent / sizes[index]
+    const wanted = extent ? clamp(extent / parentExtent, MIN_SIZE, 1 - MIN_SIZE * sizes.length) : null
+    let leafSize: number
+    if (wanted !== null && Number.isFinite(wanted)) {
+      // Every sibling makes room in proportion, which puts back what they gained when the pane left
+      leafSize = wanted
+      sizes = sizes.map((size) => size * (1 - leafSize))
+    } else {
+      leafSize = sizes[index] / 2
+      sizes[index] -= leafSize
+    }
     children.splice(before ? index : index + 1, 0, leaf)
-    sizes.splice(before ? index : index + 1, 0, half)
+    sizes.splice(before ? index : index + 1, 0, leafSize)
     return { ...node, children, sizes }
   }
 
   return {
     ...node,
-    children: node.children.map((child) => insertBeside(child, targetId, zone, leaf)),
+    children: node.children.map((child) => insertBeside(child, targetId, zone, leaf, extent, root)),
   }
 }
 
@@ -123,9 +167,11 @@ export const movePane = (
   if (zone === "centre") return swapPanes(node, draggedId, targetId)
   const dragged = findLeaf(node, draggedId)
   if (!dragged) return node
+  const direction = zone === "left" || zone === "right" ? "row" : "column"
+  const extent = inSplitOf(node, draggedId, direction) ? extentOf(node, draggedId, direction) : null
   const without = removePane(node, draggedId)
   if (!without) return node
-  return insertBeside(without, targetId, zone, dragged)
+  return insertBeside(without, targetId, zone, dragged, extent)
 }
 
 export const resize = (node: LayoutNode, splitId: string, sizes: number[]): LayoutNode => {
