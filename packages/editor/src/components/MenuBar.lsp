@@ -38,6 +38,16 @@
         <button $class="{ on: shared['editor:view'].gizmo === 'translate' }" @click="setGizmo('translate')">Gizmo: translate</button>
         <button $class="{ on: shared['editor:view'].gizmo === 'rotate' }" @click="setGizmo('rotate')">Gizmo: rotate</button>
         <hr />
+        <button $class="{ on: shared['editor:view'].snap.enabled }" @click="setSnap({ enabled: !shared['editor:view'].snap.enabled })">Snap <span class="dim">hold ⇧ for the opposite</span></button>
+        <div class="choices">
+          <span class="dim">move</span>
+          <button $for="step in state.moveSteps" $key="step" $class="{ on: shared['editor:view'].snap.move === step }" @click="setSnap({ move: step })">{{ step }}</button>
+        </div>
+        <div class="choices">
+          <span class="dim">turn</span>
+          <button $for="step in state.rotateSteps" $key="step" $class="{ on: shared['editor:view'].snap.rotate === step }" @click="setSnap({ rotate: step })">{{ step }}°</button>
+        </div>
+        <hr />
         <button @click="resetLayout()">Reset pane layout</button>
       </div>
     </div>
@@ -69,10 +79,10 @@ import { sendCommand } from '../commands.ts'
 import { preferences } from '../preferences.ts'
 
 shared('editor:project', { name: null, recipe: '', status: '', supported: false, dirty: false })
-shared('editor:view', { view: 'orbit', visualised: true, gizmo: 'translate', physics: false })
+shared('editor:view', { view: 'orbit', visualised: true, gizmo: 'translate', physics: false, snap: { enabled: true, move: 0.25, rotate: 15 } })
 shared('editor:history', { canUndo: false, canRedo: false, undoLabel: null, redoLabel: null })
 
-const state = reactive({ open: null as string | null })
+const state = reactive({ open: null as string | null, moveSteps: [0.05, 0.1, 0.25, 0.5, 1], rotateSteps: [5, 15, 45, 90] })
 
 // A press anywhere outside the bar closes the open menu
 document.addEventListener('pointerdown', (event) => {
@@ -95,6 +105,10 @@ function run(type: string) {
 function setGizmo(mode: string) {
   state.open = null
   sendCommand({ type: 'setGizmo', mode })
+}
+
+function setSnap(snap: Record<string, unknown>) {
+  sendCommand({ type: 'setSnap', snap })
 }
 
 function resetLayout() {
@@ -217,6 +231,41 @@ function resetLayout() {
   content: "";
   display: inline-block;
   width: 1.1em;
+}
+
+.choices {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 10px 4px 26px;
+}
+
+.choices .dim {
+  color: #777;
+  width: 34px;
+}
+
+.choices button {
+  padding: 2px 6px;
+  color: #aaa;
+  border: 1px solid #3a3a3a;
+}
+
+.choices button.on {
+  color: #fff;
+  background: #3b5aa0;
+  border-color: #6a8fd8;
+}
+
+.choices button::before,
+.choices button:not(.on)::before {
+  content: none;
+  width: 0;
+}
+
+.menu-items .dim {
+  color: #777;
+  font-size: 11px;
 }
 
 .menu-items hr {

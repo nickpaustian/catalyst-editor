@@ -6,6 +6,7 @@ import type { LightspeedRuntime } from "@lightspeed-js/core"
 import { EditorCamera, groupTarget, type GizmoMode } from "./EditorCamera"
 import { EditorInput } from "./EditorInput"
 import { History } from "./History"
+import { preferences, type SnapSettings } from "./preferences"
 import { ProjectFolder, folderLoader } from "./ProjectFolder"
 import type { Recipe } from "./recipe"
 
@@ -41,7 +42,7 @@ export interface EditorCells {
   "editor:history": { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
   /** The recipe's project-wide settings, or null when it has none. */
   "editor:settings": { title: string; fields: SelectionProperty[] } | null
-  "editor:view": { view: ViewMode; visualised: boolean; gizmo: GizmoMode; physics: boolean }
+  "editor:view": { view: ViewMode; visualised: boolean; gizmo: GizmoMode; physics: boolean; snap: SnapSettings }
   "editor:tree": TreeRow[]
   "editor:kinds": { kind: string; label: string; icon: string }[]
   "editor:selection": {
@@ -71,6 +72,7 @@ export type EditorCommand =
   | { type: "toggleVisualisers" }
   | { type: "togglePhysics" }
   | { type: "setGizmo"; mode: GizmoMode }
+  | { type: "setSnap"; snap: Partial<SnapSettings> }
   | { type: "select"; id: number; mode?: SelectMode }
   | { type: "add"; kind: string }
   | { type: "toggleExpand"; id: number }
@@ -113,6 +115,8 @@ export class EditorSession {
   private view: ViewMode = "orbit"
   private visualised = true
   private gizmo: GizmoMode = "translate"
+  private snap: SnapSettings = preferences.snap
+  private snapInverted = false
   private readonly history = new History()
   private dragStart: { node: Node3D; before: THREE.Matrix4 }[] | null = null
   private selected: Node3D | null = null
@@ -131,7 +135,11 @@ export class EditorSession {
     this.runnerReady = true
     this.sendToRunner()
   }
+  private readonly onKeyUp = (event: KeyboardEvent): void => {
+    if (event.key === "Shift") this.setSnapInverted(false)
+  }
   private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === "Shift") this.setSnapInverted(true)
     if (!(event.metaKey || event.ctrlKey) || event.altKey) return
     const key = event.key.toLowerCase()
     if (key === "r" && !event.shiftKey) {
@@ -174,11 +182,14 @@ export class EditorSession {
     window.addEventListener("focus", resume)
     window.addEventListener("message", this.onMessage)
     window.addEventListener("keydown", this.onKeyDown)
+    window.addEventListener("keyup", this.onKeyUp)
+    this.applySnap()
     this.unsubscribeBlur = () => {
       window.removeEventListener("blur", pause)
       window.removeEventListener("focus", resume)
       window.removeEventListener("message", this.onMessage)
       window.removeEventListener("keydown", this.onKeyDown)
+      window.removeEventListener("keyup", this.onKeyUp)
     }
     this.publishKinds()
     this.publishProject()
@@ -258,7 +269,7 @@ export class EditorSession {
   }
 
   private publishView(): void {
-    this.set("editor:view", { view: this.view, visualised: this.visualised, gizmo: this.gizmo, physics: !(this.engine.find(Physics)?.paused ?? true) })
+    this.set("editor:view", { view: this.view, visualised: this.visualised, gizmo: this.gizmo, physics: !(this.engine.find(Physics)?.paused ?? true), snap: this.snap })
   }
 
   //=========================
@@ -432,6 +443,12 @@ export class EditorSession {
         this.camera.mode = command.mode
         this.publishView()
         break
+      case "setSnap":
+        this.snap = { ...this.snap, ...command.snap }
+        preferences.setSnap(this.snap)
+        this.applySnap()
+        this.publishView()
+        break
       case "select":
         this.select(this.nodesById.get(command.id) ?? null, command.mode)
         break
@@ -532,6 +549,18 @@ export class EditorSession {
     this.input?.activate()
     if (this.selected) this.attachGizmo(this.selected)
     this.publishView()
+  }
+
+  /** Snapping as set, or the opposite while shift is held. */
+  private applySnap(): void {
+    const on = this.snap.enabled !== this.snapInverted
+    this.camera.setSnap(on ? this.snap.move : null, on ? this.snap.rotate : null)
+  }
+
+  private setSnapInverted(inverted: boolean): void {
+    if (this.snapInverted === inverted) return
+    this.snapInverted = inverted
+    this.applySnap()
   }
 
   private setVisualised(on: boolean): void {

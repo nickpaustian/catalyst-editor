@@ -87,7 +87,25 @@ const layout = new Preference<LayoutNode>({
   fallback: defaultLayout,
 })
 
+export interface SnapSettings {
+  enabled: boolean
+  /** World units between positions. */
+  move: number
+  /** Degrees between angles. */
+  rotate: number
+}
+
+const snap = new Preference<SnapSettings>({
+  key: "snap",
+  initial: { enabled: true, move: 0.25, rotate: 15 },
+})
+
 export const preferences = {
+  get snap(): SnapSettings {
+    return snap.value
+  },
+  setSnap: snap.set,
+
   /** The pane tree; a stored tree that no longer fits the known kinds falls back to the default. */
   get layout(): LayoutNode {
     return isValidLayout(layout.value, PANE_KINDS) ? layout.value : defaultLayout()
@@ -97,11 +115,12 @@ export const preferences = {
 
   init: () => {
     layout.init()
+    snap.init()
     publish()
   },
 }
 
-const snapshot = () => ({ layout: layout.value })
+const snapshot = () => ({ layout: layout.value, snap: snap.value })
 
 function publish(): void {
   ;(window as any).lightspeed?.shared(CELL).set(snapshot())

@@ -164,6 +164,12 @@ export class EditorCamera {
     this.gizmo.setMode(mode)
   }
 
+  /** Snap gizmo moves to a grid and turns to an angle; null for free. */
+  setSnap(move: number | null, rotateDegrees: number | null): void {
+    this.gizmo.setTranslationSnap(move)
+    this.gizmo.setRotationSnap(rotateDegrees === null ? null : THREE.MathUtils.degToRad(rotateDegrees))
+  }
+
   private writeBack(): void {
     if (!this.target) return
     this.target.apply(this.proxy.position, this.proxy.quaternion)
