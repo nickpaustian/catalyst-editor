@@ -52,6 +52,8 @@ export class EditorCamera {
   private unsubscribe: (() => void) | null = null
   private onChanged: (() => void) | null = null
   private readonly engine: Catalyst
+  /** A gizmo drag began or ended; an editor records the whole drag as one change. */
+  onDrag: ((dragging: boolean) => void) | null = null
 
   constructor(engine: Catalyst) {
     this.engine = engine
@@ -67,6 +69,7 @@ export class EditorCamera {
     this.gizmo.setSize(0.8)
     this.gizmo.addEventListener("dragging-changed", (event) => {
       this.orbit.enabled = this.active && !event.value
+      this.onDrag?.(Boolean(event.value))
     })
     this.gizmo.addEventListener("objectChange", () => this.writeBack())
     engine.scene.add(this.proxy)

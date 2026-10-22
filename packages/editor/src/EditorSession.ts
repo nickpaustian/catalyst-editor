@@ -5,6 +5,7 @@ import { Physics } from "@nickpaustian/catalyst/physics"
 import type { LightspeedRuntime } from "@lightspeed-js/core"
 import { EditorCamera, groupTarget, type GizmoMode } from "./EditorCamera"
 import { EditorInput } from "./EditorInput"
+import { History } from "./History"
 import { ProjectFolder, folderLoader } from "./ProjectFolder"
 import type { Recipe } from "./recipe"
 
@@ -37,6 +38,7 @@ export type ViewMode = "orbit"
 /** What the panel shows. Each key is a Lightspeed shared cell. */
 export interface EditorCells {
   "editor:project": { name: string | null; recipe: string; status: string; supported: boolean; dirty: boolean }
+  "editor:history": { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
   "editor:view": { view: ViewMode; visualised: boolean; gizmo: GizmoMode; physics: boolean }
   "editor:tree": TreeRow[]
   "editor:kinds": { kind: string; label: string; icon: string }[]
@@ -61,6 +63,8 @@ export type EditorCommand =
   | { type: "saveAs" }
   | { type: "download" }
   | { type: "run" }
+  | { type: "undo" }
+  | { type: "redo" }
   | { type: "setView"; view: ViewMode }
   | { type: "toggleVisualisers" }
   | { type: "togglePhysics" }
@@ -106,7 +110,8 @@ export class EditorSession {
   private view: ViewMode = "orbit"
   private visualised = true
   private gizmo: GizmoMode = "translate"
-  private dirty = false
+  private readonly history = new History()
+  private dragStart: { node: Node3D; before: THREE.Matrix4 }[] | null = null
   private selected: Node3D | null = null
   private selection = new Set<Node3D>()
   private anchor: Node3D | null = null
@@ -124,9 +129,21 @@ export class EditorSession {
     this.sendToRunner()
   }
   private readonly onKeyDown = (event: KeyboardEvent): void => {
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "r" && !event.shiftKey && !event.altKey) {
+    if (!(event.metaKey || event.ctrlKey) || event.altKey) return
+    const key = event.key.toLowerCase()
+    if (key === "r" && !event.shiftKey) {
       event.preventDefault()
       void this.run()
+      return
+    }
+    const target = event.target as HTMLElement | null
+    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return
+    if (key === "z" && !event.shiftKey) {
+      event.preventDefault()
+      this.undo()
+    } else if ((key === "z" && event.shiftKey) || key === "y") {
+      event.preventDefault()
+      this.redo()
     }
   }
 
@@ -140,6 +157,11 @@ export class EditorSession {
     this.input = input ? new EditorInput(input, { focusSelected: () => this.focusSelected(), deleteSelected: () => this.deleteSelected() }) : null
     const physics = this.engine.find(Physics)
     if (physics) physics.paused = true
+    this.history.onChange = () => {
+      this.publishHistory()
+      this.publishProject()
+    }
+    this.camera.onDrag = (dragging) => (dragging ? this.beginDrag() : this.endDrag())
     this.unsubscribeCommands = this.app.shared("editor:command").subscribe((command) => {
       if (command) void this.handle(command as EditorCommand)
     })
@@ -157,6 +179,7 @@ export class EditorSession {
     }
     this.publishKinds()
     this.publishProject()
+    this.publishHistory()
     this.publishView()
     this.publishTree()
     this.publishSelection()
@@ -177,7 +200,7 @@ export class EditorSession {
     this._root = root
     this.engine.add(root)
     this.setVisualised(this.visualised)
-    this.dirty = false
+    this.history.clear()
     this.publishProject(folder ? "" : "unsaved")
     this.publishTree()
     this.select(null)
@@ -214,18 +237,61 @@ export class EditorSession {
   }
 
   private publishProject(status?: string): void {
-    this.set("editor:project", { name: this.folder?.name ?? null, recipe: this.recipe.name, status: status ?? (this.dirty ? "unsaved changes" : ""), supported: ProjectFolder.isSupported, dirty: this.dirty })
+    const dirty = this.history.isDirty
+    this.set("editor:project", { name: this.folder?.name ?? null, recipe: this.recipe.name, status: status ?? (dirty ? "unsaved changes" : ""), supported: ProjectFolder.isSupported, dirty })
+  }
+
+  private publishHistory(): void {
+    this.set("editor:history", { canUndo: this.history.canUndo, canRedo: this.history.canRedo, undoLabel: this.history.undoLabel, redoLabel: this.history.redoLabel })
   }
 
   private publishView(): void {
     this.set("editor:view", { view: this.view, visualised: this.visualised, gizmo: this.gizmo, physics: !(this.engine.find(Physics)?.paused ?? true) })
   }
 
-  private touch(): void {
-    if (!this.dirty) {
-      this.dirty = true
-      this.publishProject()
+  //=========================
+  // History
+  //=========================
+
+  private record(label: string, undo: () => void, redo: () => void, key?: string): void {
+    this.history.push({ label, undo, redo, key })
+  }
+
+  undo(): void {
+    if (this.history.undo()) this.refresh()
+  }
+
+  redo(): void {
+    if (this.history.redo()) this.refresh()
+  }
+
+  /** After a change made by the history rather than a command: the tree, the fields and the gizmo catch up. */
+  private refresh(): void {
+    for (const node of [...this.selection]) if (!node.isInTree) this.selection.delete(node)
+    if (this.selected && !this.selected.isInTree) this.selected = [...this.selection].pop() ?? null
+    if (this.selected && this.selected !== this._root) this.attachGizmo(this.selected)
+    else this.camera.detach()
+    this.camera.syncFromTarget()
+    this.publishTree()
+    this.publishSelection()
+  }
+
+  private beginDrag(): void {
+    const nodes = this.selection.size > 1 ? this.selectionRoots() : this.selected ? [this.selected] : []
+    this.dragStart = nodes.map((node) => ({ node, before: node.transform.worldMatrix.clone() }))
+  }
+
+  private endDrag(): void {
+    const start = this.dragStart
+    this.dragStart = null
+    if (!start || start.length === 0) return
+    const moves = start.map(({ node, before }) => ({ node, before, after: node.transform.worldMatrix.clone() }))
+    if (moves.every(({ before, after }) => before.equals(after))) return
+    const place = (which: "before" | "after") => () => {
+      for (const move of moves) move.node.transform.setWorldMatrix(move[which])
     }
+    this.record(this.gizmo === "rotate" ? "rotate" : "move", place("before"), place("after"))
+    this.publishSelection()
   }
 
   private idOf(node: Node3D): number {
@@ -331,6 +397,12 @@ export class EditorSession {
       case "run":
         await this.run()
         break
+      case "undo":
+        this.undo()
+        break
+      case "redo":
+        this.redo()
+        break
       case "setView":
         this.setView(command.view)
         break
@@ -415,7 +487,7 @@ export class EditorSession {
   private async save(folder: ProjectFolder): Promise<void> {
     if (!this._root) return
     const written = await this.recipe.save(folder, this._root, this.engine)
-    this.dirty = false
+    this.history.markSaved()
     this.publishProject(`saved ${written.join(", ")}`)
   }
 
@@ -501,10 +573,7 @@ export class EditorSession {
 
   private attachGizmo(node: Node3D): void {
     if (!this.camera.isActive) return
-    const changed = () => {
-      this.touch()
-      this.publishSelection()
-    }
+    const changed = () => this.publishSelection()
     if (this.selection.size > 1) this.camera.attachTarget(groupTarget(this.selectionRoots(), node), changed)
     else this.camera.attach(node, changed)
   }
@@ -524,10 +593,16 @@ export class EditorSession {
   private writeTransform(position: { x: number; y: number; z: number }, rotation: { x: number; y: number; z: number }): void {
     const node = this.selected
     if (!node) return
-    node.transform.position.set(position.x, position.y, position.z)
-    node.transform.rotation.setFromEuler(new THREE.Euler(THREE.MathUtils.degToRad(rotation.x), THREE.MathUtils.degToRad(rotation.y), THREE.MathUtils.degToRad(rotation.z), "YXZ"))
+    const before = { position: node.transform.position.clone(), rotation: node.transform.rotation.clone() }
+    const after = { position: new THREE.Vector3(position.x, position.y, position.z), rotation: new THREE.Quaternion().setFromEuler(new THREE.Euler(THREE.MathUtils.degToRad(rotation.x), THREE.MathUtils.degToRad(rotation.y), THREE.MathUtils.degToRad(rotation.z), "YXZ")) }
+    if (before.position.equals(after.position) && before.rotation.equals(after.rotation)) return
+    const apply = (state: typeof before) => () => {
+      node.transform.position.copy(state.position)
+      node.transform.rotation.copy(state.rotation)
+    }
+    apply(after)()
+    this.record("transform", apply(before), apply(after), `transform:${this.idOf(node)}`)
     this.camera.syncFromTarget()
-    this.touch()
     this.publishSelection()
   }
 
@@ -535,12 +610,13 @@ export class EditorSession {
     const node = this.selected
     const clean = name.trim()
     if (!node || !clean || clean === node.name) return
+    const before = node.name
     if (!node.rename(clean)) {
       this.publishProject(`"${clean}" already exists under ${node.parent?.name}`)
       this.publishSelection()
       return
     }
-    this.touch()
+    this.record("rename", () => node.rename(before), () => node.rename(clean))
     this.publishTree()
     this.publishSelection()
   }
@@ -560,8 +636,12 @@ export class EditorSession {
     else if (property.type === "tags") next = [...new Set(toStrings(value).map((tag) => tag.trim()).filter(Boolean))]
     else if (property.type === "layers") next = [...new Set(toStrings(value).map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n < 32))].sort((a, b) => a - b)
     else next = String(value)
-    writeExposed(node, property, next)
-    this.touch()
+    const before = readExposed(node, property)
+    if (JSON.stringify(before) === JSON.stringify(next)) return
+    const after = Array.isArray(next) ? [...next] : next
+    const previous = Array.isArray(before) ? [...before] : before
+    writeExposed(node, property, after)
+    this.record(property.label ?? key, () => writeExposed(node, property, previous), () => writeExposed(node, property, after), `property:${this.idOf(node)}:${key}`)
     this.publishSelection()
     if (key === "active" || key === "visible") this.publishTree()
   }
@@ -576,7 +656,8 @@ export class EditorSession {
     node.transform.setWorldPosition(this.camera.isActive ? this.camera.orbitTarget : new THREE.Vector3(0, 1, 0))
     if (this.visualised) node.visualised = true
     this.collapsed.delete(parent)
-    this.touch()
+    const index = parent.indexOf(node)
+    this.record(`add ${definition.label.toLowerCase()}`, () => node.remove(), () => parent.insertNode(node, index, node.name))
     this.select(node)
   }
 
@@ -584,17 +665,15 @@ export class EditorSession {
     const nodes = this.selectionRoots()
     if (nodes.length === 0) return
     this.camera.detach()
-    for (const node of nodes) {
-      node.walk((n) => {
-        if (!(n instanceof Node3D)) return
-        const id = this.ids.get(n)
-        if (id !== undefined) this.nodesById.delete(id)
-        this.ids.delete(n)
-        this.collapsed.delete(n)
-      })
-      node.dispose()
+    const places = nodes.map((node) => ({ node, parent: node.parent as Node3D, index: (node.parent as Node3D).indexOf(node) })).sort((a, b) => a.index - b.index)
+    const remove = () => {
+      for (const { node } of places) node.remove()
     }
-    this.touch()
+    const restore = () => {
+      for (const { node, parent, index } of places) parent.insertNode(node, index, node.name)
+    }
+    remove()
+    this.record(places.length > 1 ? `delete ${places.length} nodes` : `delete ${places[0].node.name}`, restore, remove)
     this.select(null)
   }
 
@@ -615,16 +694,26 @@ export class EditorSession {
     for (const node of nodes) {
       if (node.parent !== newParent && newParent.children.has(node.name)) return this.publishProject(`"${node.name}" already exists under ${newParent.name}`)
     }
-    const worlds = new Map(nodes.map((node) => [node, node.transform.worldMatrix.clone()]))
-    for (const node of nodes) node.remove()
-    let index = place === "inside" ? newParent.children.size : newParent.indexOf(target) + (place === "after" ? 1 : 0)
-    for (const node of nodes) {
-      newParent.insertNode(node, index++, node.name)
-      node.transform.setWorldMatrix(worlds.get(node)!)
+    const before = nodes.map((node) => ({ node, parent: node.parent as Node3D, index: (node.parent as Node3D).indexOf(node), world: node.transform.worldMatrix.clone() }))
+    const placeAll = () => {
+      for (const node of nodes) node.remove()
+      let index = place === "inside" ? newParent.children.size : newParent.indexOf(target) + (place === "after" ? 1 : 0)
+      for (const { node, world } of before) {
+        newParent.insertNode(node, index++, node.name)
+        node.transform.setWorldMatrix(world)
+      }
     }
+    const putBack = () => {
+      for (const { node } of before) node.remove()
+      for (const { node, parent, index, world } of [...before].sort((a, b) => a.index - b.index)) {
+        parent.insertNode(node, index, node.name)
+        node.transform.setWorldMatrix(world)
+      }
+    }
+    placeAll()
+    this.record(nodes.length > 1 ? `move ${nodes.length} nodes` : `move ${nodes[0].name}`, putBack, placeAll)
     this.collapsed.delete(newParent)
     this.camera.syncFromTarget()
-    this.touch()
     this.publishTree()
     this.publishSelection()
   }

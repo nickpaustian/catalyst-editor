@@ -19,6 +19,16 @@
       </div>
     </div>
 
+    <div class="menu" $class="{ open: state.open === 'edit' }">
+      <button class="menu-title" @click="toggle('edit')" @pointerenter="hover('edit')">Edit</button>
+      <div class="menu-items" $if="state.open === 'edit'">
+        <button $disabled="!shared['editor:history'].canUndo" @click="run('undo')">Undo{{ shared['editor:history'].undoLabel ? ' ' + shared['editor:history'].undoLabel : '' }} <kbd>⌘Z</kbd></button>
+        <button $disabled="!shared['editor:history'].canRedo" @click="run('redo')">Redo{{ shared['editor:history'].redoLabel ? ' ' + shared['editor:history'].redoLabel : '' }} <kbd>⌘⇧Z</kbd></button>
+        <hr />
+        <button @click="run('delete')">Delete selected <kbd>⌦</kbd></button>
+      </div>
+    </div>
+
     <div class="menu" $class="{ open: state.open === 'view' }">
       <button class="menu-title" @click="toggle('view')" @pointerenter="hover('view')">View</button>
       <div class="menu-items" $if="state.open === 'view'">
@@ -60,6 +70,7 @@ import { preferences } from '../preferences.ts'
 
 shared('editor:project', { name: null, recipe: '', status: '', supported: false, dirty: false })
 shared('editor:view', { view: 'orbit', visualised: true, gizmo: 'translate', physics: false })
+shared('editor:history', { canUndo: false, canRedo: false, undoLabel: null, redoLabel: null })
 
 const state = reactive({ open: null as string | null })
 
@@ -190,6 +201,12 @@ function resetLayout() {
 
 .menu-items button:hover {
   background: #333;
+}
+
+.menu-items button:disabled {
+  color: #666;
+  cursor: default;
+  background: none;
 }
 
 .menu-items button.on::before {

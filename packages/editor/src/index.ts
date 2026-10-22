@@ -11,3 +11,4 @@ export { PaneLayout, type PaneContent, type PaneLayoutOptions } from "./panes/Pa
 export { pane, split, isValidLayout, type LayoutNode, type PaneKind } from "./panes/layout"
 export { preferences, Preference } from "./preferences"
 export { sendCommand } from "./commands"
+export { History, type HistoryEntry } from "./History"
