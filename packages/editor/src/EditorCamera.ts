@@ -154,7 +154,6 @@ export class EditorCamera implements ViewPose {
     engine.camera.target = this
     const canvas = this.canvas
     canvas.addEventListener("pointerdown", this.onPointerDown, true)
-    canvas.addEventListener("pointerup", this.onPointerUp, true)
     canvas.addEventListener("pointermove", this.onHover)
     canvas.addEventListener("wheel", this.onWheel, { passive: false })
     canvas.addEventListener("contextmenu", this.onContextMenu)
@@ -162,8 +161,8 @@ export class EditorCamera implements ViewPose {
     this.unsubscribe = () => {
       unsubscribeRender()
       canvas.removeEventListener("pointerdown", this.onPointerDown, true)
-      canvas.removeEventListener("pointerup", this.onPointerUp, true)
       canvas.removeEventListener("pointermove", this.onHover)
+      this.unlistenPress()
       canvas.removeEventListener("wheel", this.onWheel)
       canvas.removeEventListener("contextmenu", this.onContextMenu)
     }
@@ -254,19 +253,48 @@ export class EditorCamera implements ViewPose {
     return this.engine.camera.rayAt(u, v, this.ray)
   }
 
+  /**
+   * While a button is down the move and the release are heard on the window,
+   * whichever element holds the pointer capture (the engine's input captures
+   * on the canvas too), and a cancelled pointer or a lost window ends the press.
+   */
+  private listenPress(): void {
+    window.addEventListener("pointermove", this.onPointerMove)
+    window.addEventListener("pointerup", this.onPointerUp, true)
+    window.addEventListener("pointercancel", this.onPointerUp, true)
+    window.addEventListener("blur", this.onPressLost)
+  }
+
+  private unlistenPress(): void {
+    window.removeEventListener("pointermove", this.onPointerMove)
+    window.removeEventListener("pointerup", this.onPointerUp, true)
+    window.removeEventListener("pointercancel", this.onPointerUp, true)
+    window.removeEventListener("blur", this.onPressLost)
+  }
+
+  private readonly onPressLost = (): void => {
+    const dragging = this.drag !== null
+    this.press = null
+    this.marquee?.box?.remove()
+    this.marquee = null
+    this.orbiting = null
+    this.unlistenPress()
+    if (dragging) this.endDrag()
+  }
+
   private readonly onPointerDown = (event: PointerEvent): void => {
     const handle = event.button === 0 ? this.handleAt(event.clientX, event.clientY) : null
     if (handle) {
       event.stopImmediatePropagation()
       this.canvas.setPointerCapture(event.pointerId)
-      this.canvas.addEventListener("pointermove", this.onPointerMove)
+      this.listenPress()
       this.beginDrag(handle, event.clientX, event.clientY)
       return
     }
     const free = event.button === 0
     this.press = free ? { x: event.clientX, y: event.clientY, at: performance.now(), button: event.button } : null
     this.canvas.setPointerCapture(event.pointerId)
-    this.canvas.addEventListener("pointermove", this.onPointerMove)
+    this.listenPress()
     if (free && event.shiftKey) {
       this.marquee = { x: event.clientX, y: event.clientY, add: event.metaKey || event.ctrlKey, box: null }
       return
@@ -306,7 +334,7 @@ export class EditorCamera implements ViewPose {
     this.press = null
     this.marquee = null
     this.orbiting = null
-    this.canvas.removeEventListener("pointermove", this.onPointerMove)
+    this.unlistenPress()
     if (this.canvas.hasPointerCapture(event.pointerId)) this.canvas.releasePointerCapture(event.pointerId)
     if (dragging) {
       this.endDrag()
