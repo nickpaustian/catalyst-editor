@@ -39,7 +39,33 @@ shared('editor:tree', [])
 const addDialog = shared('editor:addDialog', false)
 
 const DRAG_THRESHOLD = 4
-let drag: { ids: number[]; startX: number; startY: number; list: HTMLElement; active: boolean } | null = null
+let drag: { ids: number[]; startX: number; startY: number; list: HTMLElement; active: boolean; label: string; ghost: HTMLElement | null } | null = null
+const PLACE_WORDS: Record<Place, string> = { before: 'before', after: 'after', inside: 'into' }
+
+// A tag that follows the pointer: what is being dragged, and where it would land
+function showGhost(x: number, y: number, target: { name: string; place: Place } | null) {
+  if (!drag) return
+  if (!drag.ghost) {
+    drag.ghost = document.createElement('div')
+    drag.ghost.className = 'tree-drag-ghost'
+    document.body.appendChild(drag.ghost)
+  }
+  drag.ghost.textContent = ''
+  const what = document.createElement('span')
+  what.className = 'what'
+  what.textContent = drag.label
+  drag.ghost.appendChild(what)
+  const where = document.createElement('span')
+  where.className = 'where'
+  where.textContent = target ? `${PLACE_WORDS[target.place]} ${target.name}` : 'drop on a row'
+  drag.ghost.appendChild(where)
+  drag.ghost.style.transform = `translate(${x + 14}px, ${y + 12}px)`
+}
+
+function hideGhost() {
+  drag?.ghost?.remove()
+  if (drag) drag.ghost = null
+}
 let dropTarget: { id: number; place: Place; element: HTMLElement } | null = null
 let justDragged = false
 
@@ -94,7 +120,8 @@ function press(event: PointerEvent, row: Row) {
   if (row.isRoot || (event.target as HTMLElement).closest('.twisty')) return
   const list = (event.currentTarget as HTMLElement).closest<HTMLElement>('.rows')
   if (!list) return
-  drag = { ids: draggedIds(row), startX: event.clientX, startY: event.clientY, list, active: false }
+  const ids = draggedIds(row)
+  drag = { ids, startX: event.clientX, startY: event.clientY, list, active: false, label: ids.length > 1 ? `${ids.length} nodes` : row.name, ghost: null }
   document.addEventListener('pointermove', move)
   document.addEventListener('pointerup', release)
 }
@@ -109,9 +136,11 @@ function move(event: PointerEvent) {
   const hit = rowAt(drag.list, event.clientX, event.clientY)
   if (!hit || drag.ids.includes(hit.row.id) || hit.row.isRoot && placeFor(hit.element, event.clientY) !== 'inside') {
     clearDrop()
+    showGhost(event.clientX, event.clientY, null)
     return
   }
   const place = placeFor(hit.element, event.clientY)
+  showGhost(event.clientX, event.clientY, { name: hit.row.name, place })
   if (dropTarget?.id === hit.row.id && dropTarget.place === place) return
   clearDrop()
   hit.element.classList.add(`drop-${place}`)
@@ -122,6 +151,7 @@ function release() {
   document.removeEventListener('pointermove', move)
   document.removeEventListener('pointerup', release)
   document.body.classList.remove('tree-dragging')
+  hideGhost()
   const moved = drag?.active ? dropTarget : null
   if (drag?.active) justDragged = true
   if (moved && drag) sendCommand({ type: 'move', ids: drag.ids, targetId: moved.id, place: moved.place })
@@ -270,5 +300,36 @@ function release() {
 
 .row.drop-inside {
   background: rgba(106, 143, 216, 0.35);
+}
+
+:global(.tree-drag-ghost) {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 8px;
+  background: #1e2a44;
+  border: 1px solid #6a8fd8;
+  border-radius: 4px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  color: #eee;
+  font: 12px/1.3 "IBM Plex Sans", system-ui, sans-serif;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+:global(.tree-drag-ghost .what) {
+  font-weight: 600;
+}
+
+:global(.tree-drag-ghost .where) {
+  color: #aab;
+  font-size: 11px;
+}
+
+:global(body.tree-dragging) {
+  cursor: grabbing;
 }
 </style>
