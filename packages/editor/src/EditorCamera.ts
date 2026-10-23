@@ -8,6 +8,21 @@ const CLICK_MS = 400
 
 export type PickMode = "replace" | "toggle"
 
+/** A rectangle on the page, in client coordinates. */
+export interface ScreenRect {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+const screenRect = (from: { x: number; y: number }, to: { clientX: number; clientY: number }): ScreenRect => ({
+  left: Math.min(from.x, to.clientX),
+  top: Math.min(from.y, to.clientY),
+  right: Math.max(from.x, to.clientX),
+  bottom: Math.max(from.y, to.clientY),
+})
+
 export type GizmoMode = "translate" | "rotate"
 
 /** Anything the gizmo can drive: a node, a control point, a marker. */
@@ -61,14 +76,49 @@ export class EditorCamera {
   onDrag: ((dragging: boolean) => void) | null = null
   /** A click on the canvas that was not a drag or a gizmo handle: where, and whether a modifier asked to add. */
   onClick: ((x: number, y: number, mode: PickMode) => void) | null = null
+  /** A shift-drag on the canvas finished: the rectangle it covered, in client coordinates, and whether cmd or ctrl asked to add to the selection. */
+  onMarquee: ((rect: ScreenRect, add: boolean) => void) | null = null
   private readonly raycaster = new THREE.Raycaster()
   private press: { x: number; y: number; at: number; button: number } | null = null
+  private marquee: { x: number; y: number; add: boolean; box: HTMLDivElement | null } | null = null
   private readonly onPointerDown = (event: PointerEvent): void => {
-    this.press = event.button === 0 && !this.gizmo.dragging && !this.gizmo.axis ? { x: event.clientX, y: event.clientY, at: performance.now(), button: event.button } : null
+    const free = event.button === 0 && !this.gizmo.dragging && !this.gizmo.axis
+    this.press = free ? { x: event.clientX, y: event.clientY, at: performance.now(), button: event.button } : null
+    if (!free || !event.shiftKey) return
+    this.marquee = { x: event.clientX, y: event.clientY, add: event.metaKey || event.ctrlKey, box: null }
+    event.stopImmediatePropagation()
+    const canvas = event.currentTarget as HTMLElement
+    canvas.setPointerCapture(event.pointerId)
+    canvas.addEventListener("pointermove", this.onPointerMove)
+  }
+  private readonly onPointerMove = (event: PointerEvent): void => {
+    const marquee = this.marquee
+    if (!marquee) return
+    if (!marquee.box) {
+      if (Math.hypot(event.clientX - marquee.x, event.clientY - marquee.y) <= CLICK_DISTANCE) return
+      marquee.box = document.createElement("div")
+      marquee.box.className = "marquee"
+      this.engine.renderer?.domElement.parentElement?.appendChild(marquee.box)
+    }
+    const rect = this.engine.renderer!.domElement.getBoundingClientRect()
+    const area = screenRect(marquee, event)
+    Object.assign(marquee.box.style, { left: `${area.left - rect.left}px`, top: `${area.top - rect.top}px`, width: `${area.right - area.left}px`, height: `${area.bottom - area.top}px` })
   }
   private readonly onPointerUp = (event: PointerEvent): void => {
     const press = this.press
+    const marquee = this.marquee
     this.press = null
+    this.marquee = null
+    if (marquee) {
+      const canvas = event.currentTarget as HTMLElement
+      canvas.removeEventListener("pointermove", this.onPointerMove)
+      if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
+      if (marquee.box) {
+        marquee.box.remove()
+        this.onMarquee?.(screenRect(marquee, event), marquee.add)
+        return
+      }
+    }
     if (!press || event.button !== 0 || this.gizmo.dragging) return
     if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > CLICK_DISTANCE || performance.now() - press.at > CLICK_MS) return
     this.onClick?.(event.clientX, event.clientY, event.metaKey || event.ctrlKey || event.shiftKey ? "toggle" : "replace")
@@ -114,8 +164,8 @@ export class EditorCamera {
     this.view.updateProjectionMatrix()
     this.orbit.enabled = true
     engine.scene.add(this.gizmo.getHelper())
-    engine.renderer!.domElement.addEventListener("pointerdown", this.onPointerDown)
-    engine.renderer!.domElement.addEventListener("pointerup", this.onPointerUp)
+    engine.renderer!.domElement.addEventListener("pointerdown", this.onPointerDown, true)
+    engine.renderer!.domElement.addEventListener("pointerup", this.onPointerUp, true)
     const unsubscribeRender = engine.signals.onUpdate.subscribe(() => this.orbit.update())
     const unsubscribeResize = engine.signals.onResize.subscribe(({ width, height }) => {
       this.view.aspect = width / height
@@ -134,8 +184,8 @@ export class EditorCamera {
     this.orbit.enabled = false
     this.detach()
     this.engine.scene.remove(this.gizmo.getHelper())
-    this.engine.renderer?.domElement.removeEventListener("pointerdown", this.onPointerDown)
-    this.engine.renderer?.domElement.removeEventListener("pointerup", this.onPointerUp)
+    this.engine.renderer?.domElement.removeEventListener("pointerdown", this.onPointerDown, true)
+    this.engine.renderer?.domElement.removeEventListener("pointerup", this.onPointerUp, true)
     this.unsubscribe?.()
     this.unsubscribe = null
     if (this.previousTarget) this.engine.camera.target = this.previousTarget
@@ -168,6 +218,24 @@ export class EditorCamera {
       if (node && node !== root) return node
     }
     return null
+  }
+
+  /** The nodes under `root` whose world position lands inside a rectangle on the canvas, in front of the camera; a node's internals count for their owner and are not listed. */
+  nodesIn(rect: ScreenRect, root: Node3D): Node3D[] {
+    const canvas = this.engine.renderer?.domElement
+    if (!canvas) return []
+    const bounds = canvas.getBoundingClientRect()
+    const inside: Node3D[] = []
+    const point = new THREE.Vector3()
+    root.walk((node) => {
+      if (!(node instanceof Node3DClass) || node === root || node.internal) return
+      point.copy(node.transform.getWorldPosition()).project(this.view)
+      if (point.z < -1 || point.z > 1) return
+      const x = bounds.left + ((point.x + 1) / 2) * bounds.width
+      const y = bounds.top + ((1 - point.y) / 2) * bounds.height
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) inside.push(node)
+    })
+    return inside
   }
 
   focus(node: Node3D, distance = 2.5): void {

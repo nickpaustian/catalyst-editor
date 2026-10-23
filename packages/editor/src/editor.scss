@@ -31,6 +31,13 @@ html.shell-macos #menu-bar .bar {
   height: 100%;
 }
 
+#app .marquee {
+  position: absolute;
+  pointer-events: none;
+  border: 1px solid #6a8fd8;
+  background: rgba(106, 143, 216, 0.15);
+}
+
 .poi {
   position: absolute;
   transform: translate(-50%, -50%) scale(var(--poi-scale, 1));

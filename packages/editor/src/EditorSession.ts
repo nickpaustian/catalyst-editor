@@ -276,6 +276,9 @@ export class EditorSession {
       if (node) this.select(node, mode)
       else if (mode === "replace") this.select(null)
     }
+    this.camera.onMarquee = (rect, add) => {
+      if (this._root) this.selectMany(this.camera.nodesIn(rect, this._root), add)
+    }
     this.unsubscribeCommands = this.app.shared("editor:command").subscribe((command) => {
       if (command) void this.handle(command as EditorCommand)
     })
@@ -1212,6 +1215,19 @@ export class EditorSession {
     }
     this.selected = node
     if (node && node !== root) this.attachGizmo(node)
+    else this.camera.detach()
+    this.publishTree()
+    this.publishSelection()
+  }
+
+  /** A marquee's catch replaces the selection, or joins it when asked; the last one caught becomes the active node. */
+  private selectMany(nodes: Node3D[], add: boolean): void {
+    if (!add) this.selection.clear()
+    for (const node of nodes) if (node !== this._root) this.selection.add(node)
+    const node = nodes[nodes.length - 1] ?? [...this.selection].pop() ?? null
+    this.selected = node
+    this.anchor = node
+    if (node) this.attachGizmo(node)
     else this.camera.detach()
     this.publishTree()
     this.publishSelection()

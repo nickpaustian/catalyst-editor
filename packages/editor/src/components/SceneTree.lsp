@@ -6,8 +6,9 @@
   </div>
   <p class="hint">
     New nodes go under the selected node. Shift-click selects a range, ctrl- or cmd-click adds
-    or removes one. Drag a row onto another: its top edge puts it before, its bottom edge after,
-    the middle makes it a child. World position is kept.
+    or removes one; in the viewport, shift-drag a rectangle to select what it covers (with cmd
+    or ctrl held, to add). Drag a row onto another: its top edge puts it before, its bottom edge
+    after, the middle makes it a child. World position is kept.
   </p>
   <div class="rows" @contextmenu="contextEmpty($event)">
     <div
