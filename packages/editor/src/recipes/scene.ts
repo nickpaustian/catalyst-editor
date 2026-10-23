@@ -2,7 +2,8 @@ import { Camera, Colour, Light, Model, Node3D, type Catalyst, type NodeJSON } fr
 import { pickFile } from "../ProjectFolder"
 import { Interactable } from "@nickpaustian/catalyst/interaction"
 import { BoxCollider, CapsuleCollider, SphereCollider } from "@nickpaustian/catalyst/physics"
-import { Box, Capsule, FirstPersonController, FocalPoint, FocalPointTrigger, PointOfInterest, Sphere } from "@nickpaustian/catalyst/prefabs"
+import { Box, Capsule, FirstPersonController, FocalPoint, FocalPointTrigger, OrbitCamera, PointOfInterest, Sphere } from "@nickpaustian/catalyst/prefabs"
+import type { ToneMapping } from "@nickpaustian/obelisk"
 import { Physics } from "@nickpaustian/catalyst/physics"
 import { Vector3 } from "@nickpaustian/catalyst"
 import type { Recipe } from "../recipe"
@@ -20,9 +21,16 @@ export interface SceneEnvironment {
   ambientIntensity: number
   /** A white light from the camera; 0 for none. */
   headlight: number
+  /** An equirectangular .hdr in the project that lights the scene, or null for none. */
+  environment: string | null
+  environmentIntensity: number
+  toneMapping: ToneMapping
+  /** In stops. */
+  exposure: number
 }
 
-const DEFAULT_ENVIRONMENT: SceneEnvironment = { floor: 0, gravity: 9.8, drag: 0.1, ambient: 0xffffff, ambientIntensity: 0.35, headlight: 0.4 }
+const TONE_MAPPINGS: ToneMapping[] = ["none", "neutral", "aces"]
+const DEFAULT_ENVIRONMENT: SceneEnvironment = { floor: 0, gravity: 9.8, drag: 0.1, ambient: 0xffffff, ambientIntensity: 0.35, headlight: 0.4, environment: null, environmentIntensity: 1, toneMapping: "none", exposure: 0 }
 
 const hexOf = (c: Colour): number => (Math.round(c.x) << 16) | (Math.round(c.y) << 8) | Math.round(c.z)
 const colourOf = (hex: number): Colour => new Colour((hex >> 16) & 255, (hex >> 8) & 255, hex & 255)
@@ -31,7 +39,18 @@ const readEnvironment = (engine: Catalyst): SceneEnvironment => {
   const world = engine.find(Physics)?.world
   const lighting = engine.lighting
   const physics = world ? { floor: world.floor, gravity: world.gravity, drag: world.drag } : DEFAULT_ENVIRONMENT
-  return { floor: physics.floor, gravity: physics.gravity, drag: physics.drag, ambient: hexOf(lighting.ambient), ambientIntensity: lighting.ambientIntensity, headlight: lighting.headlight }
+  return {
+    floor: physics.floor,
+    gravity: physics.gravity,
+    drag: physics.drag,
+    ambient: hexOf(lighting.ambient),
+    ambientIntensity: lighting.ambientIntensity,
+    headlight: lighting.headlight,
+    environment: engine.environment?.url ?? null,
+    environmentIntensity: engine.environment?.intensity ?? 1,
+    toneMapping: engine.toneMapping,
+    exposure: engine.exposure,
+  }
 }
 const applyEnvironment = (engine: Catalyst, environment: Partial<SceneEnvironment> | undefined): void => {
   const next = { ...DEFAULT_ENVIRONMENT, ...environment }
@@ -42,6 +61,10 @@ const applyEnvironment = (engine: Catalyst, environment: Partial<SceneEnvironmen
     world.drag = next.drag
   }
   engine.lighting = { ...engine.lighting, ambient: colourOf(next.ambient), ambientIntensity: next.ambientIntensity, headlight: next.headlight }
+  const hdr = next.environment ? { url: next.environment, intensity: next.environmentIntensity } : null
+  if (JSON.stringify(hdr) !== JSON.stringify(engine.environment)) engine.environment = hdr
+  engine.toneMapping = TONE_MAPPINGS.includes(next.toneMapping) ? next.toneMapping : "none"
+  engine.exposure = next.exposure
 }
 
 /** The scene file with the environment beside the nodes. */
@@ -68,6 +91,13 @@ export const sceneRecipe: Recipe = {
       },
       make: (o) => new Model({ ...o, url: String(o.url ?? "") }),
     },
+    {
+      kind: "OrbitCamera",
+      label: "Orbit camera",
+      cls: OrbitCamera,
+      description: "A turntable about this node: a run starts here, with the pointer turning, panning and zooming around the subject instead of walking. Set its radius to the size of what sits at the node.",
+      make: (o) => new OrbitCamera({ ...o, radius: 1 }),
+    },
     { kind: "Camera", label: "Camera", cls: Camera, description: "A perspective camera with a real lens: a focal length over a sensor.", make: (o) => new Camera(o) },
     { kind: "Light", label: "Light", cls: Light, description: "A directional light shining along the node's -z, like the sun: only its rotation matters. With none in the scene the engine's default sun is used.", make: (o) => new Light(o) },
     { kind: "BoxCollider", label: "Box collider", cls: BoxCollider, description: "An invisible box the physics world collides with, or a trigger volume.", make: (o) => new BoxCollider({ ...o, width: 1, height: 1, depth: 1 }) },
@@ -88,10 +118,15 @@ export const sceneRecipe: Recipe = {
       { key: "ambient", label: "Ambient", type: "colour" },
       { key: "ambientIntensity", label: "Ambient strength", type: "number", min: 0, step: 0.05 },
       { key: "headlight", label: "Headlight", type: "number", min: 0, step: 0.05 },
+      { key: "environment", label: "Environment", type: "file", accept: ".hdr" },
+      { key: "environmentIntensity", label: "Environment strength", type: "number", min: 0, step: 0.05 },
+      { key: "toneMapping", label: "Tone map", type: "select", options: TONE_MAPPINGS },
+      { key: "exposure", label: "Exposure", type: "number", step: 0.1 },
     ],
     read: (engine) => {
       const environment = readEnvironment(engine)
-      return { floored: environment.floor !== null, floor: environment.floor ?? 0, gravity: environment.gravity, drag: environment.drag, ambient: environment.ambient, ambientIntensity: environment.ambientIntensity, headlight: environment.headlight }
+      const { floor, ...rest } = environment
+      return { floored: floor !== null, floor: floor ?? 0, ...rest }
     },
     write: (engine, _root, key, value) => {
       const current = readEnvironment(engine)
@@ -124,8 +159,33 @@ export const sceneRecipe: Recipe = {
     return [SCENE_FILE]
   },
   download: (root, engine) => ({ name: SCENE_FILE, text: JSON.stringify(toFile(engine, root), null, 2) + "\n" }),
+  hint: (root) => {
+    let orbit = false
+    root.walk((node) => {
+      if (node instanceof OrbitCamera) orbit = true
+    })
+    return orbit
+      ? "drag turns · right-drag, shift-drag or two fingers pan · wheel or pinch zooms · F frames the subject · run again from the editor to reload"
+      : "click to look around · WASD move · shift sprint · space jump · F interacts · run again from the editor to reload"
+  },
   run: async ({ engine, root, scene }) => {
     applyEnvironment(engine, (scene as { environment?: Partial<SceneEnvironment> }).environment)
+    const physics = engine.find(Physics)
+    let orbit: OrbitCamera | null = null
+    root.walk((node) => {
+      if (!orbit && node instanceof OrbitCamera) orbit = node
+    })
+    // With an orbit camera the run is a viewer: the view follows it and nothing walks.
+    if (orbit) {
+      const camera = orbit as OrbitCamera
+      camera.enabled = true
+      engine.camera.target = camera.camera
+      if (physics) physics.paused = false
+      return () => {
+        camera.enabled = false
+        if (physics) physics.paused = true
+      }
+    }
     let start: Node3D | null = null
     root.walk((node) => {
       if (!start && node instanceof PlayerStart) start = node
@@ -138,7 +198,6 @@ export const sceneRecipe: Recipe = {
     player.transform.position.set(at.x, at.y + 0.85, at.z)
     if (start) player.transform.rotation.copy((start as Node3D).getWorldRotation())
     engine.camera.target = player.camera
-    const physics = engine.find(Physics)
     if (physics) physics.paused = false
     return () => {
       player.dispose()

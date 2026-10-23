@@ -67,6 +67,11 @@
                 <input class="swatch" type="color" $aria-label="field.label" $value="field.hex" @input="applyColour($event, field)" />
                 <span class="mono">{{ field.hex }}</span>
               </label>
+              <select $else-if="field.type === 'select'" class="well" $aria-label="field.label" $disabled="field.readonly" @change="applySelect($event, field)">
+                <template $for="choice in field.options" $key="choice">
+                  <option $value="choice" $selected="choice === field.value">{{ choice }}</option>
+                </template>
+              </select>
               <input $else class="well" type="text" $aria-label="field.label" $model="field.value" $disabled="field.readonly" @change="applyField(field)" />
             </div>
           </template>
@@ -138,7 +143,7 @@ const scriptFiles = shared('editor:scripts', SCRIPTS_DEFAULT)
 
 // Local copies of the fields, so typing doesn't fight the scene publishing
 // the same values back on every gizmo move
-interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number; readonly?: boolean; hex?: string; ranged?: boolean }
+interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number; options?: string[]; readonly?: boolean; hex?: string; ranged?: boolean }
 interface ScriptEntry { index: number; url: string; name: string; built: boolean; fields: Field[] }
 
 const state = reactive({
@@ -218,6 +223,11 @@ function send(type: string) {
 // so a rename has to be a deliberate change
 function rename() {
   sendCommand({ type: 'rename', name: state.name })
+}
+
+function applySelect(event: Event, field: Field) {
+  field.value = (event.target as HTMLSelectElement).value
+  applyField(field)
 }
 
 function applyField(field: Field) {

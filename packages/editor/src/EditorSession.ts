@@ -6,7 +6,7 @@ import { EditorCamera, groupTarget, type GizmoMode } from "./EditorCamera"
 import { EditorInput } from "./EditorInput"
 import { History } from "./History"
 import { preferences, type SnapSettings } from "./preferences"
-import { browserFolders, folderLoader, type FolderSource, type ProjectFolder, type ProjectStorage, type RecentProject } from "./ProjectFolder"
+import { browserFolders, folderLoader, pickFile, type FolderSource, type ProjectFolder, type ProjectStorage, type RecentProject } from "./ProjectFolder"
 import { windowRunnerLink, type RunnerLink } from "./RunnerLink"
 import { SCRIPTS_DIR, ScriptCompiler, scriptTemplate } from "./ScriptCompiler"
 import { LEGACY_PROJECT_FILE, PROJECT_EXTENSION, createProject, readProjectSettings, writeProjectSettings, type NewProject, type ProjectSettings } from "./project"
@@ -153,7 +153,7 @@ export type EditorCommand =
   | { type: "setTransform"; position: { x: number; y: number; z: number }; rotation: { x: number; y: number; z: number } }
   | { type: "setProperty"; key: string; value: unknown }
   | { type: "rename"; name: string }
-  | { type: "setSetting"; key: string; value: unknown }
+  | { type: "setSetting"; key: string; value: unknown; pick?: boolean }
 
 const round = (n: number, places = 4) => Number(n.toFixed(places))
 const toStrings = (value: unknown): string[] => (Array.isArray(value) ? value.map(String) : String(value ?? "").split(","))
@@ -774,7 +774,8 @@ export class EditorSession {
         this.renameSelected(command.name)
         break
       case "setSetting":
-        this.writeSetting(command.key, command.value)
+        if (command.pick) void this.pickSetting(command.key)
+        else this.writeSetting(command.key, command.value)
         break
     }
   }
@@ -1339,6 +1340,15 @@ export class EditorSession {
     if (key === "active" || key === "visible") this.publishTree()
   }
 
+  /** A `file` setting: choose a file, import it into the project's assets and point the setting at it. */
+  private async pickSetting(key: string): Promise<void> {
+    const field = this.recipe.settings?.fields.find((f) => f.key === key)
+    if (!field || field.type !== "file") return
+    const file = await pickFile(field.accept ?? "")
+    if (!file || !this.folder) return
+    this.writeSetting(key, await this.folder.importFile(file))
+  }
+
   private writeSetting(key: string, value: unknown): void {
     const settings = this.recipe.settings
     const root = this._root
@@ -1375,6 +1385,8 @@ export class EditorSession {
       return Number.isFinite(n) ? n : undefined
     }
     if (property.type === "tags") return [...new Set(toStrings(value).map((tag) => tag.trim()).filter(Boolean))]
+    if (property.type === "select") return typeof value === "string" && (property.options ?? []).includes(value) ? value : undefined
+    if (property.type === "file") return value === null || value === "" ? null : String(value)
     if (property.type === "layers") return [...new Set(toStrings(value).map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n < 32))].sort((a, b) => a - b)
     return String(value)
   }

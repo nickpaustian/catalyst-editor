@@ -15,6 +15,16 @@
             <input class="swatch" type="color" $aria-label="field.label" $value="field.hex" @input="applyColour($event, field)" />
             <span class="mono">{{ field.hex }}</span>
           </label>
+          <select $else-if="field.type === 'select'" class="well" $aria-label="field.label" @change="applySelect($event, field)">
+            <template $for="choice in field.options" $key="choice">
+              <option $value="choice" $selected="choice === field.value">{{ choice }}</option>
+            </template>
+          </select>
+          <div class="well file" $else-if="field.type === 'file'">
+            <span class="name" $title="field.value || ''">{{ field.value || 'none' }}</span>
+            <button class="small" type="button" $if="field.value" aria-label="Clear" @click="clearFile(field)">×</button>
+            <button class="small" type="button" @click="pickFile(field)">Choose…</button>
+          </div>
           <input $else class="well" type="text" $aria-label="field.label" $model="field.value" @change="apply(field)" />
         </div>
       </template>
@@ -28,7 +38,7 @@ import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { scrub } from '../scrub.ts'
 
-interface Field { key: string; label: string; type: string; value: unknown; min?: number; max?: number; step?: number; ranged?: boolean; hex?: string }
+interface Field { key: string; label: string; type: string; value: unknown; min?: number; max?: number; step?: number; options?: string[]; accept?: string; ranged?: boolean; hex?: string }
 
 const settings = shared('editor:settings', null)
 const state = reactive({ fields: [] as Field[], open: true })
@@ -43,6 +53,20 @@ function toHex(value: unknown): string {
 
 function apply(field: Field) {
   sendCommand({ type: 'setSetting', key: field.key, value: field.value })
+}
+
+function applySelect(event: Event, field: Field) {
+  field.value = (event.target as HTMLSelectElement).value
+  apply(field)
+}
+
+function pickFile(field: Field) {
+  sendCommand({ type: 'setSetting', key: field.key, value: null, pick: true })
+}
+
+function clearFile(field: Field) {
+  field.value = null
+  apply(field)
 }
 
 function applyColour(event: Event, field: Field) {
@@ -70,6 +94,31 @@ function scrubField(event: PointerEvent, field: Field) {
 <style>
 .control > .well:not(.colour) {
   flex: 1 1 auto;
+}
+
+.file {
+  display: flex;
+  align-items: center;
+  gap: var(--cat-space-1);
+  min-width: 0;
+}
+
+.file .name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file .small {
+  flex: 0 0 auto;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0 var(--cat-space-1);
+  cursor: pointer;
 }
 
 .colour {

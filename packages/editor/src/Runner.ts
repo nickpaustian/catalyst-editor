@@ -46,6 +46,8 @@ export class Runner {
     this.engine.add(root)
     this.teardown = await this.recipe.run({ engine: this.engine, root, scene: message.scene, folder })
     document.title = `${folder?.name ?? "untitled"} · running`
+    const hint = document.getElementById("hint")
+    if (hint && this.recipe.hint) hint.textContent = this.recipe.hint(root)
   }
 
   stop(): void {

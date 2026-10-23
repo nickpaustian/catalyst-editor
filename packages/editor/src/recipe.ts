@@ -60,4 +60,6 @@ export interface Recipe {
   download?: (root: Node3D, engine: Catalyst) => { name: string; text: string }
   /** Play the project in the runner: put a player in, let physics go. Returns the teardown. */
   run: (context: RunContext) => Promise<() => void>
+  /** One line for the runner's corner saying how this scene is driven; the runner keeps its own when there is none. */
+  hint?: (root: Node3D) => string
 }
