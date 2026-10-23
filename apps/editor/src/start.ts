@@ -12,6 +12,7 @@ import { desktop } from "./desktop"
 document.addEventListener("DOMContentLoaded", async () => {
   const app = createLightspeedApp()
   app.useComponents(components)
+  ;(window as any).lightspeed = app
   const shell = await desktop()
   const folders: FolderSource = shell?.folders ?? browserFolders
   const project = app.shared("editor:project")
