@@ -95,5 +95,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (shell) {
     const { getCurrentWindow } = await import("@tauri-apps/api/window")
     void getCurrentWindow().onCloseRequested(() => shell.startClosed())
+    void getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+      if (focused) void refresh()
+    })
   }
 })
