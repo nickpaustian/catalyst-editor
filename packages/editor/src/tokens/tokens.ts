@@ -89,7 +89,7 @@ export const size = {
   menuItem: 26,
   panelHeader: 32,
   sectionHeader: 28,
-  titleBar: 36,
+  titleBar: 44,
   treeIndent: 18,
   labelColumn: 112,
   labelColumnNarrow: 72,

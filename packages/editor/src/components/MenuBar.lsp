@@ -163,7 +163,7 @@ function resetLayout() {
   display: flex;
   align-items: center;
   gap: var(--cat-space-4);
-  padding: 0 var(--cat-space-2) 0 var(--cat-space-4);
+  padding: 0 var(--cat-space-4);
   box-sizing: border-box;
   background: var(--cat-bg-app);
   border-bottom: 1px solid var(--cat-border-subtle);
