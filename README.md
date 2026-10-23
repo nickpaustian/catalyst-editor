@@ -17,6 +17,8 @@ The engine comes from `@nickpaustian/catalyst` and its peers (`helm`, `velora`, 
 
 ## Running
 
+To work on the engine and the editor together, `npm run link:engine` symlinks `node_modules/@nickpaustian/catalyst` to the sibling `../catalyst` repo without touching package.json or the lockfile (run `npm run build -- --watch` there, since the package resolves to its `dist`); `npm run unlink` reinstalls from the lockfile and drops the link.
+
 ```sh
 npm install
 npm run dev:editor     # http://localhost:3100
