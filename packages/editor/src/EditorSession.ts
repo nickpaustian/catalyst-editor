@@ -1,5 +1,4 @@
-import * as THREE from "three"
-import { Node3D, Prefab, editorIcon, exposedProperties, readExposed, writeExposed, type Catalyst, type ExposedProperty, type NodeClass, type NodeJSON, type Script } from "@nickpaustian/catalyst"
+import { Mat4, Node3D, Prefab, Quaternion, Vector3, editorIcon, exposedProperties, readExposed, writeExposed, type Catalyst, type ExposedProperty, type NodeClass, type NodeJSON, type Script } from "@nickpaustian/catalyst"
 import { Input } from "@nickpaustian/catalyst/input"
 import { Physics } from "@nickpaustian/catalyst/physics"
 import type { LightspeedRuntime } from "@lightspeed-js/core"
@@ -197,7 +196,7 @@ export class EditorSession {
   private snap: SnapSettings = preferences.snap
   private snapInverted = false
   private readonly history = new History()
-  private dragStart: { node: Node3D; before: THREE.Matrix4 }[] | null = null
+  private dragStart: { node: Node3D; before: Mat4 }[] | null = null
   private selected: Node3D | null = null
   private selection = new Set<Node3D>()
   private anchor: Node3D | null = null
@@ -349,7 +348,7 @@ export class EditorSession {
     this.publishProject(folder ? "" : "unsaved")
     this.publishTree()
     this.select(null)
-    this.camera.focusPoint(new THREE.Vector3(0, 0.5, 0), 8)
+    this.camera.focusPoint(new Vector3(0, 0.5, 0), 8)
     if (folder) await folder.remember()
     void this.publishRecent()
     if (folder?.watch) {
@@ -566,7 +565,7 @@ export class EditorSession {
       return
     }
     const p = node.transform.position
-    const e = new THREE.Euler().setFromQuaternion(node.transform.rotation, "YXZ")
+    const e = node.transform.rotation.toEuler(new Vector3(), "YXZ")
     this.set("editor:selection", {
       id: this.idOf(node),
       name: node.name,
@@ -577,7 +576,7 @@ export class EditorSession {
       prefab: node instanceof Prefab ? node.url : null,
       scripts: this.selectionScripts(node),
       position: { x: round(p.x), y: round(p.y), z: round(p.z) },
-      rotation: { x: round(THREE.MathUtils.radToDeg(e.x), 2), y: round(THREE.MathUtils.radToDeg(e.y), 2), z: round(THREE.MathUtils.radToDeg(e.z), 2) },
+      rotation: { x: round(degrees(e.x), 2), y: round(degrees(e.y), 2), z: round(degrees(e.z), 2) },
       properties: exposedProperties(node)
         .map((property) => ({ ...property, label: property.label ?? property.key, value: readExposed(node, property) }))
         .sort((a, b) => Number(LIST_TYPES.includes(a.type)) - Number(LIST_TYPES.includes(b.type))),
@@ -1150,7 +1149,7 @@ export class EditorSession {
     const parent = instance.parent as Node3D
     const index = parent.indexOf(instance)
     const name = instance.name
-    const world = instance.transform.worldMatrix.clone().multiply(made.transform.matrix)
+    const world = new Mat4().multiply(instance.transform.worldMatrix, made.transform.matrix)
     const unpack = () => {
       instance.remove()
       parent.insertNode(made, index, name)
@@ -1283,9 +1282,9 @@ export class EditorSession {
   private focusSelected(): void {
     if (!this.selected || !this.camera.isActive) return
     if (this.selection.size <= 1) return this.camera.focus(this.selected)
-    const centre = new THREE.Vector3()
-    for (const node of this.selection) centre.add(node.transform.getWorldPosition())
-    this.camera.focusPoint(centre.divideScalar(this.selection.size))
+    const centre = new Vector3()
+    for (const node of this.selection) centre.addVector(node.transform.getWorldPosition())
+    this.camera.focusPoint(centre.scale(1 / this.selection.size))
   }
 
   //=========================
@@ -1296,7 +1295,7 @@ export class EditorSession {
     const node = this.selected
     if (!node) return
     const before = { position: node.transform.position.clone(), rotation: node.transform.rotation.clone() }
-    const after = { position: new THREE.Vector3(position.x, position.y, position.z), rotation: new THREE.Quaternion().setFromEuler(new THREE.Euler(THREE.MathUtils.degToRad(rotation.x), THREE.MathUtils.degToRad(rotation.y), THREE.MathUtils.degToRad(rotation.z), "YXZ")) }
+    const after = { position: new Vector3(position.x, position.y, position.z), rotation: new Quaternion().setFromEuler(radians(rotation.x), radians(rotation.y), radians(rotation.z), "YXZ") }
     if (before.position.equals(after.position) && before.rotation.equals(after.rotation)) return
     const apply = (state: typeof before) => () => {
       node.transform.position.copy(state.position)
@@ -1395,7 +1394,7 @@ export class EditorSession {
     if (parent !== (this.selected ?? this._root)) return
     const node = definition.make({ name: `${definition.kind.charAt(0).toLowerCase()}${definition.kind.slice(1)}`, visualise: this.visualised, ...picked })
     parent.addNode(node)
-    node.transform.setWorldPosition(this.camera.isActive ? this.camera.orbitTarget : new THREE.Vector3(0, 1, 0))
+    node.transform.setWorldPosition(this.camera.isActive ? this.camera.orbitTarget : new Vector3(0, 1, 0))
     if (this.visualised) node.visualised = true
     this.collapsed.delete(parent)
     const index = parent.indexOf(node)
@@ -1532,3 +1531,6 @@ export class EditorSession {
     this.reparent(nodes.filter((node) => node.parent === parent), grandparent, grandparent.indexOf(parent) + 1)
   }
 }
+
+const degrees = (radians: number): number => (radians * 180) / Math.PI
+const radians = (degrees: number): number => (degrees * Math.PI) / 180

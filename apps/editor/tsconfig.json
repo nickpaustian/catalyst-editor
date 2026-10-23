@@ -1,11 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "baseUrl": ".",
-    "paths": {
-      "three": ["../../node_modules/@types/three"],
-      "three/*": ["../../node_modules/@types/three/*"]
-    }
+    "baseUrl": "."
   },
   "include": ["src", "../../packages/editor/src"]
 }

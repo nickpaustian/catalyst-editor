@@ -8,10 +8,10 @@ const crossOriginIsolation = {
 
 // Lightspeed compiles the panel's components, the editor package's and any
 // recipe's; host mode leaves this app's index.html alone. The engine packages
-// are file links, so three is pinned to one copy.
+// are file links, so the renderer is pinned to one copy (its classes are checked with instanceof).
 export default defineConfig({
   plugins: [lightspeedPlugin({ typescript: true, host: true, componentDirs: ["../../packages/editor/src/components"] })],
-  resolve: { dedupe: ["three"] },
+  resolve: { dedupe: ["@nickpaustian/obelisk", "@nickpaustian/catalyst"] },
   server: { headers: crossOriginIsolation, port: 3100, fs: { allow: ["../.."] } },
   preview: { headers: crossOriginIsolation, port: 4174 },
   worker: { format: "es" },

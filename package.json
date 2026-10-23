@@ -17,13 +17,12 @@
     "preview": "cd apps/player && vite preview",
     "typecheck": "cd apps/editor && tsc && cd ../player && tsc",
     "tokens": "node scripts/tokens.mjs",
-    "link:engine": "npm install --no-save ../catalyst",
+    "link:engine": "npm install --no-save ../catalyst ../obelisk/packages/obelisk",
     "unlink": "npm ci",
     "build:wasm": "cd packages/stelligra/stelligra-wasm && wasm-pack build --target web --release"
   },
   "devDependencies": {
     "@types/node": "^24.6.2",
-    "@types/three": "^0.183.0",
     "sass": "^1.93.2",
     "typescript": "~5.9.3",
     "vite": "^8.0.3"

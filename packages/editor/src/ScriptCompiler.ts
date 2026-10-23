@@ -5,8 +5,7 @@ import * as interaction from "@nickpaustian/catalyst/interaction"
 import * as physics from "@nickpaustian/catalyst/physics"
 import * as prefabs from "@nickpaustian/catalyst/prefabs"
 import * as resources from "@nickpaustian/catalyst/resources"
-import * as splats from "@nickpaustian/catalyst/splats"
-import * as three from "three"
+import * as obelisk from "@nickpaustian/obelisk"
 import { transform } from "sucrase"
 import type { ProjectFolder } from "./ProjectFolder"
 
@@ -20,8 +19,7 @@ export const editorModules: Record<string, object> = {
   "@nickpaustian/catalyst/physics": physics,
   "@nickpaustian/catalyst/prefabs": prefabs,
   "@nickpaustian/catalyst/resources": resources,
-  "@nickpaustian/catalyst/splats": splats,
-  three,
+  "@nickpaustian/obelisk": obelisk,
 }
 
 const SHIMS_GLOBAL = "__catalystScriptModules"
@@ -29,8 +27,7 @@ const IMPORT = /(\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(["'])([^"'\n]+)\2/g
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
 
 /** A starting script for a project, named after its class. */
-export const scriptTemplate = (className: string): string => `import { Script, type FrameData, type Node3D } from "@nickpaustian/catalyst"
-import { Quaternion, Vector3 } from "three"
+export const scriptTemplate = (className: string): string => `import { Quaternion, Script, Vector3, type FrameData, type Node3D } from "@nickpaustian/catalyst"
 
 const UP = new Vector3(0, 1, 0)
 const step = new Quaternion()
@@ -40,7 +37,7 @@ export default class ${className} extends Script<Node3D> {
   speed = 1
 
   protected onUpdate({ dt }: FrameData) {
-    this.node.transform.rotation.multiply(step.setFromAxisAngle(UP, this.speed * dt))
+    this.node.transform.rotation.multiplyBy(step.setFromAxisAngle(UP, this.speed * dt))
   }
 }
 `
@@ -59,7 +56,7 @@ const normalise = (path: string): string => {
 
 /**
  * Builds a project's scripts in the browser: each `.ts` file is read from
- * the folder, stripped of its types, its imports of the engine and three
+ * the folder, stripped of its types, its imports of the engine and the renderer
  * pointed at the editor's own copies and its relative imports at the other
  * files it names, and loaded as a module from a blob URL. Modules are kept
  * until `invalidate`.

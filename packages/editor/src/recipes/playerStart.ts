@@ -1,6 +1,5 @@
 import { Node3D, svgIcon, type Node3DOptions } from "@nickpaustian/catalyst"
-import { DebugShapes } from "@nickpaustian/catalyst"
-import type { Object3D } from "three"
+import { DebugShapes, type Visual } from "@nickpaustian/catalyst"
 
 /** Where a run puts the player: position and facing. One per scene is read; more are ignored. */
 export class PlayerStart extends Node3D {
@@ -11,7 +10,7 @@ export class PlayerStart extends Node3D {
     super({ ...opts, name: opts.name ?? "playerStart" })
   }
 
-  protected override createVisualisation(): Object3D {
+  protected override createVisualisation(): Visual {
     return DebugShapes.capsule({ radius: 0.15, height: 1.7, colour: 0x6ad0ff })
   }
 }

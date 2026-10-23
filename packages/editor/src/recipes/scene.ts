@@ -1,11 +1,10 @@
 import { Camera, Model, Node3D, type Catalyst, type NodeJSON } from "@nickpaustian/catalyst"
-import { GaussianSplat } from "@nickpaustian/catalyst/splats"
 import { pickFile } from "../ProjectFolder"
 import { Interactable } from "@nickpaustian/catalyst/interaction"
 import { BoxCollider, CapsuleCollider, SphereCollider } from "@nickpaustian/catalyst/physics"
 import { Box, Capsule, FirstPersonController, FocalPoint, FocalPointTrigger, PointOfInterest, Sphere } from "@nickpaustian/catalyst/prefabs"
 import { Physics } from "@nickpaustian/catalyst/physics"
-import { Vector3 } from "three"
+import { Vector3 } from "@nickpaustian/catalyst"
 import type { Recipe } from "../recipe"
 import { PlayerStart } from "./playerStart"
 
@@ -57,17 +56,6 @@ export const sceneRecipe: Recipe = {
         return file ? { url: await folder.importFile(file), name: file.name.replace(/\.[^.]+$/, "") } : null
       },
       make: (o) => new Model({ ...o, url: String(o.url ?? "") }),
-    },
-    {
-      kind: "Splat",
-      label: "Gaussian splat",
-      cls: GaussianSplat,
-      description: "A Gaussian splat file (.sog or .ply) imported into the project's assets, drawn through the shared splat renderer.",
-      pick: async (folder) => {
-        const file = await pickFile(".sog,.ply,.splat")
-        return file ? { url: await folder.importFile(file), name: file.name.replace(/\.[^.]+$/, "") } : null
-      },
-      make: (o) => new GaussianSplat({ ...o, url: String(o.url ?? "") }),
     },
     { kind: "Camera", label: "Camera", cls: Camera, description: "A perspective camera with a real lens: a focal length over a sensor.", make: (o) => new Camera(o) },
     { kind: "BoxCollider", label: "Box collider", cls: BoxCollider, description: "An invisible box the physics world collides with, or a trigger volume.", make: (o) => new BoxCollider({ ...o, width: 1, height: 1, depth: 1 }) },
