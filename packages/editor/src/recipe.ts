@@ -42,6 +42,8 @@ export interface NodeKind {
  */
 export interface Recipe {
   name: string
+  /** The project files the recipe writes (`scene.json`): a change to one on disk means the project should reload. */
+  files?: string[]
   /** Modules installed on the editor's engine, beyond the core set. */
   modules?: () => Module[]
   kinds: NodeKind[]

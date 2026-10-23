@@ -123,9 +123,13 @@ const importPath = async (folder: ProjectFolder, file: File, dir: string): Promi
  * folder is remembered across reloads, though the browser asks for a click
  * before giving it back.
  */
+const POLL_MS = 2000
+const POLLED_DIRS = ["", "scripts", "prefabs"]
+
 export class HandleFolder implements ProjectFolder {
   readonly handle: FileSystemDirectoryHandle
   readonly storage: ProjectStorage
+  private readonly written = new Map<string, number>()
 
   constructor(handle: FileSystemDirectoryHandle, storage: ProjectStorage = "disk") {
     this.handle = handle
@@ -224,6 +228,7 @@ export class HandleFolder implements ProjectFolder {
     const writable = await (await this.fileAt(path, true)).createWritable()
     await writable.write(text)
     await writable.close()
+    this.written.set(path, Date.now())
   }
 
   async writeJSON(path: string, value: unknown): Promise<void> {
@@ -234,6 +239,45 @@ export class HandleFolder implements ProjectFolder {
     const writable = await (await this.fileAt(path, true)).createWritable()
     await writable.write(data)
     await writable.close()
+    this.written.set(path, Date.now())
+  }
+
+  /** The browser has no file events, so a folder on disk is polled: the root, scripts/ and prefabs/ files by modification time. */
+  async watch(listener: (paths: string[]) => void): Promise<() => void> {
+    if (this.storage !== "disk") return () => undefined
+    const stamp = async (): Promise<Map<string, number>> => {
+      const out = new Map<string, number>()
+      for (const dir of POLLED_DIRS) {
+        for (const entry of await this.list(dir)) {
+          if (entry.kind !== "file") continue
+          try {
+            out.set(entry.path, (await this.readFile(entry.path)).lastModified)
+          } catch {}
+        }
+      }
+      return out
+    }
+    let last = await stamp()
+    let stopped = false
+    let busy = false
+    const timer = setInterval(() => {
+      if (stopped || busy) return
+      busy = true
+      void stamp()
+        .then((next) => {
+          const changed: string[] = []
+          for (const [path, modified] of next) if (last.get(path) !== modified) changed.push(path)
+          for (const path of last.keys()) if (!next.has(path)) changed.push(path)
+          last = next
+          const theirs = changed.filter((path) => !(this.written.get(path) !== undefined && Date.now() - this.written.get(path)! < POLL_MS * 2))
+          if (!stopped && theirs.length) listener(theirs)
+        })
+        .finally(() => (busy = false))
+    }, POLL_MS)
+    return () => {
+      stopped = true
+      clearInterval(timer)
+    }
   }
 
   async importFile(file: File, dir = "assets"): Promise<string> {

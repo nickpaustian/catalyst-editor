@@ -40,6 +40,7 @@ const toFile = (engine: Catalyst, root: Node3D): NodeJSON & { environment: Scene
 /** A plain Catalyst scene: a folder holding `scene.json` and whatever it names. */
 export const sceneRecipe: Recipe = {
   name: "scene",
+  files: [SCENE_FILE],
   kinds: [
     { kind: "Group", label: "Group", cls: Node3D, description: "An empty spatial node: a place to gather other nodes under one transform.", make: ({ name }) => new Node3D(name) },
     { kind: "PlayerStart", label: "Player start", cls: PlayerStart, description: "Where a run puts the player: its position and facing. The first one in the scene is used.", make: (o) => new PlayerStart(o) },

@@ -9,6 +9,7 @@
         <button @click="run('newProject')">New project <span class="dim" $if="shared['editor:project'].browserStorage">in the browser</span></button>
         <button @click="run('openFolder')" $disabled="!shared['editor:project'].supported">Open folder…</button>
         <button @click="run('reopenLast')" $disabled="!shared['editor:project'].supported">Reopen last</button>
+        <button @click="run('reloadProject')" $disabled="!shared['editor:project'].open">Reload from disk</button>
         <button @click="run('closeProject')" $disabled="!shared['editor:project'].open">Close project</button>
         <hr />
         <button @click="projectSettings()" $disabled="!shared['editor:project'].open">Project settings…</button>

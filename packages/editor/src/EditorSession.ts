@@ -107,6 +107,7 @@ export type EditorCommand =
   | { type: "openRecent"; id: string }
   | { type: "forgetRecent"; id: string }
   | { type: "closeProject" }
+  | { type: "reloadProject" }
   | { type: "openProjectDialog"; mode: "create" | "edit" }
   | { type: "closeProjectDialog" }
   | { type: "pickLocation" }
@@ -251,6 +252,12 @@ export class EditorSession {
       this.publishProject()
     }
     this.camera.onDrag = (dragging) => (dragging ? this.beginDrag() : this.endDrag())
+    this.camera.onClick = (x, y, mode) => {
+      if (!this._root) return
+      const node = this.camera.pick(x, y, this._root)
+      if (node) this.select(node, mode)
+      else if (mode === "replace") this.select(null)
+    }
     this.unsubscribeCommands = this.app.shared("editor:command").subscribe((command) => {
       if (command) void this.handle(command as EditorCommand)
     })
@@ -317,6 +324,14 @@ export class EditorSession {
         this.engine.log(`the project folder is not watched: ${error instanceof Error ? error.message : error}`, "editor")
       }
     }
+  }
+
+  /** Read the project's files again and rebuild the scene from them, dropping unsaved changes. */
+  async reloadProject(): Promise<void> {
+    const folder = this.folder
+    if (!folder) return
+    await this.open(folder)
+    this.publishProject("reloaded from disk")
   }
 
   /** Take the project out of the viewport and show the start screen again. */
@@ -572,6 +587,9 @@ export class EditorSession {
       case "closeProject":
         this.closeProject()
         break
+      case "reloadProject":
+        await this.reloadProject()
+        break
       case "openProjectDialog":
         this.openProjectDialog(command.mode)
         break
@@ -764,7 +782,14 @@ export class EditorSession {
     const scripts = changed.filter((path) => path.startsWith(`${SCRIPTS_DIR}/`))
     const prefabs = changed.filter((path) => path.startsWith(`${PREFABS_DIR}/`) && path.endsWith(".json"))
     const project = changed.some((path) => !path.includes("/") && (path.endsWith(PROJECT_EXTENSION) || path === LEGACY_PROJECT_FILE))
+    const scene = changed.some((path) => this.recipe.files?.includes(path))
+    if (scene && !this.history.isDirty) {
+      await this.reloadProject()
+      this.publishProject("reloaded from disk: the scene changed outside")
+      return
+    }
     const notes: string[] = []
+    if (scene) notes.push("the scene (your unsaved changes are kept; File → Reload from disk takes the disk's)")
     if (scripts.length) {
       await this.reloadScripts()
       const code = this.app.shared("editor:code").value as EditorCells["editor:code"] | undefined
