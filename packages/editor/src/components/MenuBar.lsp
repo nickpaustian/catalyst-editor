@@ -1,8 +1,8 @@
 <view>
-<header class="bar">
+<header class="bar" data-tauri-drag-region>
   <span class="brand">Catalyst</span>
 
-  <nav class="menus">
+  <nav class="menus" data-tauri-drag-region>
     <div class="menu" $class="{ open: state.open === 'file' }">
       <button class="menu-title" @click="toggle('file')" @pointerenter="hover('file')">File</button>
       <div class="menu-items" $if="state.open === 'file'">
@@ -83,10 +83,11 @@
 import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { preferences } from '../preferences.ts'
+import { HISTORY_DEFAULT, PROJECT_DEFAULT, VIEW_DEFAULT } from '../cells.ts'
 
-shared('editor:project', { open: false, name: null, recipe: '', storage: null, status: '', supported: false, browserStorage: false, dirty: false })
-shared('editor:view', { view: 'orbit', visualised: true, gizmo: 'translate', physics: false, scripts: false, snap: { enabled: true, move: 0.25, rotate: 15 } })
-shared('editor:history', { canUndo: false, canRedo: false, undoLabel: null, redoLabel: null })
+shared('editor:project', PROJECT_DEFAULT)
+shared('editor:view', VIEW_DEFAULT)
+shared('editor:history', HISTORY_DEFAULT)
 shared('editor:selection', null)
 
 const state = reactive({ open: null as string | null, moveSteps: [0.05, 0.1, 0.25, 0.5, 1], rotateSteps: [5, 15, 45, 90] })

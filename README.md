@@ -51,7 +51,7 @@ Scripts are viewed and edited in the **Code** pane: Edit on a script in the insp
 
 ## The start screen
 
-Until a project is open the editor shows a start screen over the viewport: New project (a name, for a project in the browser's storage; a folder picked or made in the system picker, in the desktop app), Open folder…, and the recent list. Recent is the projects the browser keeps plus the last folder picked on disk, or, in the desktop app, the last twelve folders opened by path; × takes one off the list, and a folder that has gone is dropped when it is clicked. File → Close project puts the start screen back.
+Until a project is open the editor shows a start screen over the viewport: New project (a name, for a project in the browser's storage; a folder picked or made in the system picker, in the desktop app), Open folder…, and the recent list. Recent is the projects the browser keeps plus the last folder picked on disk, or, in the desktop app, the last twelve folders opened by path; × takes one off the list, and a folder that has gone is dropped when it is clicked. File → Close project puts the start screen back. In the desktop app the start screen is a small window of its own (`start.html`), the editor window hidden until a project is chosen there and hidden again on Close project; closing the start window with nothing open quits.
 
 ## Running a project
 

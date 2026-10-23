@@ -41,6 +41,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   const shell = await desktop()
   const folders = shell?.folders ?? browserFolders
   const session = new EditorSession({ app, engine, recipe, folders, runner: shell?.runnerLink })
+  if (shell) {
+    app.shared("editor:startMode").set("off")
+    app.shared("editor:project").subscribe((project: { open: boolean } | undefined) => shell.showEditor(project?.open ?? false))
+    shell.onProjectChosen((transfer) => void session.open(folders.fromTransfer(transfer)))
+    shell.onStartClosed(() => {
+      if (!session.root) window.close()
+    })
+  }
   for (const id of recipe.panel ?? []) {
     const host = document.createElement("div")
     document.getElementById("recipe-sections")!.appendChild(host)

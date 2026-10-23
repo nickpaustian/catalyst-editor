@@ -1,12 +1,26 @@
-import { nativeFolders, type NativeFs, type RunMessage, type RunnerLink, type RunnerPageLink } from "@nickpaustian/catalyst-editor"
+import { nativeFolders, type FolderTransfer, type NativeFs, type RunMessage, type RunnerLink, type RunnerPageLink } from "@nickpaustian/catalyst-editor"
 import { open } from "@tauri-apps/plugin-dialog"
 import { exists, mkdir, readDir, readFile, readTextFile, remove, writeFile, writeTextFile } from "@tauri-apps/plugin-fs"
 import { emitTo, listen } from "@tauri-apps/api/event"
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow"
+import { getCurrentWindow } from "@tauri-apps/api/window"
 import type { DesktopShell } from "./desktop"
 
 const RUNNER_LABEL = "runner"
 const MAIN_LABEL = "main"
+const START_LABEL = "start"
+
+const startWindow = () => WebviewWindow.getByLabel(START_LABEL)
+
+const showStart = async (): Promise<void> => {
+  const start = await startWindow()
+  await start?.show()
+  await start?.setFocus()
+}
+
+const hideStart = async (): Promise<void> => {
+  await (await startWindow())?.hide()
+}
 
 const fs: NativeFs = {
   pickDirectory: async () => {
@@ -60,4 +74,37 @@ const runnerPageLink = (): RunnerPageLink => ({
   },
 })
 
-export const tauriShell = (): DesktopShell => ({ folders: nativeFolders(fs), runnerLink: runnerLink(), runnerPageLink: runnerPageLink() })
+/** The start window is declared in the Tauri config and only ever shown or hidden; closing the editor window takes it along so the app exits. */
+export const tauriShell = (): DesktopShell => {
+  const current = getCurrentWindow()
+  if (current.label === MAIN_LABEL) void current.onCloseRequested(async () => void (await startWindow())?.close())
+  return shell()
+}
+
+const shell = (): DesktopShell => ({
+  folders: nativeFolders(fs),
+  runnerLink: runnerLink(),
+  runnerPageLink: runnerPageLink(),
+  showEditor(open) {
+    const editor = getCurrentWindow()
+    if (open) {
+      void hideStart()
+      void editor.show().then(() => editor.setFocus())
+    } else {
+      void editor.hide()
+      void showStart()
+    }
+  },
+  projectChosen(transfer) {
+    void emitTo(MAIN_LABEL, "catalyst:open-project", transfer)
+  },
+  onProjectChosen(listener) {
+    void listen<FolderTransfer>("catalyst:open-project", (event) => listener(event.payload))
+  },
+  startClosed() {
+    void emitTo(MAIN_LABEL, "catalyst:start-closed", null)
+  },
+  onStartClosed(listener) {
+    void listen("catalyst:start-closed", () => listener())
+  },
+})

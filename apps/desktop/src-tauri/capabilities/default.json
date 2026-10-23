@@ -4,10 +4,15 @@
   "description": "the editor and its runner window: the whole filesystem for projects, the folder picker, and a second window for runs",
   "windows": [
     "main",
-    "runner"
+    "runner",
+    "start"
   ],
   "permissions": [
     "core:default",
+    "core:window:allow-is-visible",
+    "core:window:allow-center",
+    "core:window:allow-hide",
+    "core:window:allow-show",
     "core:window:allow-create",
     "core:window:allow-set-focus",
     "core:window:allow-close",

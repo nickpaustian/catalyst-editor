@@ -1,7 +1,8 @@
 <view>
-<div class="start" $if="!shared['editor:project'].open">
-  <div class="card">
-    <header>
+<div class="start" $class="{ window: shared['editor:startMode'] === 'window' }" $if="shared['editor:startMode'] === 'window' || (shared['editor:startMode'] !== 'off' && !shared['editor:project'].open)">
+  <div class="card" data-tauri-drag-region>
+    <div class="drag" data-tauri-drag-region $if="shared['editor:startMode'] === 'window'"></div>
+    <header data-tauri-drag-region>
       <h1>Catalyst</h1>
       <p class="tagline">Open a project to begin.</p>
     </header>
@@ -34,11 +35,13 @@
 <logic lang="ts">
 import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
+import { PROJECT_DEFAULT } from '../cells.ts'
 
 interface Project { id: string; name: string; location: string }
 
-shared('editor:project', { open: false, name: null, recipe: '', storage: null, status: '', supported: false, browserStorage: false, dirty: false })
+shared('editor:project', PROJECT_DEFAULT)
 shared('editor:recent')
+shared('editor:startMode', 'overlay')
 
 const state = reactive({ name: 'untitled' })
 
@@ -75,6 +78,36 @@ function forget(event: Event, project: Project) {
   background: rgba(10, 10, 10, 0.92);
   color: #eee;
   font: 13px/1.5 "IBM Plex Sans", system-ui, sans-serif;
+}
+
+.start.window {
+  inset: 0;
+  background: #161616;
+}
+
+.start.window .card {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.start.window .card {
+  position: relative;
+}
+
+.drag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+}
+
+:global(html.shell-macos) .start.window .card {
+  padding-top: 52px;
 }
 
 .card {

@@ -110,9 +110,10 @@
 <logic lang="ts">
 import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
+import { SCRIPTS_DEFAULT } from '../cells.ts'
 
 const selection = shared('editor:selection', null)
-const scriptFiles = shared('editor:scripts', [])
+const scriptFiles = shared('editor:scripts', SCRIPTS_DEFAULT)
 
 // Local copies of the fields, so typing doesn't fight the scene publishing
 // the same values back on every gizmo move

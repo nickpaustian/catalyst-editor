@@ -63,6 +63,8 @@ export interface EditorCells {
   "editor:project": { open: boolean; name: string | null; recipe: string; storage: ProjectStorage | null; status: string; supported: boolean; browserStorage: boolean; dirty: boolean }
   /** Projects opened before, for the start screen. */
   "editor:recent": RecentProject[]
+  /** How the start screen shows: over the editor, as the whole page of its own window, or not at all here. */
+  "editor:startMode": "overlay" | "window" | "off"
   "editor:history": { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
   /** The recipe's project-wide settings, or null when it has none. */
   "editor:settings": { title: string; fields: SelectionProperty[] } | null

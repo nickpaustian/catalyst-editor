@@ -18,7 +18,21 @@
         "height": 900,
         "minWidth": 960,
         "minHeight": 600,
-        "resizable": true
+        "resizable": true,
+        "visible": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
+      },
+      {
+        "label": "start",
+        "url": "start.html",
+        "title": "Catalyst",
+        "width": 760,
+        "height": 520,
+        "resizable": false,
+        "center": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
       }
     ],
     "security": {
