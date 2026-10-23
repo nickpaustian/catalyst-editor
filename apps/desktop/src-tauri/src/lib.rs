@@ -1,6 +1,9 @@
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 
+#[cfg(target_os = "macos")]
+mod pointer_lock;
+
 /// Project files (`.catalyst`) the app was launched with or asked to open, until the editor window takes them.
 struct OpenedFiles(Mutex<Vec<String>>);
 
@@ -37,6 +40,12 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![init_git, take_opened_files])
     .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_dialog::init())
+    .on_page_load(|webview, _| {
+      #[cfg(target_os = "macos")]
+      let _ = webview.with_webview(|platform| unsafe { pointer_lock::allow(platform.inner()) });
+      #[cfg(not(target_os = "macos"))]
+      let _ = webview;
+    })
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(

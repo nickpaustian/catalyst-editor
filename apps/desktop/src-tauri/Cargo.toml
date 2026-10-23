@@ -25,3 +25,8 @@ tauri = { version = "2.12.5", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-fs = { version = "2", features = ["watch"] }
 tauri-plugin-dialog = "2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-web-kit = { version = "0.3", features = ["WKWebView", "WKUIDelegate"] }
+block2 = "0.6"
