@@ -1,10 +1,10 @@
 .pane-root {
   position: fixed;
-  inset: var(--menu-bar-height, 30px) 0 0 0;
+  inset: var(--menu-bar-height) 0 0 0;
   display: flex;
-  background: #0a0a0a;
-  --pane-gutter: 4px;
-  --pane-header: 24px;
+  background: var(--cat-bg-app);
+  --pane-gutter: var(--cat-space-1);
+  --pane-header: var(--cat-h-sm);
 }
 
 .pane-root > * {
@@ -36,7 +36,7 @@
 
 .pane-gutter {
   flex: 0 0 var(--pane-gutter);
-  background: #1c1c1c;
+  background: var(--cat-bg-app);
   position: relative;
   z-index: 2;
 }
@@ -52,7 +52,7 @@
 .pane-gutter:hover,
 body.pane-resizing-x .pane-split.row > .pane-gutter,
 body.pane-resizing-y .pane-split.column > .pane-gutter {
-  background: #6a8fd8;
+  background: var(--cat-accent);
 }
 
 body.pane-resizing-x,
@@ -75,7 +75,7 @@ body.pane-dragging {
   display: flex;
   flex-direction: column;
   position: relative;
-  background: #101010;
+  background: var(--cat-bg-panel);
   overflow: hidden;
 }
 
@@ -84,13 +84,13 @@ body.pane-dragging {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 6px 0 8px;
-  background: #181818;
-  border-bottom: 1px solid #2a2a2a;
-  color: #aaa;
-  font: 11px/1 "IBM Plex Sans", system-ui, sans-serif;
+  padding: 0 var(--cat-space-1-5) 0 var(--cat-space-2);
+  background: var(--cat-bg-raised);
+  border-bottom: 1px solid var(--cat-border);
+  color: var(--cat-text-secondary);
+  font: 600 var(--cat-text-xs) / 1 var(--cat-font-ui);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--cat-tracking-section);
   cursor: grab;
   user-select: none;
 }
@@ -102,28 +102,28 @@ body.pane-dragging .pane-header {
 .pane-actions {
   position: relative;
   display: flex;
-  gap: 2px;
+  gap: var(--cat-space-0-5);
 }
 
 .pane-actions button {
-  font: 13px/1 system-ui, sans-serif;
-  color: #999;
+  font: var(--cat-text-md) / 1 var(--cat-font-ui);
+  color: var(--cat-text-tertiary);
   background: none;
   border: 0;
-  border-radius: 3px;
-  width: 18px;
-  height: 18px;
+  border-radius: var(--cat-radius-xs);
+  width: var(--cat-h-xs);
+  height: var(--cat-h-xs);
   cursor: pointer;
   padding: 0;
 }
 
 .pane-actions button:hover:not(:disabled) {
-  color: #eee;
-  background: #2a2a2a;
+  color: var(--cat-text-primary);
+  background: var(--cat-bg-hover);
 }
 
 .pane-actions button:disabled {
-  opacity: 0.3;
+  color: var(--cat-text-disabled);
   cursor: default;
 }
 
@@ -135,27 +135,29 @@ body.pane-dragging .pane-header {
   display: flex;
   flex-direction: column;
   min-width: 140px;
-  padding: 4px;
-  background: #222;
-  border: 1px solid #444;
-  border-radius: 3px;
+  padding: var(--cat-space-1);
+  background: var(--cat-bg-raised);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-md);
+  box-shadow: var(--cat-shadow-e1);
   text-transform: none;
   letter-spacing: 0;
 }
 
 .pane-menu button {
   width: auto;
-  height: auto;
-  padding: 5px 8px;
+  height: var(--cat-menu-item);
+  padding: 0 var(--cat-space-2);
   text-align: left;
-  font: 12px/1.2 "IBM Plex Sans", system-ui, sans-serif;
-  color: #ddd;
+  font: var(--cat-text-sm) / var(--cat-leading-body) var(--cat-font-ui);
+  color: var(--cat-text-primary);
+  border-radius: var(--cat-radius-sm);
 }
 
 .pane-menu-note {
-  padding: 5px 8px;
-  color: #777;
-  font: 12px/1.2 "IBM Plex Sans", system-ui, sans-serif;
+  padding: var(--cat-space-1) var(--cat-space-2);
+  color: var(--cat-text-tertiary);
+  font: var(--cat-text-sm) / var(--cat-leading-body) var(--cat-font-ui);
 }
 
 .pane-body {
@@ -171,7 +173,7 @@ body.pane-dragging .pane-header {
 }
 
 .pane-body.viewport {
-  background: #000;
+  background: var(--cat-bg-viewport);
 }
 
 .pane-body.viewport #slate {
@@ -189,14 +191,15 @@ body.pane-dragging .pane-body {
 .pane-ghost {
   position: fixed;
   z-index: 30;
-  padding: 4px 10px;
-  background: #2a3650;
-  border: 1px solid #6a8fd8;
-  border-radius: 3px;
-  color: #eee;
-  font: 11px/1 "IBM Plex Sans", system-ui, sans-serif;
+  padding: var(--cat-space-1) var(--cat-space-3);
+  background: var(--cat-bg-raised);
+  border: 1px solid var(--cat-accent);
+  border-radius: var(--cat-radius-sm);
+  box-shadow: var(--cat-shadow-e1);
+  color: var(--cat-text-primary);
+  font: 600 var(--cat-text-xs) / 1 var(--cat-font-ui);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--cat-tracking-section);
   pointer-events: none;
 }
 
@@ -204,8 +207,8 @@ body.pane-dragging .pane-body {
   position: absolute;
   inset: 0;
   z-index: 10;
-  background: rgba(106, 143, 216, 0.35);
-  border: 1px solid #6a8fd8;
+  background: var(--cat-accent-soft);
+  border: 1px solid var(--cat-accent);
   pointer-events: none;
 }
 

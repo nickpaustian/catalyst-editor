@@ -30,34 +30,36 @@ function apply(field: Field) {
 
 <style>
 .heading {
-  font-size: 11px;
+  font-size: var(--cat-text-xs);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #999;
-  margin: 14px 0 4px;
+  color: var(--cat-text-secondary);
+  margin: var(--cat-space-3) 0 var(--cat-space-1);
 }
 
 .row {
   display: flex;
   align-items: center;
-  margin: 2px 0;
+  margin: var(--cat-space-0-5) 0;
 }
 
 .label {
   width: 90px;
-  color: #999;
+  color: var(--cat-text-secondary);
 }
 
 input {
   font: inherit;
   color: inherit;
-  background: #222;
-  border: 1px solid #444;
-  border-radius: 3px;
-  padding: 3px 6px;
+  background: var(--cat-bg-field);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-sm);
+  padding: var(--cat-space-0-5) var(--cat-space-1-5);
 }
 
 input[type="number"] {
   width: 64px;
+  font-family: var(--cat-font-mono);
+  font-variant-numeric: tabular-nums;
 }
 </style>

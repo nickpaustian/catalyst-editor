@@ -61,22 +61,22 @@ function setHtml() {
 
 <style>
 h2 {
-  font-size: 11px;
+  font-size: var(--cat-text-xs);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #999;
-  margin: 14px 0 4px;
+  color: var(--cat-text-secondary);
+  margin: var(--cat-space-3) 0 var(--cat-space-1);
 }
 
 .list {
   max-height: 120px;
   overflow-y: auto;
-  border: 1px solid #333;
-  margin-bottom: 6px;
+  border: 1px solid var(--cat-border);
+  margin-bottom: var(--cat-space-1-5);
 }
 
 .item {
-  padding: 2px 6px;
+  padding: var(--cat-space-0-5) var(--cat-space-1-5);
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -84,22 +84,22 @@ h2 {
 }
 
 .item:hover {
-  background: #2a2a2a;
+  background: var(--cat-bg-hover);
 }
 
 .item.selected {
-  background: #3a4a6a;
+  background: var(--cat-accent-soft);
 }
 
 .item.edited::after {
   content: " •";
-  color: #ffd54a;
+  color: var(--cat-changed);
 }
 
 .row {
   display: flex;
-  gap: 4px;
-  margin: 4px 0;
+  gap: var(--cat-space-1);
+  margin: var(--cat-space-1) 0;
 }
 
 input,
@@ -107,10 +107,10 @@ textarea,
 button {
   font: inherit;
   color: inherit;
-  background: #222;
-  border: 1px solid #444;
-  border-radius: 3px;
-  padding: 3px 6px;
+  background: var(--cat-bg-field);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-sm);
+  padding: var(--cat-space-0-5) var(--cat-space-1-5);
 }
 
 input {
@@ -120,19 +120,19 @@ input {
 textarea {
   width: 100%;
   box-sizing: border-box;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
+  font-family: var(--cat-font-mono);
+  font-size: var(--cat-text-xs);
   resize: vertical;
 }
 
 button {
   cursor: pointer;
-  margin: 0 4px 4px 0;
+  margin: 0 var(--cat-space-1) var(--cat-space-1) 0;
 }
 
 .hint {
-  color: #888;
-  font-size: 11px;
-  margin: 4px 0;
+  color: var(--cat-text-tertiary);
+  font-size: var(--cat-text-xs);
+  margin: var(--cat-space-1) 0;
 }
 </style>

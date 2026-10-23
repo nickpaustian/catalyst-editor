@@ -18,3 +18,4 @@ export { pane, split, isValidLayout, type LayoutNode, type PaneKind } from "./pa
 export { preferences, Preference } from "./preferences"
 export { sendCommand } from "./commands"
 export { History, type HistoryEntry } from "./History"
+export { tokens } from "./tokens/tokens"

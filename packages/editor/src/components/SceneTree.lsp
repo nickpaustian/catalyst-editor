@@ -244,64 +244,64 @@ function release() {
 
 <style>
 .heading {
-  font-size: 11px;
+  font-size: var(--cat-text-xs);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #999;
-  margin: 14px 0 4px;
+  color: var(--cat-text-secondary);
+  margin: var(--cat-space-3) 0 var(--cat-space-1);
 }
 
 .adders button {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--cat-space-1);
   font: inherit;
   color: inherit;
-  background: #222;
-  border: 1px solid #444;
-  border-radius: 3px;
-  padding: 2px 6px;
-  margin: 0 4px 4px 0;
+  background: var(--cat-bg-field);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-sm);
+  padding: var(--cat-space-0-5) var(--cat-space-1-5);
+  margin: 0 var(--cat-space-1) var(--cat-space-1) 0;
   cursor: pointer;
 }
 
 .adders button:hover {
-  background: #333;
+  background: var(--cat-bg-hover);
 }
 
 .adders .plus {
   font-weight: 600;
-  color: #8fa3c7;
+  color: var(--cat-text-secondary);
 }
 
 .adders kbd {
-  font: 10px/1 ui-monospace, Menlo, monospace;
-  padding: 1px 4px;
-  border: 1px solid #555;
+  font: var(--cat-text-xs) / 1 var(--cat-font-mono);
+  padding: 0 var(--cat-space-1);
+  border: 1px solid var(--cat-border);
   border-bottom-width: 2px;
-  border-radius: 3px;
-  background: #1a1a1a;
-  color: #999;
-  margin-left: 4px;
+  border-radius: var(--cat-radius-sm);
+  background: var(--cat-bg-field);
+  color: var(--cat-text-secondary);
+  margin-left: var(--cat-space-1);
 }
 
 .hint {
-  color: #888;
-  font-size: 11px;
-  margin: 4px 0;
+  color: var(--cat-text-tertiary);
+  font-size: var(--cat-text-xs);
+  margin: var(--cat-space-1) 0;
 }
 
 .rows {
   overflow-y: auto;
-  border: 1px solid #333;
-  margin-bottom: 6px;
+  border: 1px solid var(--cat-border);
+  margin-bottom: var(--cat-space-1-5);
   user-select: none;
 }
 
 .row {
   display: flex;
   align-items: center;
-  padding: 2px 6px 2px 4px;
+  padding: var(--cat-space-0-5) var(--cat-space-1-5) var(--cat-space-0-5) var(--cat-space-1);
   cursor: pointer;
   white-space: nowrap;
   border-top: 1px solid transparent;
@@ -309,19 +309,19 @@ function release() {
 }
 
 .row:hover {
-  background: #1e1e1e;
+  background: var(--cat-bg-hover);
 }
 
 .row.selected {
-  background: #2a3650;
+  background: var(--cat-accent-soft);
 }
 
 .row.active {
-  box-shadow: inset 2px 0 #6a8fd8;
+  box-shadow: inset 2px 0 var(--cat-accent);
 }
 
 .row.root {
-  color: #aaa;
+  color: var(--cat-text-secondary);
   cursor: default;
 }
 
@@ -333,8 +333,8 @@ function release() {
   flex: 0 0 14px;
   width: 14px;
   height: 14px;
-  margin-right: 5px;
-  color: #8fa3c7;
+  margin-right: var(--cat-space-1);
+  color: var(--cat-text-secondary);
 }
 
 .icon :global(svg) {
@@ -345,8 +345,8 @@ function release() {
 
 .twisty {
   flex: 0 0 14px;
-  color: #777;
-  font-size: 10px;
+  color: var(--cat-text-tertiary);
+  font-size: var(--cat-text-xs);
   text-align: center;
   transition: transform 0.1s;
 }
@@ -363,11 +363,11 @@ function release() {
   flex: 1 1 auto;
   min-width: 0;
   font: inherit;
-  color: #eee;
-  background: #222;
-  border: 1px solid #6a8fd8;
-  border-radius: 2px;
-  padding: 0 4px;
+  color: var(--cat-text-primary);
+  background: var(--cat-bg-field);
+  border: 1px solid var(--cat-accent);
+  border-radius: var(--cat-radius-xs);
+  padding: 0 var(--cat-space-1);
 }
 
 .name {
@@ -378,21 +378,22 @@ function release() {
 
 .type {
   flex: 0 0 auto;
-  margin-left: 8px;
-  color: #666;
-  font-size: 10px;
+  margin-left: var(--cat-space-2);
+  color: var(--cat-text-tertiary);
+  font: var(--cat-text-xs) / var(--cat-leading-tight) var(--cat-font-mono);
 }
 
 .row.drop-before {
-  border-top-color: #6a8fd8;
+  border-top-color: var(--cat-accent);
 }
 
 .row.drop-after {
-  border-bottom-color: #6a8fd8;
+  border-bottom-color: var(--cat-accent);
 }
 
 .row.drop-inside {
-  background: rgba(106, 143, 216, 0.35);
+  background: var(--cat-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--cat-accent);
 }
 
 :global(.tree-drag-ghost) {
@@ -402,13 +403,13 @@ function release() {
   z-index: 2000;
   display: flex;
   flex-direction: column;
-  padding: 4px 8px;
-  background: #1e2a44;
-  border: 1px solid #6a8fd8;
-  border-radius: 4px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
-  color: #eee;
-  font: 12px/1.3 "IBM Plex Sans", system-ui, sans-serif;
+  padding: var(--cat-space-1) var(--cat-space-2);
+  background: var(--cat-bg-raised);
+  border: 1px solid var(--cat-accent);
+  border-radius: var(--cat-radius-sm);
+  box-shadow: var(--cat-shadow-e1);
+  color: var(--cat-text-primary);
+  font: var(--cat-text-sm) / var(--cat-leading-tight) var(--cat-font-ui);
   pointer-events: none;
   white-space: nowrap;
 }
@@ -418,8 +419,8 @@ function release() {
 }
 
 :global(.tree-drag-ghost .where) {
-  color: #aab;
-  font-size: 11px;
+  color: var(--cat-text-secondary);
+  font-size: var(--cat-text-xs);
 }
 
 :global(body.tree-dragging) {

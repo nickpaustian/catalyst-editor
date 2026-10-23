@@ -59,19 +59,19 @@ function forget(event: Event, project: Project) {
 <style>
 .start {
   position: fixed;
-  inset: var(--menu-bar-height, 30px) 0 0 0;
+  inset: var(--menu-bar-height) 0 0 0;
   z-index: 1100;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(10, 10, 10, 0.92);
-  color: #eee;
-  font: 13px/1.5 "IBM Plex Sans", system-ui, sans-serif;
+  background: var(--cat-bg-app);
+  color: var(--cat-text-primary);
+  font: var(--cat-text-md) / var(--cat-leading-body) var(--cat-font-ui);
 }
 
 .start.window {
   inset: 0;
-  background: #161616;
+  background: var(--cat-bg-panel);
 }
 
 .start.window .card {
@@ -101,15 +101,15 @@ function forget(event: Event, project: Project) {
 
 .card {
   width: min(760px, 92vw);
-  padding: 28px 32px;
-  background: #161616;
-  border: 1px solid #333;
-  border-radius: 8px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  padding: var(--cat-space-6) var(--cat-space-8);
+  background: var(--cat-bg-panel);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-lg);
+  box-shadow: var(--cat-shadow-e2);
 }
 
 header {
-  margin-bottom: 20px;
+  margin-bottom: var(--cat-space-4);
 }
 
 h1 {
@@ -120,32 +120,32 @@ h1 {
 }
 
 .tagline {
-  margin: 2px 0 0;
-  color: #999;
+  margin: var(--cat-space-0-5) 0 0;
+  color: var(--cat-text-secondary);
 }
 
 .columns {
   display: grid;
   grid-template-columns: 260px 1fr;
-  gap: 28px;
+  gap: var(--cat-space-6);
 }
 
 .actions {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--cat-space-2);
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  color: #bbb;
+  gap: var(--cat-space-1);
+  color: var(--cat-text-secondary);
 }
 
 .row {
   display: flex;
-  gap: 4px;
+  gap: var(--cat-space-1);
 }
 
 input {
@@ -153,25 +153,25 @@ input {
   min-width: 0;
   font: inherit;
   color: inherit;
-  background: #222;
-  border: 1px solid #444;
-  border-radius: 3px;
-  padding: 5px 8px;
+  background: var(--cat-bg-field);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-sm);
+  padding: var(--cat-space-1) var(--cat-space-2);
 }
 
 button {
   font: inherit;
   color: inherit;
-  background: #222;
-  border: 1px solid #444;
-  border-radius: 4px;
-  padding: 6px 12px;
+  background: var(--cat-bg-field);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-sm);
+  padding: var(--cat-space-1-5) var(--cat-space-3);
   cursor: pointer;
   text-align: left;
 }
 
 button:hover {
-  background: #2a2a2a;
+  background: var(--cat-bg-hover);
 }
 
 button:disabled {
@@ -180,27 +180,32 @@ button:disabled {
 }
 
 button.primary {
-  background: #3b5aa0;
-  border-color: #6a8fd8;
-  color: #fff;
+  background: var(--cat-accent);
+  border-color: var(--cat-accent);
+  color: var(--cat-text-on-accent);
+  font-weight: 500;
 }
 
 button.big {
-  padding: 10px 14px;
+  padding: var(--cat-space-2) var(--cat-space-3);
 }
 
 .dim {
-  color: #aab;
-  font-size: 11px;
-  margin-left: 4px;
+  color: var(--cat-text-secondary);
+  font-size: var(--cat-text-xs);
+  margin-left: var(--cat-space-1);
+}
+
+button.primary .dim {
+  color: inherit;
 }
 
 h2 {
-  margin: 0 0 8px;
-  font-size: 11px;
+  margin: 0 0 var(--cat-space-2);
+  font-size: var(--cat-text-xs);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #999;
+  color: var(--cat-text-secondary);
 }
 
 .recent {
@@ -210,14 +215,14 @@ h2 {
 .project {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  padding: 7px 8px;
-  border-radius: 4px;
+  gap: var(--cat-space-2);
+  padding: var(--cat-space-1-5) var(--cat-space-2);
+  border-radius: var(--cat-radius-sm);
   cursor: pointer;
 }
 
 .project:hover {
-  background: #202020;
+  background: var(--cat-bg-hover);
 }
 
 .name {
@@ -230,32 +235,32 @@ h2 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #888;
-  font-size: 11px;
+  color: var(--cat-text-tertiary);
+  font-size: var(--cat-text-xs);
   direction: rtl;
   text-align: left;
 }
 
 .forget {
-  padding: 0 6px;
+  padding: 0 var(--cat-space-1-5);
   border: none;
   background: none;
-  color: #777;
+  color: var(--cat-text-tertiary);
   line-height: 1;
 }
 
 .forget:hover {
-  color: #ddd;
+  color: var(--cat-text-primary);
 }
 
 .hint {
-  color: #777;
-  margin: 4px 0;
+  color: var(--cat-text-tertiary);
+  margin: var(--cat-space-1) 0;
 }
 
 .status {
-  margin: 16px 0 0;
-  color: #999;
-  font-size: 11px;
+  margin: var(--cat-space-4) 0 0;
+  color: var(--cat-text-secondary);
+  font-size: var(--cat-text-xs);
 }
 </style>

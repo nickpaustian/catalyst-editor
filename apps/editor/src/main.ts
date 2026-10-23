@@ -1,7 +1,8 @@
 import "@nickpaustian/catalyst-editor/styles.scss"
 import { createLightspeedApp } from "@lightspeed-js/core"
 import { components } from "virtual:lightspeed/components"
-import { EditorSession, PaneLayout, browserFolders, createEngine, preferences, projectFolderOfFile, sceneRecipe, type FolderSource, type Recipe } from "@nickpaustian/catalyst-editor"
+import { Color } from "three"
+import { EditorSession, PaneLayout, browserFolders, createEngine, preferences, projectFolderOfFile, sceneRecipe, tokens, type FolderSource, type Recipe } from "@nickpaustian/catalyst-editor"
 import { desktop } from "./desktop"
 
 const recipes: Recipe[] = [sceneRecipe]
@@ -46,7 +47,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   })
 
   const recipe = recipes.find((r) => r.name === new URLSearchParams(location.search).get("recipe")) ?? recipes[0]
-  const engine = createEngine(recipe, { container: "#app" })
+  const engine = createEngine(recipe, { container: "#app", background: new Color(tokens.color.bg.viewport).getHex() })
   engine.start()
 
   const shell = await desktop()

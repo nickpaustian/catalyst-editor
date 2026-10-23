@@ -22,23 +22,23 @@ export {}
   height: 100%;
   overflow-y: auto;
   box-sizing: border-box;
-  padding: 12px;
-  background: #101010;
-  color: #eee;
-  font: 12px/1.4 "IBM Plex Sans", system-ui, sans-serif;
+  padding: var(--cat-space-3);
+  background: var(--cat-bg-panel);
+  color: var(--cat-text-primary);
+  font: var(--cat-text-sm) / var(--cat-leading-body) var(--cat-font-ui);
 }
 
 h2 {
-  font-size: 11px;
+  font-size: var(--cat-text-xs);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #999;
-  margin: 14px 0 4px;
+  color: var(--cat-text-secondary);
+  margin: var(--cat-space-3) 0 var(--cat-space-1);
 }
 
 .hint {
-  color: #888;
-  font-size: 11px;
-  margin: 4px 0;
+  color: var(--cat-text-tertiary);
+  font-size: var(--cat-text-xs);
+  margin: var(--cat-space-1) 0;
 }
 </style>

@@ -326,25 +326,25 @@ function apply() {
 
 <style>
 .hint {
-  color: #888;
-  font-size: 11px;
-  margin: 4px 0;
+  color: var(--cat-text-tertiary);
+  font-size: var(--cat-text-xs);
+  margin: var(--cat-space-1) 0;
 }
 
 .row {
-  margin: 2px 0;
+  margin: var(--cat-space-0-5) 0;
 }
 
 .type {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--cat-space-1);
 }
 
 .icon {
   width: 14px;
   height: 14px;
-  color: #8fa3c7;
+  color: var(--cat-text-secondary);
 }
 
 .icon :global(svg) {
@@ -356,7 +356,7 @@ function apply() {
 label {
   display: inline-block;
   width: 18px;
-  color: #999;
+  color: var(--cat-text-secondary);
 }
 
 input,
@@ -364,14 +364,16 @@ select,
 button {
   font: inherit;
   color: inherit;
-  background: #222;
-  border: 1px solid #444;
-  border-radius: 3px;
-  padding: 3px 6px;
+  background: var(--cat-bg-field);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-sm);
+  padding: var(--cat-space-0-5) var(--cat-space-1-5);
 }
 
 input[type="number"] {
   width: 64px;
+  font-family: var(--cat-font-mono);
+  font-variant-numeric: tabular-nums;
   cursor: ew-resize;
   appearance: textfield;
   -moz-appearance: textfield;
@@ -389,7 +391,7 @@ input[type="number"]:focus {
 
 input[type="number"].scrubbing {
   user-select: none;
-  border-color: #6a8bd0;
+  border-color: var(--cat-accent);
 }
 
 :global(body.scrubbing) {
@@ -420,88 +422,88 @@ input.name {
 .row.property:has(.tags) .property-label,
 .row.property:has(.layers) .property-label {
   flex: 0 0 56px;
-  padding-top: 4px;
+  padding-top: var(--cat-space-1);
 }
 
 .tags {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 3px;
+  gap: var(--cat-space-0-5);
   flex: 1 1 auto;
 }
 
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  background: #2a3650;
-  border-radius: 3px;
-  padding: 1px 2px 1px 6px;
-  font-size: 11px;
+  gap: var(--cat-space-0-5);
+  background: var(--cat-bg-active);
+  border-radius: var(--cat-radius-sm);
+  padding: 0 var(--cat-space-0-5) 0 var(--cat-space-1-5);
+  font-size: var(--cat-text-xs);
 }
 
 .chip .remove {
   background: none;
   border: none;
-  padding: 0 3px;
+  padding: 0 var(--cat-space-0-5);
   margin: 0;
-  color: #9ab;
+  color: var(--cat-text-secondary);
   line-height: 1;
 }
 
 .chip .remove:hover {
-  color: #fff;
+  color: var(--cat-text-primary);
 }
 
 .tag-input {
   width: 64px;
-  padding: 2px 4px;
-  font-size: 11px;
+  padding: var(--cat-space-0-5) var(--cat-space-1);
+  font-size: var(--cat-text-xs);
 }
 
 .colour {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--cat-space-1-5);
 }
 
 .colour input[type="color"] {
   width: 32px;
   height: 22px;
-  padding: 0 2px;
+  padding: 0 var(--cat-space-0-5);
   cursor: pointer;
 }
 
 .hex {
-  color: #999;
-  font-family: ui-monospace, Menlo, monospace;
-  font-size: 11px;
+  color: var(--cat-text-secondary);
+  font-family: var(--cat-font-mono);
+  font-size: var(--cat-text-xs);
 }
 
 .scripts {
-  margin-top: 10px;
+  margin-top: var(--cat-space-2);
 }
 
 .scripts h3 {
-  margin: 0 0 4px;
-  font-size: 11px;
+  margin: 0 0 var(--cat-space-1);
+  font-size: var(--cat-text-xs);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #999;
+  color: var(--cat-text-secondary);
 }
 
 .script {
-  margin: 4px 0 6px;
-  padding: 4px 6px;
-  border: 1px solid #2a2a2a;
-  border-radius: 3px;
+  margin: var(--cat-space-1) 0 var(--cat-space-1-5);
+  padding: var(--cat-space-1) var(--cat-space-1-5);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-sm);
 }
 
 .script-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--cat-space-1-5);
 }
 
 .script-name {
@@ -511,27 +513,27 @@ input.name {
 
 .script-head .small {
   font: inherit;
-  font-size: 10px;
+  font-size: var(--cat-text-xs);
   color: inherit;
-  background: #222;
-  border: 1px solid #444;
-  border-radius: 3px;
-  padding: 0 6px;
+  background: var(--cat-bg-field);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-sm);
+  padding: 0 var(--cat-space-1-5);
   cursor: pointer;
 }
 
 .script-head .remove {
   background: none;
   border: none;
-  padding: 0 3px;
-  color: #9ab;
+  padding: 0 var(--cat-space-0-5);
+  color: var(--cat-text-secondary);
   line-height: 1;
   cursor: pointer;
 }
 
 .attach {
   display: flex;
-  gap: 4px;
+  gap: var(--cat-space-1);
 }
 
 .attach select,
@@ -543,7 +545,7 @@ input.name {
 .layers {
   display: grid;
   grid-template-columns: repeat(8, 22px);
-  gap: 2px;
+  gap: var(--cat-space-0-5);
 }
 
 .layer {
@@ -551,20 +553,20 @@ input.name {
   height: 18px;
   padding: 0;
   margin: 0;
-  font-size: 9px;
-  color: #777;
-  background: #1c1c1c;
-  border-color: #333;
+  font-size: var(--cat-text-xs);
+  color: var(--cat-text-tertiary);
+  background: var(--cat-bg-field);
+  border-color: var(--cat-border);
 }
 
 .layer.on {
-  color: #fff;
-  background: #3b5aa0;
-  border-color: #6a8fd8;
+  color: var(--cat-text-on-accent);
+  background: var(--cat-text-primary);
+  border-color: var(--cat-text-primary);
 }
 
 button {
   cursor: pointer;
-  margin: 0 4px 4px 0;
+  margin: 0 var(--cat-space-1) var(--cat-space-1) 0;
 }
 </style>

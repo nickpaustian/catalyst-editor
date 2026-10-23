@@ -1,0 +1,144 @@
+/* Catalyst editor design tokens — mirrors tokens.json (the source of truth).
+   Dark theme only (v1). A light theme later redefines the same names. */
+
+:root {
+  /* Surfaces — one step per level of nesting */
+  --cat-bg-app: #0E0F12;
+  --cat-bg-viewport: #111216;
+  --cat-bg-panel: #16171B;
+  --cat-bg-raised: #1C1D22;
+  --cat-bg-field: #22242A;
+  --cat-bg-hover: #2A2C33;
+  --cat-bg-active: #33363E;
+
+  /* Text */
+  --cat-text-primary: #E6E7EA;
+  --cat-text-secondary: #A3A7B0;
+  --cat-text-tertiary: #8A8E98;
+  --cat-text-disabled: #5C606A;
+  --cat-text-on-accent: #0E0F12;
+
+  /* Borders */
+  --cat-border-subtle: #24262C;
+  --cat-border: #2F3239;
+  --cat-border-strong: #464A54;
+
+  /* Accent — Hot pink. Selected / focused / active only (+ primary button). */
+  --cat-accent: #FF4FC8;
+  --cat-accent-soft: rgb(255 79 200 / 0.16);
+  --cat-accent-ring: rgb(255 79 200 / 0.40);
+  --cat-selection-inactive: var(--cat-bg-active);
+
+  /* Status */
+  --cat-success: #5FCB8A;
+  --cat-warning: #F2B451;
+  --cat-warning-surface: #2B2416;
+  --cat-warning-border: #6B5320;
+  --cat-danger: #F2696B;
+  --cat-danger-surface: #2E1F22;
+  --cat-danger-surface-pressed: #3A2427;
+  --cat-danger-border: #6B3337;
+  --cat-danger-text-pressed: #F58A8B;
+  --cat-info: #6FA8FF;
+
+  /* Axes — always shown with their letter */
+  --cat-axis-x: #FF6B6B;
+  --cat-axis-y: #7BD88F;
+  --cat-axis-z: #6FA8FF;
+  --cat-axis-w: #A3A7B0;
+
+  /* Property states */
+  --cat-anim-key: #F2B451;
+  --cat-anim-key-surface: #2B2416;
+  --cat-anim-key-border: #6B5320;
+  --cat-override: #6FA8FF;
+  --cat-changed: #A3A7B0;
+
+  /* Logo */
+  --cat-logo-pink: #FF4FC8;
+  --cat-logo-pink-on-light: #E62DAE;
+  --cat-logo-ink: #141414;
+  --cat-logo-bone: #F3F1EC;
+  --cat-logo-stone-cap: #F4F2EE;
+  --cat-logo-stone-front: #D9D5CC;
+  --cat-logo-stone-side: #8F8C86;
+
+  /* Overlays */
+  --cat-viewport-chrome: rgb(22 23 27 / 0.88);
+  --cat-scrim: rgb(8 9 11 / 0.6);
+  --cat-checker: repeating-conic-gradient(#46484F 0 25%, #2A2C33 0 50%) 0 0 / 8px 8px;
+
+  /* Type */
+  --cat-font-ui: Geist, ui-sans-serif, system-ui, sans-serif;
+  --cat-font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --cat-text-xs: 11px;
+  --cat-text-sm: 12px;
+  --cat-text-md: 13px;
+  --cat-text-lg: 15px;
+  --cat-leading-tight: 16px;
+  --cat-leading-body: 18px;
+  --cat-leading-code: 20px;
+  --cat-tracking-section: 0.06em;
+  --cat-tracking-panel: 0.01em;
+
+  /* Space (4px grid) */
+  --cat-space-0-5: 2px;
+  --cat-space-1: 4px;
+  --cat-space-1-5: 6px;
+  --cat-space-2: 8px;
+  --cat-space-3: 12px;
+  --cat-space-4: 16px;
+  --cat-space-6: 24px;
+  --cat-space-8: 32px;
+
+  /* Radius */
+  --cat-radius-xs: 3px;
+  --cat-radius-sm: 4px;
+  --cat-radius-md: 6px;
+  --cat-radius-lg: 10px;
+  --cat-radius-pill: 999px;
+
+  /* Sizes */
+  --cat-h-xs: 20px;
+  --cat-h-sm: 24px;
+  --cat-h-md: 28px;
+  --cat-h-lg: 32px;
+  --cat-row: 24px;
+  --cat-menu-item: 26px;
+  --cat-panel-header: 32px;
+  --cat-section-header: 28px;
+  --cat-title-bar: 36px;
+  --cat-tree-indent: 18px;
+  --cat-label-col: 112px;
+  --cat-label-col-narrow: 72px;
+  --cat-checkbox: 14px;
+  --cat-icon: 16px;
+  --cat-icon-sm: 14px;
+  --cat-icon-xs: 12px;
+
+  /* Elevation */
+  --cat-shadow-e1: 0 4px 12px rgb(0 0 0 / 0.35);
+  --cat-shadow-e2: 0 16px 40px rgb(0 0 0 / 0.55);
+  --cat-focus-ring: 0 0 0 2px var(--cat-bg-panel), 0 0 0 4px var(--cat-accent-ring);
+
+  /* Motion — PROPOSED, not yet reviewed */
+  --cat-dur-fast: 80ms;
+  --cat-dur-base: 140ms;
+  --cat-dur-slow: 220ms;
+  --cat-ease: cubic-bezier(0.2, 0, 0, 1);
+  --cat-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+}
+
+/* Base — opt-in by importing this file at the app root. */
+html, body {
+  background: var(--cat-bg-app);
+  color: var(--cat-text-primary);
+  font-family: var(--cat-font-ui);
+  font-size: var(--cat-text-sm);
+  line-height: var(--cat-leading-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --cat-dur-fast: 0ms; --cat-dur-base: 0ms; --cat-dur-slow: 0ms; }
+}

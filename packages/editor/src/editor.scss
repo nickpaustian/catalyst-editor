@@ -1,17 +1,18 @@
+@use "./fonts/fonts.scss";
+@use "./tokens/tokens";
 @use "./panes/panes.scss";
 
 :root {
-  --menu-bar-height: 30px;
+  --menu-bar-height: var(--cat-title-bar);
 }
 
 html,
 body {
   margin: 0;
   height: 100%;
-  background: #0a0a0a;
-  color: #eee;
-  font: 12px/1.4 "IBM Plex Sans", system-ui, sans-serif;
   overflow: hidden;
+  color-scheme: dark;
+  accent-color: var(--cat-text-primary);
 }
 
 // In the macOS shell the title bar is hidden and the traffic lights sit over the menu bar's left end
@@ -34,8 +35,8 @@ html.shell-macos #menu-bar .bar {
 #app .marquee {
   position: absolute;
   pointer-events: none;
-  border: 1px solid #6a8fd8;
-  background: rgba(106, 143, 216, 0.15);
+  border: 1px solid var(--cat-accent);
+  background: var(--cat-accent-soft);
 }
 
 .poi {

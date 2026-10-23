@@ -16,9 +16,9 @@ export {}
   height: 100%;
   overflow-y: auto;
   box-sizing: border-box;
-  padding: 12px;
-  background: #101010;
-  color: #eee;
-  font: 12px/1.4 "IBM Plex Sans", system-ui, sans-serif;
+  padding: var(--cat-space-3);
+  background: var(--cat-bg-panel);
+  color: var(--cat-text-primary);
+  font: var(--cat-text-sm) / var(--cat-leading-body) var(--cat-font-ui);
 }
 </style>

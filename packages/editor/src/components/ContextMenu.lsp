@@ -86,13 +86,13 @@ onMounted(() => {
 
 .menu {
   min-width: 180px;
-  padding: 4px;
-  background: #1c1c1c;
-  border: 1px solid #3a3a3a;
-  border-radius: 5px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
-  color: #ddd;
-  font: 12px/1.4 "IBM Plex Sans", system-ui, sans-serif;
+  padding: var(--cat-space-1);
+  background: var(--cat-bg-raised);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-md);
+  box-shadow: var(--cat-shadow-e1);
+  color: var(--cat-text-primary);
+  font: var(--cat-text-sm) / var(--cat-leading-body) var(--cat-font-ui);
   user-select: none;
 }
 
@@ -100,35 +100,35 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--cat-space-4);
   width: 100%;
-  padding: 5px 10px;
+  padding: var(--cat-space-1) var(--cat-space-2);
   font: inherit;
   color: inherit;
   background: none;
   border: 0;
-  border-radius: 3px;
+  border-radius: var(--cat-radius-sm);
   text-align: left;
   cursor: pointer;
 }
 
 button:hover:not(:disabled) {
-  background: #2a3650;
+  background: var(--cat-bg-hover);
 }
 
 button:disabled {
-  color: #666;
+  color: var(--cat-text-disabled);
   cursor: default;
 }
 
 kbd {
-  font: 10px ui-monospace, Menlo, monospace;
-  color: #999;
+  font: var(--cat-text-xs) var(--cat-font-mono);
+  color: var(--cat-text-tertiary);
 }
 
 hr {
-  margin: 4px 6px;
+  margin: var(--cat-space-1) var(--cat-space-1-5);
   border: 0;
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--cat-border);
 }
 </style>

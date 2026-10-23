@@ -104,32 +104,32 @@ onUnmounted(() => {
   flex-direction: column;
   width: 100%;
   height: 100%;
-  background: #101010;
-  color: #eee;
-  font: 12px/1.4 "IBM Plex Sans", system-ui, sans-serif;
+  background: var(--cat-bg-panel);
+  color: var(--cat-text-primary);
+  font: var(--cat-text-sm) / var(--cat-leading-body) var(--cat-font-ui);
 }
 
 .bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  border-bottom: 1px solid #2a2a2a;
+  gap: var(--cat-space-2);
+  padding: var(--cat-space-1) var(--cat-space-2);
+  border-bottom: 1px solid var(--cat-border);
 }
 
 .file {
   font: inherit;
   color: inherit;
-  background: #222;
-  border: 1px solid #444;
-  border-radius: 3px;
-  padding: 2px 6px;
+  background: var(--cat-bg-field);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-sm);
+  padding: var(--cat-space-0-5) var(--cat-space-1-5);
   max-width: 320px;
 }
 
 .dirty {
-  color: #e0b050;
-  font-size: 11px;
+  color: var(--cat-warning);
+  font-size: var(--cat-text-xs);
 }
 
 .status {
@@ -138,21 +138,22 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #888;
-  font-size: 11px;
+  color: var(--cat-text-tertiary);
+  font-size: var(--cat-text-xs);
 }
 
 .status.error {
-  color: #e07070;
+  color: var(--cat-danger);
 }
 
 .bar button {
   font: inherit;
-  color: #fff;
-  background: #3b5aa0;
-  border: 1px solid #6a8fd8;
-  border-radius: 3px;
-  padding: 2px 10px;
+  color: var(--cat-text-on-accent);
+  background: var(--cat-accent);
+  border: 1px solid var(--cat-accent);
+  font-weight: 500;
+  border-radius: var(--cat-radius-sm);
+  padding: var(--cat-space-0-5) var(--cat-space-2);
   cursor: pointer;
 }
 
@@ -162,9 +163,9 @@ onUnmounted(() => {
 }
 
 kbd {
-  font: 10px ui-monospace, Menlo, monospace;
-  color: #cdd;
-  margin-left: 4px;
+  font: var(--cat-text-xs) var(--cat-font-mono);
+  color: var(--cat-text-tertiary);
+  margin-left: var(--cat-space-1);
 }
 
 .host {
@@ -174,17 +175,17 @@ kbd {
 
 .host :global(.cm-editor) {
   height: 100%;
-  font-size: 12px;
+  font-size: var(--cat-text-sm);
 }
 
 .host :global(.cm-scroller) {
-  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-family: var(--cat-font-mono);
 }
 
 .hint {
   position: absolute;
-  margin: 40px 16px;
-  color: #777;
+  margin: 40px var(--cat-space-4);
+  color: var(--cat-text-tertiary);
   pointer-events: none;
 }
 </style>

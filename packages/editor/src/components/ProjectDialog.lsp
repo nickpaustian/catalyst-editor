@@ -95,34 +95,34 @@ document.addEventListener('keydown', (event) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--cat-scrim);
 }
 
 .dialog {
   width: min(520px, 92vw);
   display: flex;
   flex-direction: column;
-  background: #161616;
-  border: 1px solid #3a3a3a;
-  border-radius: 6px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
-  color: #ddd;
-  font: 12px/1.4 "IBM Plex Sans", system-ui, sans-serif;
+  background: var(--cat-bg-panel);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-md);
+  box-shadow: var(--cat-shadow-e2);
+  color: var(--cat-text-primary);
+  font: var(--cat-text-sm) / var(--cat-leading-body) var(--cat-font-ui);
 }
 
 .title {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
-  border-bottom: 1px solid #2a2a2a;
-  font-size: 13px;
+  padding: var(--cat-space-2) var(--cat-space-3);
+  border-bottom: 1px solid var(--cat-border);
+  font-size: var(--cat-text-md);
   font-weight: 600;
 }
 
 .x {
-  font: 16px/1 system-ui, sans-serif;
-  color: #999;
+  font: var(--cat-text-lg) / 1 var(--cat-font-ui);
+  color: var(--cat-text-secondary);
   background: none;
   border: 0;
   cursor: pointer;
@@ -131,20 +131,20 @@ document.addEventListener('keydown', (event) => {
 .body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
+  gap: var(--cat-space-2);
+  padding: var(--cat-space-3);
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  color: #bbb;
+  gap: var(--cat-space-1);
+  color: var(--cat-text-secondary);
 }
 
 .row {
   display: flex;
-  gap: 4px;
+  gap: var(--cat-space-1);
 }
 
 .row input {
@@ -156,11 +156,11 @@ input,
 select,
 textarea {
   font: inherit;
-  color: #eee;
-  background: #222;
-  border: 1px solid #444;
-  border-radius: 3px;
-  padding: 5px 8px;
+  color: var(--cat-text-primary);
+  background: var(--cat-bg-field);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-sm);
+  padding: var(--cat-space-1) var(--cat-space-2);
 }
 
 textarea {
@@ -168,15 +168,15 @@ textarea {
 }
 
 .hint {
-  color: #777;
-  font-size: 11px;
+  color: var(--cat-text-tertiary);
+  font-size: var(--cat-text-xs);
 }
 
 .check {
   display: flex;
   align-items: center;
-  gap: 6px;
-  color: #bbb;
+  gap: var(--cat-space-1-5);
+  color: var(--cat-text-secondary);
 }
 
 .check input {
@@ -185,31 +185,32 @@ textarea {
 
 .error {
   margin: 0;
-  color: #e07070;
+  color: var(--cat-danger);
 }
 
 .actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  padding: 8px 12px;
-  border-top: 1px solid #2a2a2a;
+  gap: var(--cat-space-2);
+  padding: var(--cat-space-2) var(--cat-space-3);
+  border-top: 1px solid var(--cat-border);
 }
 
 button {
   font: inherit;
   color: inherit;
-  background: #222;
-  border: 1px solid #444;
-  border-radius: 3px;
-  padding: 5px 14px;
+  background: var(--cat-bg-field);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-sm);
+  padding: var(--cat-space-1) var(--cat-space-3);
   cursor: pointer;
 }
 
 button.primary {
-  background: #3b5aa0;
-  border-color: #6a8fd8;
-  color: #fff;
+  background: var(--cat-accent);
+  border-color: var(--cat-accent);
+  color: var(--cat-text-on-accent);
+  font-weight: 500;
 }
 
 button:disabled {

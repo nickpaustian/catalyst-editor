@@ -84,62 +84,64 @@ function apply() {
 
 <style>
 h2 {
-  font-size: 11px;
+  font-size: var(--cat-text-xs);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #999;
-  margin: 14px 0 4px;
+  color: var(--cat-text-secondary);
+  margin: var(--cat-space-3) 0 var(--cat-space-1);
 }
 
 .hint {
-  color: #888;
-  font-size: 11px;
-  margin: 4px 0;
+  color: var(--cat-text-tertiary);
+  font-size: var(--cat-text-xs);
+  margin: var(--cat-space-1) 0;
 }
 
 .row {
-  margin: 2px 0;
+  margin: var(--cat-space-0-5) 0;
 }
 
 label {
   display: inline-block;
   width: 18px;
-  color: #999;
+  color: var(--cat-text-secondary);
 }
 
 input,
 button {
   font: inherit;
   color: inherit;
-  background: #222;
-  border: 1px solid #444;
-  border-radius: 3px;
-  padding: 3px 6px;
+  background: var(--cat-bg-field);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-sm);
+  padding: var(--cat-space-0-5) var(--cat-space-1-5);
 }
 
 input[type="number"] {
   width: 64px;
+  font-family: var(--cat-font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 button {
   cursor: pointer;
-  margin: 0 4px 4px 0;
+  margin: 0 var(--cat-space-1) var(--cat-space-1) 0;
 }
 
 button.on {
-  border-color: #6a8fd8;
-  background: #2a3650;
+  border-color: var(--cat-border-strong);
+  background: var(--cat-bg-active);
 }
 
 .list {
   max-height: 160px;
   overflow-y: auto;
-  border: 1px solid #333;
-  margin-bottom: 6px;
+  border: 1px solid var(--cat-border);
+  margin-bottom: var(--cat-space-1-5);
 }
 
 .item {
-  padding: 2px 6px;
+  padding: var(--cat-space-0-5) var(--cat-space-1-5);
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -147,10 +149,10 @@ button.on {
 }
 
 .item:hover {
-  background: #2a2a2a;
+  background: var(--cat-bg-hover);
 }
 
 .item.selected {
-  background: #3a4a6a;
+  background: var(--cat-accent-soft);
 }
 </style>

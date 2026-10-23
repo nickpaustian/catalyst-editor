@@ -4,8 +4,9 @@ import { Interaction } from "@nickpaustian/catalyst/interaction"
 import { Physics } from "@nickpaustian/catalyst/physics"
 import { Resources } from "@nickpaustian/catalyst/resources"
 import { Splats } from "@nickpaustian/catalyst/splats"
-import { HemisphereLight } from "three"
+import { Color, HemisphereLight } from "three"
 import type { Recipe } from "./recipe"
+import { color } from "./tokens/tokens"
 
 /** The engine the editor and the runner share: the core modules, a recipe's own, a light and a grid. */
 export const createEngine = (recipe: Recipe, options: CatalystOptions & { grid?: boolean } = {}): Catalyst => {
@@ -18,6 +19,6 @@ export const createEngine = (recipe: Recipe, options: CatalystOptions & { grid?:
     modules: [new Physics({ gravity: 9.8 }), new Input(), new Interaction(), new Resources(), new Splats({ capacity: 500_000 }), ...(recipe.modules?.() ?? []), ...(rest.modules ?? [])],
   })
   engine.scene.add(new HemisphereLight(0xffffff, 0x334455, 2))
-  if (grid) engine.scene.add(DebugShapes.grid({ size: 40, colour: 0x2a2f3a }))
+  if (grid) engine.scene.add(DebugShapes.grid({ size: 40, colour: new Color(color.border.default).getHex() }))
   return engine
 }

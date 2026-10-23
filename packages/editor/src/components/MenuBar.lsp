@@ -143,16 +143,16 @@ function resetLayout() {
   top: 0;
   left: 0;
   right: 0;
-  height: var(--menu-bar-height, 30px);
+  height: var(--menu-bar-height);
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 10px;
+  gap: var(--cat-space-2);
+  padding: 0 var(--cat-space-2);
   box-sizing: border-box;
-  background: #161616;
-  border-bottom: 1px solid #2a2a2a;
-  color: #ddd;
-  font: 12px/1 "IBM Plex Sans", system-ui, sans-serif;
+  background: var(--cat-bg-app);
+  border-bottom: 1px solid var(--cat-border);
+  color: var(--cat-text-primary);
+  font: var(--cat-text-sm) / 1 var(--cat-font-ui);
   z-index: 1100;
   user-select: none;
 }
@@ -164,16 +164,17 @@ function resetLayout() {
 
 .run {
   font: inherit;
-  color: #dfe8ff;
-  background: #2a3650;
-  border: 1px solid #6a8fd8;
-  border-radius: 3px;
-  padding: 3px 10px;
+  color: var(--cat-text-primary);
+  background: var(--cat-bg-field);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-sm);
+  padding: var(--cat-space-0-5) var(--cat-space-2);
   cursor: pointer;
 }
 
 .run:hover {
-  background: #3b5aa0;
+  background: var(--cat-bg-hover);
+  border-color: var(--cat-border-strong);
 }
 
 .menus {
@@ -196,13 +197,13 @@ function resetLayout() {
   color: inherit;
   background: none;
   border: 0;
-  padding: 0 10px;
+  padding: 0 var(--cat-space-2);
   cursor: default;
 }
 
 .menu-title:hover,
 .menu.open .menu-title {
-  background: #2a2a2a;
+  background: var(--cat-bg-hover);
 }
 
 .menu-items {
@@ -212,31 +213,31 @@ function resetLayout() {
   min-width: 190px;
   display: flex;
   flex-direction: column;
-  padding: 4px;
-  background: #222;
-  border: 1px solid #444;
-  border-radius: 0 0 3px 3px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+  padding: var(--cat-space-1);
+  background: var(--cat-bg-raised);
+  border: 1px solid var(--cat-border);
+  border-radius: 0 0 var(--cat-radius-md) var(--cat-radius-md);
+  box-shadow: var(--cat-shadow-e1);
 }
 
 .menu-items button {
   font: inherit;
-  color: #ddd;
+  color: var(--cat-text-primary);
   text-align: left;
   background: none;
   border: 0;
-  border-radius: 3px;
-  padding: 6px 10px;
+  border-radius: var(--cat-radius-sm);
+  padding: var(--cat-space-1-5) var(--cat-space-2);
   cursor: pointer;
   white-space: nowrap;
 }
 
 .menu-items button:hover {
-  background: #333;
+  background: var(--cat-bg-hover);
 }
 
 .menu-items button:disabled {
-  color: #666;
+  color: var(--cat-text-disabled);
   cursor: default;
   background: none;
 }
@@ -254,25 +255,25 @@ function resetLayout() {
 .choices {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px 10px 4px 26px;
+  gap: var(--cat-space-0-5);
+  padding: var(--cat-space-0-5) var(--cat-space-2) var(--cat-space-1) var(--cat-space-6);
 }
 
 .choices .dim {
-  color: #777;
+  color: var(--cat-text-tertiary);
   width: 34px;
 }
 
 .choices button {
-  padding: 2px 6px;
-  color: #aaa;
-  border: 1px solid #3a3a3a;
+  padding: var(--cat-space-0-5) var(--cat-space-1-5);
+  color: var(--cat-text-secondary);
+  border: 1px solid var(--cat-border);
 }
 
 .choices button.on {
-  color: #fff;
-  background: #3b5aa0;
-  border-color: #6a8fd8;
+  color: var(--cat-text-primary);
+  background: var(--cat-bg-active);
+  border-color: var(--cat-border-strong);
 }
 
 .choices button::before,
@@ -282,45 +283,45 @@ function resetLayout() {
 }
 
 .menu-items .dim {
-  color: #777;
-  font-size: 11px;
+  color: var(--cat-text-tertiary);
+  font-size: var(--cat-text-xs);
 }
 
 .menu-items hr {
   border: 0;
-  border-top: 1px solid #3a3a3a;
-  margin: 4px 0;
+  border-top: 1px solid var(--cat-border);
+  margin: var(--cat-space-1) 0;
 }
 
 .menu-items.help {
   min-width: 300px;
   max-width: 360px;
-  padding: 8px 12px;
-  color: #bbb;
+  padding: var(--cat-space-2) var(--cat-space-3);
+  color: var(--cat-text-secondary);
   line-height: 1.4;
 }
 
 .menu-items.help p {
-  margin: 4px 0;
+  margin: var(--cat-space-1) 0;
 }
 
 kbd {
-  font: 11px/1 ui-monospace, Menlo, monospace;
-  padding: 1px 4px;
-  border: 1px solid #555;
+  font: var(--cat-text-xs) / 1 var(--cat-font-mono);
+  padding: 0 var(--cat-space-1);
+  border: 1px solid var(--cat-border);
   border-bottom-width: 2px;
-  border-radius: 3px;
-  background: #1a1a1a;
+  border-radius: var(--cat-radius-sm);
+  background: var(--cat-bg-field);
 }
 
 .status {
   margin-left: auto;
   display: flex;
-  gap: 8px;
-  color: #aaa;
+  gap: var(--cat-space-2);
+  color: var(--cat-text-secondary);
 }
 
 .status .dim {
-  color: #777;
+  color: var(--cat-text-tertiary);
 }
 </style>

@@ -31,40 +31,40 @@ function apply(field: { path: string; value: string }) {
 
 <style>
 h2 {
-  font-size: 11px;
+  font-size: var(--cat-text-xs);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #999;
-  margin: 14px 0 4px;
+  color: var(--cat-text-secondary);
+  margin: var(--cat-space-3) 0 var(--cat-space-1);
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  margin: 4px 0;
+  margin: var(--cat-space-1) 0;
 }
 
 label {
-  color: #999;
-  font-size: 11px;
+  color: var(--cat-text-secondary);
+  font-size: var(--cat-text-xs);
 }
 
 input,
 textarea {
   font: inherit;
   color: inherit;
-  background: #222;
-  border: 1px solid #444;
-  border-radius: 3px;
-  padding: 3px 6px;
+  background: var(--cat-bg-field);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-sm);
+  padding: var(--cat-space-0-5) var(--cat-space-1-5);
   width: 100%;
   box-sizing: border-box;
   resize: vertical;
 }
 
 .hint {
-  color: #888;
-  font-size: 11px;
-  margin: 4px 0;
+  color: var(--cat-text-tertiary);
+  font-size: var(--cat-text-xs);
+  margin: var(--cat-space-1) 0;
 }
 </style>
