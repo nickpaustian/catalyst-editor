@@ -1,5 +1,5 @@
 <view>
-<div class="menu" $if="state.open" $ref="menu" @pointerdown="$event.stopPropagation()" @contextmenu="$event.preventDefault()">
+<div class="menu" $if="state.open" @pointerdown="$event.stopPropagation()" @contextmenu="$event.preventDefault()">
   <template $for="item in state.items" $key="item.key">
     <hr $if="item.separator" />
     <button $else type="button" $disabled="item.disabled" @click="pick(item)">
@@ -11,12 +11,11 @@
 </view>
 
 <logic lang="ts">
-import { reactive, shared, defineRefs, onMounted } from '@lightspeed-js/core'
+import { reactive, shared, onMounted } from '@lightspeed-js/core'
 
 interface Item { key: number; separator: boolean; label: string; disabled: boolean; kbd: string; run: (() => void) | null }
 
 const cell = shared('editor:contextMenu', null)
-const refs = defineRefs<{ menu: HTMLElement }>()
 const state = reactive({ open: false, x: 0, y: 0, items: [] as Item[] })
 
 function close() {
@@ -38,14 +37,22 @@ cell.subscribe((next: { x: number; y: number; items: any[] } | null | undefined)
   state.x = next.x
   state.y = next.y
   state.open = true
-  setTimeout(place, 0)
+  placeWhenRendered(++opening)
 })
 
+let opening = 0
+
+// The element appears with the render, a frame or two after the state
+// changes, so placement waits for it (and gives up if the menu closed first)
+function placeWhenRendered(id: number, tries = 0) {
+  if (id !== opening || !state.open) return
+  const menu = document.querySelector<HTMLElement>('#context-menu .menu')
+  if (menu) return place(menu)
+  if (tries < 90) requestAnimationFrame(() => placeWhenRendered(id, tries + 1))
+}
+
 // At the pointer, shifted back inside the window when it would not fit
-function place() {
-  const menu = refs.menu ?? document.querySelector<HTMLElement>('#context-menu .menu')
-  if (!menu) return
-  menu.style.visibility = 'hidden'
+function place(menu: HTMLElement) {
   menu.style.left = `${state.x}px`
   menu.style.top = `${state.y}px`
   const rect = menu.getBoundingClientRect()
@@ -53,7 +60,7 @@ function place() {
   const y = rect.bottom > window.innerHeight ? Math.max(0, window.innerHeight - rect.height - 4) : state.y
   menu.style.left = `${x}px`
   menu.style.top = `${y}px`
-  menu.style.visibility = ''
+  menu.classList.add('placed')
 }
 
 onMounted(() => {
@@ -70,6 +77,14 @@ onMounted(() => {
 .menu {
   position: fixed;
   z-index: 2500;
+  visibility: hidden;
+}
+
+.menu.placed {
+  visibility: visible;
+}
+
+.menu {
   min-width: 180px;
   padding: 4px;
   background: #1c1c1c;
