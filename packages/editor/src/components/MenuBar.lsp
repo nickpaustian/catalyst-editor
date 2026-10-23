@@ -9,6 +9,7 @@
         <button @click="run('newProject')">New project <span class="dim" $if="shared['editor:project'].browserStorage">in the browser</span></button>
         <button @click="run('openFolder')" $disabled="!shared['editor:project'].supported">Open folder…</button>
         <button @click="run('reopenLast')" $disabled="!shared['editor:project'].supported">Reopen last</button>
+        <button @click="run('closeProject')" $disabled="!shared['editor:project'].open">Close project</button>
         <hr />
         <button @click="run('save')">Save</button>
         <button @click="run('saveAs')">Save as…</button>
@@ -69,7 +70,7 @@
   <button class="run" title="Run (⌘R / Ctrl+R)" @click="run('run')">▶ Run</button>
 
   <span class="status">
-    <span>{{ shared['editor:project'].name ?? 'untitled' }}</span>
+    <span>{{ shared['editor:project'].open ? (shared['editor:project'].name ?? 'untitled') : '' }}</span>
     <span class="dim">{{ shared['editor:project'].storage === 'browser' ? 'in browser' : shared['editor:project'].storage === 'disk' ? 'on disk' : '' }}</span>
     <span class="dim">{{ shared['editor:project'].recipe }}</span>
     <span class="dim" $if="shared['editor:project'].status">{{ shared['editor:project'].status }}</span>
@@ -83,7 +84,7 @@ import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { preferences } from '../preferences.ts'
 
-shared('editor:project', { name: null, recipe: '', storage: null, status: '', supported: false, browserStorage: false, dirty: false })
+shared('editor:project', { open: false, name: null, recipe: '', storage: null, status: '', supported: false, browserStorage: false, dirty: false })
 shared('editor:view', { view: 'orbit', visualised: true, gizmo: 'translate', physics: false, scripts: false, snap: { enabled: true, move: 0.25, rotate: 15 } })
 shared('editor:history', { canUndo: false, canRedo: false, undoLabel: null, redoLabel: null })
 shared('editor:selection', null)

@@ -29,6 +29,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!(await app.mount("editorpanel", "#editor-panel"))) throw new Error("EditorPanel did not mount")
   if (!(await app.mount("menubar", "#menu-bar"))) throw new Error("MenuBar did not mount")
   if (!(await app.mount("codepane", "#code-panel"))) throw new Error("CodePane did not mount")
+  if (!(await app.mount("startscreen", "#start-screen"))) throw new Error("StartScreen did not mount")
   app.shared("editor:code").subscribe((code: { path: string | null } | undefined) => {
     if (code?.path) panes.open("code", "viewport")
   })
@@ -46,8 +47,4 @@ document.addEventListener("DOMContentLoaded", async () => {
     await app.mount(id, host)
   }
   Object.assign(window, { engine, session, folders })
-
-  const last = folders.isSupported ? await folders.last() : null
-  await session.open(null)
-  if (last) (window as any).lightspeed.shared("editor:project").set({ name: null, recipe: recipe.name, storage: null, status: `last folder: ${last.name}, use File → Reopen last`, supported: true, browserStorage: folders.hasBrowserStorage, dirty: false })
 })

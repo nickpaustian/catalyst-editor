@@ -7,7 +7,7 @@ import { EditorCamera, groupTarget, type GizmoMode } from "./EditorCamera"
 import { EditorInput } from "./EditorInput"
 import { History } from "./History"
 import { preferences, type SnapSettings } from "./preferences"
-import { browserFolders, folderLoader, type FolderSource, type ProjectFolder, type ProjectStorage } from "./ProjectFolder"
+import { browserFolders, folderLoader, type FolderSource, type ProjectFolder, type ProjectStorage, type RecentProject } from "./ProjectFolder"
 import { windowRunnerLink, type RunnerLink } from "./RunnerLink"
 import { SCRIPTS_DIR, ScriptCompiler, scriptTemplate } from "./ScriptCompiler"
 import type { NodeKind, Recipe } from "./recipe"
@@ -59,7 +59,10 @@ export type ViewMode = "orbit"
 
 /** What the panel shows. Each key is a Lightspeed shared cell. */
 export interface EditorCells {
-  "editor:project": { name: string | null; recipe: string; storage: ProjectStorage | null; status: string; supported: boolean; browserStorage: boolean; dirty: boolean }
+  /** `open` is false until a project is in the viewport; the start screen shows meanwhile. */
+  "editor:project": { open: boolean; name: string | null; recipe: string; storage: ProjectStorage | null; status: string; supported: boolean; browserStorage: boolean; dirty: boolean }
+  /** Projects opened before, for the start screen. */
+  "editor:recent": RecentProject[]
   "editor:history": { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
   /** The recipe's project-wide settings, or null when it has none. */
   "editor:settings": { title: string; fields: SelectionProperty[] } | null
@@ -90,9 +93,12 @@ export interface EditorCells {
 }
 
 export type EditorCommand =
-  | { type: "newProject" }
+  | { type: "newProject"; name?: string }
   | { type: "openFolder" }
   | { type: "reopenLast" }
+  | { type: "openRecent"; id: string }
+  | { type: "forgetRecent"; id: string }
+  | { type: "closeProject" }
   | { type: "save" }
   | { type: "saveAs" }
   | { type: "download" }
@@ -254,6 +260,7 @@ export class EditorSession {
     this.set("editor:scripts", [])
     this.set("editor:code", { path: null, text: "", status: "" })
     this.setView("orbit")
+    void this.publishRecent()
   }
 
   get root(): Node3D | null {
@@ -263,10 +270,6 @@ export class EditorSession {
   /** Put a project in the viewport: the folder's, or a fresh one when there is no folder. */
   async open(folder: ProjectFolder | null): Promise<void> {
     this.close()
-    if (!folder && this.folders.hasBrowserStorage) {
-      folder = await this.folders.inBrowser("untitled")
-      await folder.clear()
-    }
     this.folder = folder
     this.engine.loader = folder ? folderLoader(folder) : this.engine.loader
     this.useFolderScripts()
@@ -284,6 +287,19 @@ export class EditorSession {
     this.publishTree()
     this.select(null)
     this.camera.focusPoint(new THREE.Vector3(0, 0.5, 0), 8)
+    if (folder) await folder.remember()
+    void this.publishRecent()
+  }
+
+  /** Take the project out of the viewport and show the start screen again. */
+  closeProject(): void {
+    this.close()
+    this.folder = null
+    this.set("editor:code", { path: null, text: "", status: "" })
+    this.publishSettings()
+    this.publishTree()
+    this.publishProject()
+    void this.publishRecent()
   }
 
   private close(): void {
@@ -350,9 +366,13 @@ export class EditorSession {
     this.set("editor:addDialog", false)
   }
 
+  private async publishRecent(): Promise<void> {
+    this.set("editor:recent", await this.folders.recent())
+  }
+
   private publishProject(status?: string): void {
     const dirty = this.history.isDirty
-    this.set("editor:project", { name: this.folder?.name ?? null, recipe: this.recipe.name, storage: this.folder?.storage ?? null, status: status ?? (dirty ? "unsaved changes" : ""), supported: this.folders.isSupported, browserStorage: this.folders.hasBrowserStorage, dirty })
+    this.set("editor:project", { open: this._root !== null, name: this.folder?.name ?? null, recipe: this.recipe.name, storage: this.folder?.storage ?? null, status: status ?? (dirty ? "unsaved changes" : ""), supported: this.folders.isSupported, browserStorage: this.folders.hasBrowserStorage, dirty })
   }
 
   private publishSettings(): void {
@@ -490,12 +510,11 @@ export class EditorSession {
   private async handle(command: EditorCommand): Promise<void> {
     switch (command.type) {
       case "newProject":
-        await this.open(null)
+        await this.newProject(command.name)
         break
       case "openFolder": {
         const folder = await this.folders.pick()
         if (!folder) return
-        await folder.remember()
         if (await folder.ensurePermission()) await this.open(folder)
         break
       }
@@ -505,6 +524,23 @@ export class EditorSession {
         if (await folder.ensurePermission()) await this.open(folder)
         break
       }
+      case "openRecent": {
+        const folder = await this.folders.openRecent(command.id)
+        if (!folder) {
+          await this.folders.forget(command.id)
+          await this.publishRecent()
+          return this.publishProject("that project is gone")
+        }
+        if (await folder.ensurePermission()) await this.open(folder)
+        break
+      }
+      case "forgetRecent":
+        await this.folders.forget(command.id)
+        await this.publishRecent()
+        break
+      case "closeProject":
+        this.closeProject()
+        break
       case "save":
         if (this.folder) await this.save(this.folder)
         else await this.saveAs()
@@ -621,6 +657,28 @@ export class EditorSession {
     }
   }
 
+  /**
+   * A fresh project: in the browser's storage under a name, or, where
+   * projects are folders, in a folder the user picks (an empty one, or a
+   * new one made in the picker).
+   */
+  private async newProject(name?: string): Promise<void> {
+    if (this.folders.hasBrowserStorage) {
+      const clean = (name ?? "untitled").trim().replace(/[\\/]+/g, "-") || "untitled"
+      const folder = await this.folders.inBrowser(clean)
+      if (!name) await folder.clear()
+      await this.open(folder)
+      return
+    }
+    if (this.folders.isSupported) {
+      const folder = await this.folders.pick()
+      if (!folder) return
+      if (await folder.ensurePermission()) await this.open(folder)
+      return
+    }
+    await this.open(null)
+  }
+
   //=========================
   // Running
   //=========================
@@ -665,9 +723,10 @@ export class EditorSession {
     }
     const folder = await this.folders.pick()
     if (!folder) return
-    await folder.remember()
     if (!(await folder.ensurePermission())) return
     this.folder = folder
+    await folder.remember()
+    void this.publishRecent()
     this.engine.loader = folderLoader(folder)
     this.useFolderScripts()
     await this.save(folder)

@@ -49,6 +49,10 @@ The scene recipe adds boxes, spheres and capsules (a mesh with a matching collid
 
 Scripts are viewed and edited in the **Code** pane: Edit on a script in the inspector (or choosing a file in the pane's own list) opens the file in a CodeMirror editor with TypeScript highlighting, below the viewport if the pane was closed. Save (⌘S in the editor) writes the file and rebuilds every script in the scene; a build error is shown in the pane's status against the file, and the scripts from that file stay on their nodes as "not built" until the next good save.
 
+## The start screen
+
+Until a project is open the editor shows a start screen over the viewport: New project (a name, for a project in the browser's storage; a folder picked or made in the system picker, in the desktop app), Open folder…, and the recent list. Recent is the projects the browser keeps plus the last folder picked on disk, or, in the desktop app, the last twelve folders opened by path; × takes one off the list, and a folder that has gone is dropped when it is clicked. File → Close project puts the start screen back.
+
 ## Running a project
 
 **Run** in the menu bar, or ⌘R / Ctrl+R while the editor has focus (Safari keeps that key for reload; use the button there), opens `play.html` in a window of its own and plays the scene as it is in the editor, unsaved edits included. The editor sends the serialised scene and the project folder's handle, so the runner reads the same files; a second run swaps the scene in the same window. The scene recipe puts a first person player at the **Player start** node, or the first camera, or the origin, and lets physics go. A recipe's `run(context)` does whatever playing means for it and returns a teardown.

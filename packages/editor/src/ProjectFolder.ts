@@ -43,6 +43,15 @@ export interface ProjectFolder {
   transfer(): FolderTransfer
 }
 
+/** A project opened before, as the start screen lists it. */
+export interface RecentProject {
+  id: string
+  name: string
+  /** Where it lives, for the eye: a path, or "in the browser". */
+  location: string
+  storage: ProjectStorage
+}
+
 /** Where projects come from: the browser's pickers and storage, or a desktop shell's. */
 export interface FolderSource {
   /** Whether folders on disk can be opened. */
@@ -54,6 +63,10 @@ export interface FolderSource {
   inBrowser(name: string): Promise<ProjectFolder>
   browserProjects(): Promise<string[]>
   fromTransfer(transfer: FolderTransfer): ProjectFolder
+  /** Projects opened before, most recent first. */
+  recent(): Promise<RecentProject[]>
+  openRecent(id: string): Promise<ProjectFolder | null>
+  forget(id: string): Promise<void>
 }
 
 const HANDLE_DB = "catalyst-editor"
@@ -261,6 +274,27 @@ export const browserFolders: FolderSource = {
     if (transfer.kind !== "handle") throw new Error("[catalyst-editor] a path cannot be opened through the browser")
     return new HandleFolder(transfer.handle)
   },
+  recent: async () => {
+    const out: RecentProject[] = []
+    const last = await HandleFolder.last()
+    if (last && last.storage === "disk") out.push({ id: "last", name: last.name, location: "a folder on disk, last opened", storage: "disk" })
+    for (const name of await HandleFolder.browserProjects()) out.push({ id: `browser:${name}`, name, location: "in the browser", storage: "browser" })
+    return out
+  },
+  openRecent: async (id) => {
+    if (id === "last") return HandleFolder.last()
+    if (!id.startsWith("browser:")) return null
+    const name = id.slice("browser:".length)
+    return (await HandleFolder.browserProjects()).includes(name) ? HandleFolder.inBrowser(name) : null
+  },
+  forget: async (id) => {
+    if (id === "last") await withStore("readwrite", (store) => store.delete(HANDLE_KEY))
+    else if (id.startsWith("browser:") && HandleFolder.hasBrowserStorage) {
+      const root = await navigator.storage.getDirectory()
+      const projects = await root.getDirectoryHandle(BROWSER_PROJECTS, { create: true })
+      await projects.removeEntry(id.slice("browser:".length), { recursive: true }).catch(() => undefined)
+    }
+  },
 }
 
 /** A filesystem a desktop shell gives the editor: absolute paths, the shell's own picker. */
@@ -276,7 +310,23 @@ export interface NativeFs {
   remove(path: string): Promise<void>
 }
 
-const LAST_PATH_KEY = "catalyst-editor:last-project-path"
+const RECENT_PATHS_KEY = "catalyst-editor:recent-project-paths"
+const RECENT_MAX = 12
+
+const recentPaths = (): string[] => {
+  try {
+    const list = JSON.parse(localStorage.getItem(RECENT_PATHS_KEY) ?? "[]")
+    return Array.isArray(list) ? list.filter((p): p is string => typeof p === "string") : []
+  } catch {
+    return []
+  }
+}
+
+const setRecentPaths = (paths: string[]): void => {
+  try {
+    localStorage.setItem(RECENT_PATHS_KEY, JSON.stringify(paths.slice(0, RECENT_MAX)))
+  } catch {}
+}
 
 const basename = (path: string): string => path.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? path
 
@@ -300,9 +350,7 @@ export class NativeFolder implements ProjectFolder {
   }
 
   async remember(): Promise<void> {
-    try {
-      localStorage.setItem(LAST_PATH_KEY, this.path)
-    } catch {}
+    setRecentPaths([this.path, ...recentPaths().filter((p) => p !== this.path)])
   }
 
   async ensurePermission(): Promise<boolean> {
@@ -383,13 +431,12 @@ export const nativeFolders = (fs: NativeFs): FolderSource => ({
     return path ? new NativeFolder(fs, path) : null
   },
   last: async () => {
-    try {
-      const path = localStorage.getItem(LAST_PATH_KEY)
-      return path && (await fs.exists(path)) ? new NativeFolder(fs, path) : null
-    } catch {
-      return null
-    }
+    const path = recentPaths()[0]
+    return path && (await fs.exists(path)) ? new NativeFolder(fs, path) : null
   },
+  recent: async () => recentPaths().map((path) => ({ id: path, name: basename(path), location: path, storage: "native" as const })),
+  openRecent: async (path) => ((await fs.exists(path)) ? new NativeFolder(fs, path) : null),
+  forget: async (path) => setRecentPaths(recentPaths().filter((p) => p !== path)),
   inBrowser: () => Promise.reject(new Error("[catalyst-editor] projects live on disk here")),
   browserProjects: async () => [],
   fromTransfer: (transfer) => {
