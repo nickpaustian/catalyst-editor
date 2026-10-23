@@ -13,7 +13,7 @@ npm workspace. The editor packages are consumed from source; the engine packages
 | `apps/editor/exhibition` | | The exhibition editor's sections and session as they were, kept as the reference for the exhibition recipe |
 | `packages/runtime`, `apps/player`, and the vendored `packages/catalyst`, `stelligra`, `spektra`, `telemetry`, `assets`, `debug` | | The exhibition player and its copies of the engine, as ported from Beruk. They go once the exhibition recipe runs on the published packages |
 
-The engine comes from `@nickpaustian/catalyst` and its peers (`helm`, `velora`, `signal`, `requester`, `@stelligra/core`) as `file:` links to the sibling repos. Vite dedupes `three` so the links and the app share one copy, and the app's `tsconfig` maps `three` to one set of types.
+The engine comes from `@nickpaustian/catalyst` and its peers (`helm`, `velora`, `signal`, `requester`, `@nickpaustian/stelligra`) from npm. Vite dedupes `three` so the packages and the app share one copy, and the app's `tsconfig` maps `three` to one set of types.
 
 ## Running
 

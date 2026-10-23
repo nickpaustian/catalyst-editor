@@ -9,12 +9,12 @@
   },
   "dependencies": {
     "@lightspeed-js/core": "^0.4.9",
-    "@nickpaustian/catalyst": "file:../../../catalyst",
-    "@nickpaustian/helm": "file:../../../helm",
-    "@nickpaustian/requester": "file:../../../requester",
-    "@nickpaustian/signal": "file:../../../signal",
-    "@nickpaustian/velora": "file:../../../velora",
-    "@stelligra/core": "file:../../../stelligra/packages/stelligra",
+    "@nickpaustian/catalyst": "^0.1.0",
+    "@nickpaustian/helm": "^0.1.0",
+    "@nickpaustian/requester": "^0.1.0",
+    "@nickpaustian/signal": "^0.1.0",
+    "@nickpaustian/velora": "^0.1.0",
+    "@nickpaustian/stelligra": "^0.1.0",
     "three": "^0.183.2"
   }
 }
