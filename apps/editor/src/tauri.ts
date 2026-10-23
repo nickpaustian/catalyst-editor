@@ -2,7 +2,7 @@ import { nativeFolders, type FolderTransfer, type NativeFs, type RunMessage, typ
 import { open } from "@tauri-apps/plugin-dialog"
 import { exists, mkdir, readDir, readFile, readTextFile, remove, watch, writeFile, writeTextFile } from "@tauri-apps/plugin-fs"
 import { invoke } from "@tauri-apps/api/core"
-import { homeDir } from "@tauri-apps/api/path"
+import { documentDir, homeDir } from "@tauri-apps/api/path"
 import { emitTo, listen } from "@tauri-apps/api/event"
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow"
 import { getCurrentWindow } from "@tauri-apps/api/window"
@@ -40,6 +40,7 @@ const fs: NativeFs = {
   initGit: (path) => invoke("init_git", { path }),
   watch: (path, listener) => watch(path, (event) => listener(event.paths), { recursive: true, delayMs: 250 }),
   homeDir: () => homeDir(),
+  documentsDir: () => documentDir(),
 }
 
 /** The runner as a second Tauri window, spoken to with Tauri events rather than `postMessage`. */

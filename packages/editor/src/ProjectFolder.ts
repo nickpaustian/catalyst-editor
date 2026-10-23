@@ -74,7 +74,7 @@ export interface FolderSource {
   readonly hasLocations: boolean
   /** Ask for a parent folder for a new project; null when cancelled or where there are no locations. */
   pickLocation(): Promise<string | null>
-  /** Where a new project goes unless another is chosen: the last location used, else home. */
+  /** Where a new project goes unless another is chosen: the last location used, else Documents, else nothing until one is picked. */
   defaultLocation(): Promise<string | null>
   /** Whether a new project of that name would land on a folder that already exists. */
   isTaken(name: string, location: string | null): Promise<boolean>
@@ -388,6 +388,8 @@ export interface NativeFs {
   watch?(path: string, listener: (paths: string[]) => void): Promise<() => void>
   /** The user's home folder, so paths can be shown from `~`. */
   homeDir?(): Promise<string>
+  /** The user's Documents folder, where a first project goes unless another place is chosen. */
+  documentsDir?(): Promise<string>
 }
 
 const RECENT_PATHS_KEY = "catalyst-editor:recent-project-paths"
@@ -568,9 +570,10 @@ export const nativeFolders = (fs: NativeFs): FolderSource => ({
   hasLocations: true,
   pickLocation: () => fs.pickDirectory(),
   defaultLocation: async () => {
-    const last = readStored<string | null>(LAST_LOCATION_KEY, null)
-    if (last && (await fs.exists(last))) return last
-    return (await fs.homeDir?.()) ?? null
+    for (const candidate of [readStored<string | null>(LAST_LOCATION_KEY, null), await fs.documentsDir?.()]) {
+      if (candidate && (await fs.exists(candidate))) return candidate.replace(/[\\/]+$/, "")
+    }
+    return null
   },
   isTaken: async (name, location) => Boolean(location) && fs.exists(`${location!.replace(/[\\/]+$/, "")}/${slug(name)}`),
   canInitGit: typeof fs.initGit === "function",
