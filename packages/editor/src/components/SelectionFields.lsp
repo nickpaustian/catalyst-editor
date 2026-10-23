@@ -69,6 +69,39 @@
         <input $else type="text" $model="field.value" $disabled="field.readonly" @change="applyField(field)" />
       </div>
     </div>
+    <div class="scripts">
+      <h3>Scripts</h3>
+      <div class="script" $for="script in state.scripts" $key="script.index">
+        <div class="row script-head">
+          <span class="script-name" $title="script.url">{{ script.name }}</span>
+          <span class="hint" $if="!script.built">not built</span>
+          <button class="remove" title="Detach script" @click="detachScript(script)">×</button>
+        </div>
+        <div class="row property" $for="field in script.fields" $key="field.key">
+          <label class="property-label">{{ field.label }}</label>
+          <input $if="field.type === 'number'" type="number" $step="field.step" $min="field.min" $max="field.max" $model="field.value" @change="applyScriptField(script, field)" />
+          <input $else-if="field.type === 'boolean'" type="checkbox" $model="field.value" @change="applyScriptField(script, field)" />
+          <span class="colour" $else-if="field.type === 'colour'">
+            <input type="color" $value="field.hex" @input="applyScriptColour($event, script, field)" />
+            <span class="hex">{{ field.hex }}</span>
+          </span>
+          <input $else type="text" $model="field.value" $disabled="field.readonly" @change="applyScriptField(script, field)" />
+        </div>
+      </div>
+      <div class="row attach" $if="shared['editor:scripts'].length">
+        <select $model="state.attachPath">
+          <option $for="file in shared['editor:scripts']" $key="file.path" $value="file.path">{{ file.name }}</option>
+        </select>
+        <button @click="attachScript()">Attach</button>
+      </div>
+      <div class="row attach">
+        <input class="new-script" type="text" placeholder="New script class name" $model="state.newScriptName" @keydown="newScriptKey($event)" />
+        <button @click="newScript()">New</button>
+      </div>
+      <div class="buttons" $if="state.scripts.length">
+        <button @click="send('reloadScripts')">Reload scripts</button>
+      </div>
+    </div>
   </template>
 </div>
 </view>
@@ -78,16 +111,25 @@ import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 
 const selection = shared('editor:selection', null)
+const scriptFiles = shared('editor:scripts', [])
 
 // Local copies of the fields, so typing doesn't fight the scene publishing
 // the same values back on every gizmo move
 interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number; readonly?: boolean; hex?: string }
+interface ScriptEntry { index: number; url: string; name: string; built: boolean; fields: Field[] }
 
 const state = reactive({
   name: '',
   px: 0, py: 0, pz: 0, rx: 0, ry: 0, rz: 0,
   fields: [] as Field[],
+  scripts: [] as ScriptEntry[],
+  attachPath: '',
+  newScriptName: '',
   layerNumbers: Array.from({ length: 32 }, (_, n) => n),
+})
+
+scriptFiles.subscribe((files: { path: string }[]) => {
+  if (!files.some((file) => file.path === state.attachPath)) state.attachPath = files[0]?.path ?? ''
 })
 
 selection.subscribe((next: any) => {
@@ -100,7 +142,37 @@ selection.subscribe((next: any) => {
   state.ry = next.rotation.y
   state.rz = next.rotation.z
   state.fields = (next.properties ?? []).map((field: Field) => ({ ...field, hex: field.type === 'colour' ? toHex(field.value) : undefined }))
+  state.scripts = (next.scripts ?? []).map((script: ScriptEntry) => ({ ...script, fields: script.fields.map((field) => ({ ...field, hex: field.type === 'colour' ? toHex(field.value) : undefined })) }))
 })
+
+function applyScriptField(script: ScriptEntry, field: Field) {
+  sendCommand({ type: 'setScriptProperty', index: script.index, key: field.key, value: field.value })
+}
+
+function applyScriptColour(event: Event, script: ScriptEntry, field: Field) {
+  field.hex = (event.target as HTMLInputElement).value
+  field.value = parseInt(field.hex.slice(1), 16)
+  applyScriptField(script, field)
+}
+
+function detachScript(script: ScriptEntry) {
+  sendCommand({ type: 'detachScript', index: script.index })
+}
+
+function attachScript() {
+  if (state.attachPath) sendCommand({ type: 'attachScript', url: state.attachPath })
+}
+
+function newScript() {
+  const name = state.newScriptName.trim()
+  if (!name) return
+  sendCommand({ type: 'newScript', name })
+  state.newScriptName = ''
+}
+
+function newScriptKey(event: KeyboardEvent) {
+  if (event.key === 'Enter') newScript()
+}
 
 function send(type: string) {
   sendCommand({ type })
@@ -399,6 +471,56 @@ input.name {
   color: #999;
   font-family: ui-monospace, Menlo, monospace;
   font-size: 11px;
+}
+
+.scripts {
+  margin-top: 10px;
+}
+
+.scripts h3 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #999;
+}
+
+.script {
+  margin: 4px 0 6px;
+  padding: 4px 6px;
+  border: 1px solid #2a2a2a;
+  border-radius: 3px;
+}
+
+.script-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.script-name {
+  flex: 1 1 auto;
+  font-weight: 600;
+}
+
+.script-head .remove {
+  background: none;
+  border: none;
+  padding: 0 3px;
+  color: #9ab;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.attach {
+  display: flex;
+  gap: 4px;
+}
+
+.attach select,
+.attach .new-script {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .layers {

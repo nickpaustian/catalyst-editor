@@ -1,5 +1,5 @@
 import * as THREE from "three"
-import { Node3D, Prefab, editorIcon, exposedProperties, readExposed, writeExposed, type Catalyst, type ExposedProperty, type NodeClass, type NodeJSON } from "@nickpaustian/catalyst"
+import { Node3D, Prefab, editorIcon, exposedProperties, readExposed, writeExposed, type Catalyst, type ExposedProperty, type NodeClass, type NodeJSON, type Script } from "@nickpaustian/catalyst"
 import { Input } from "@nickpaustian/catalyst/input"
 import { Physics } from "@nickpaustian/catalyst/physics"
 import type { LightspeedRuntime } from "@lightspeed-js/core"
@@ -8,6 +8,7 @@ import { EditorInput } from "./EditorInput"
 import { History } from "./History"
 import { preferences, type SnapSettings } from "./preferences"
 import { ProjectFolder, folderLoader } from "./ProjectFolder"
+import { SCRIPTS_DIR, ScriptCompiler, scriptTemplate } from "./ScriptCompiler"
 import type { NodeKind, Recipe } from "./recipe"
 
 export interface TreeRow {
@@ -44,6 +45,15 @@ export interface SelectionProperty extends ExposedProperty {
   value: unknown
 }
 
+/** A script on the selected node: built, with its fields, or still named by a file that could not be built. */
+export interface SelectionScript {
+  index: number
+  url: string
+  name: string
+  built: boolean
+  fields: SelectionProperty[]
+}
+
 export type ViewMode = "orbit"
 
 /** What the panel shows. Each key is a Lightspeed shared cell. */
@@ -52,12 +62,14 @@ export interface EditorCells {
   "editor:history": { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
   /** The recipe's project-wide settings, or null when it has none. */
   "editor:settings": { title: string; fields: SelectionProperty[] } | null
-  "editor:view": { view: ViewMode; visualised: boolean; gizmo: GizmoMode; physics: boolean; snap: SnapSettings }
+  "editor:view": { view: ViewMode; visualised: boolean; gizmo: GizmoMode; physics: boolean; scripts: boolean; snap: SnapSettings }
   "editor:tree": TreeRow[]
   /** The kinds the tree can add, as the class hierarchy they sit in: bases that are not kinds are shown but cannot be added. */
   "editor:kinds": KindNode[]
   /** Set true to open the add dialog; the dialog sets it back. */
   "editor:addDialog": boolean
+  /** The script files in the project, offered to attach. */
+  "editor:scripts": { path: string; name: string }[]
   "editor:selection": {
     id: number
     name: string
@@ -70,6 +82,7 @@ export interface EditorCells {
     position: { x: number; y: number; z: number }
     rotation: { x: number; y: number; z: number }
     properties: SelectionProperty[]
+    scripts: SelectionScript[]
   } | null
 }
 
@@ -86,6 +99,7 @@ export type EditorCommand =
   | { type: "setView"; view: ViewMode }
   | { type: "toggleVisualisers" }
   | { type: "togglePhysics" }
+  | { type: "toggleScripts" }
   | { type: "setGizmo"; mode: GizmoMode }
   | { type: "setSnap"; snap: Partial<SnapSettings> }
   | { type: "select"; id: number; mode?: SelectMode }
@@ -95,6 +109,11 @@ export type EditorCommand =
   | { type: "delete" }
   | { type: "makePrefab" }
   | { type: "unpackPrefab" }
+  | { type: "attachScript"; url: string }
+  | { type: "detachScript"; index: number }
+  | { type: "setScriptProperty"; index: number; key: string; value: unknown }
+  | { type: "newScript"; name: string }
+  | { type: "reloadScripts" }
   | { type: "focus" }
   | { type: "setTransform"; position: { x: number; y: number; z: number }; rotation: { x: number; y: number; z: number } }
   | { type: "setProperty"; key: string; value: unknown }
@@ -147,6 +166,8 @@ export class EditorSession {
   private nextId = 1
   private collapsed = new Set<Node3D>()
   private prefabs: { path: string; name: string }[] = []
+  private scriptFiles: { path: string; name: string }[] = []
+  private compiler: ScriptCompiler | null = null
   private unsubscribeCommands: () => void
   private unsubscribeBlur: () => void
   private runner: Window | null = null
@@ -192,6 +213,7 @@ export class EditorSession {
     this.input = input ? new EditorInput(input, { focusSelected: () => this.focusSelected(), deleteSelected: () => this.deleteSelected() }) : null
     const physics = this.engine.find(Physics)
     if (physics) physics.paused = true
+    this.engine.scripts.setRunning(false, this.engine.root, this.engine)
     this.history.onChange = () => {
       this.publishHistory()
       this.publishProject()
@@ -222,6 +244,7 @@ export class EditorSession {
     this.publishView()
     this.publishTree()
     this.publishSelection()
+    this.set("editor:scripts", [])
     this.setView("orbit")
   }
 
@@ -238,12 +261,14 @@ export class EditorSession {
     }
     this.folder = folder
     this.engine.loader = folder ? folderLoader(folder) : this.engine.loader
+    this.useFolderScripts()
     this.publishProject(folder ? `opening ${folder.name}` : "new project")
     const root = await this.recipe.load(folder, this.engine)
     this._root = root
     this.engine.add(root)
     this.setVisualised(this.visualised)
     await this.loadPrefabs()
+    await this.loadScriptFiles()
     this.history.clear()
     this.publishSettings()
     this.publishProject(folder ? "" : "unsaved")
@@ -332,7 +357,7 @@ export class EditorSession {
   }
 
   private publishView(): void {
-    this.set("editor:view", { view: this.view, visualised: this.visualised, gizmo: this.gizmo, physics: !(this.engine.find(Physics)?.paused ?? true), snap: this.snap })
+    this.set("editor:view", { view: this.view, visualised: this.visualised, gizmo: this.gizmo, physics: !(this.engine.find(Physics)?.paused ?? true), scripts: this.engine.scripts.running, snap: this.snap })
   }
 
   //=========================
@@ -439,6 +464,7 @@ export class EditorSession {
       count: this.selection.size,
       parent: node.parent instanceof Node3D && node.parent !== this._root ? node.parent.name : null,
       prefab: node instanceof Prefab ? node.url : null,
+      scripts: this.selectionScripts(node),
       position: { x: round(p.x), y: round(p.y), z: round(p.z) },
       rotation: { x: round(THREE.MathUtils.radToDeg(e.x), 2), y: round(THREE.MathUtils.radToDeg(e.y), 2), z: round(THREE.MathUtils.radToDeg(e.z), 2) },
       properties: exposedProperties(node)
@@ -502,6 +528,10 @@ export class EditorSession {
         this.publishView()
         break
       }
+      case "toggleScripts":
+        this.engine.scripts.setRunning(!this.engine.scripts.running, this.engine.root, this.engine)
+        this.publishView()
+        break
       case "setGizmo":
         this.gizmo = command.mode
         this.camera.mode = command.mode
@@ -538,6 +568,21 @@ export class EditorSession {
         break
       case "unpackPrefab":
         await this.unpackPrefab()
+        break
+      case "attachScript":
+        await this.attachScript(command.url)
+        break
+      case "detachScript":
+        this.detachScript(command.index)
+        break
+      case "setScriptProperty":
+        this.writeScriptProperty(command.index, command.key, command.value)
+        break
+      case "newScript":
+        await this.newScript(command.name)
+        break
+      case "reloadScripts":
+        await this.reloadScripts()
         break
       case "focus":
         this.focusSelected()
@@ -606,8 +651,122 @@ export class EditorSession {
     if (!(await folder.ensurePermission())) return
     this.folder = folder
     this.engine.loader = folderLoader(folder)
+    this.useFolderScripts()
     await this.save(folder)
     await this.loadPrefabs()
+    await this.loadScriptFiles()
+  }
+
+  //=========================
+  // Scripts
+  //=========================
+
+  /** Scripts build from the project folder's files, or through the engine's default import when there is no folder. */
+  private useFolderScripts(): void {
+    this.compiler = this.folder ? new ScriptCompiler(this.folder) : null
+    this.engine.scripts.invalidate()
+    if (this.compiler) this.engine.scripts.loader = this.compiler.loader
+  }
+
+  private async loadScriptFiles(): Promise<void> {
+    const files = this.folder ? await this.folder.list(SCRIPTS_DIR) : []
+    this.scriptFiles = files.filter((file) => file.kind === "file" && /\.(ts|js)$/.test(file.name)).map((file) => ({ path: file.path, name: file.name.replace(/\.(ts|js)$/, "") }))
+    this.set("editor:scripts", this.scriptFiles)
+  }
+
+  private selectionScripts(node: Node3D): SelectionScript[] {
+    const name = (url: string) => url.slice(url.lastIndexOf("/") + 1).replace(/\.(ts|js)$/, "")
+    const built = node.scripts.map((script, index) => ({
+      index,
+      url: script.url,
+      name: name(script.url),
+      built: true,
+      fields: exposedProperties(script).map((property) => ({ ...property, label: property.label ?? property.key, value: readExposed(script, property) })),
+    }))
+    const pending = node.pendingScripts.map((json, i) => ({ index: node.scripts.length + i, url: json.url, name: name(json.url), built: false, fields: [] }))
+    return [...built, ...pending]
+  }
+
+  /** Attach a script file to the selected node; its fields appear once it is built. */
+  private async attachScript(url: string): Promise<void> {
+    const node = this.selected
+    if (!node || node === this._root) return
+    await node.addScript({ url })
+    if (this.selected === node) this.publishSelection()
+    const script = node.scripts.find((s) => s.url === url && !this.knownScripts.has(s))
+    if (script) {
+      this.knownScripts.add(script)
+      const index = node.scripts.indexOf(script)
+      this.record(`attach ${url}`, () => node.detachScript(script), () => node.attachScript(script, index))
+    } else {
+      const entry = node.pendingScripts.find((json) => json.url === url)
+      if (entry) this.record(`attach ${url}`, () => (node.pendingScripts = node.pendingScripts.filter((j) => j !== entry)), () => node.pendingScripts.push(entry))
+      this.publishProject(`${url} could not be built; see the console`)
+    }
+    this.publishSelection()
+  }
+
+  private readonly knownScripts = new WeakSet<Script>()
+
+  private detachScript(index: number): void {
+    const node = this.selected
+    if (!node) return
+    if (index < node.scripts.length) {
+      const script = node.scripts[index]
+      node.detachScript(script)
+      this.record(`detach ${script.url}`, () => node.attachScript(script, index), () => node.detachScript(script))
+    } else {
+      const entry = node.pendingScripts[index - node.scripts.length]
+      if (!entry) return
+      const drop = () => (node.pendingScripts = node.pendingScripts.filter((j) => j !== entry))
+      drop()
+      this.record(`detach ${entry.url}`, () => node.pendingScripts.push(entry), drop)
+    }
+    this.publishSelection()
+  }
+
+  private writeScriptProperty(index: number, key: string, value: unknown): void {
+    const node = this.selected
+    const script = node?.scripts[index]
+    if (!node || !script) return
+    const property = exposedProperties(script).find((p) => p.key === key)
+    if (!property || property.readonly) return
+    const next = this.coerce(property, value)
+    if (next === undefined) return
+    const before = readExposed(script, property)
+    if (JSON.stringify(before) === JSON.stringify(next)) return
+    writeExposed(script, property, next)
+    this.record(property.label ?? key, () => writeExposed(script, property, before), () => writeExposed(script, property, next), `script:${this.idOf(node)}:${index}:${key}`)
+    this.publishSelection()
+  }
+
+  /** Write a starting script named after the class into scripts/, and attach it to the selected node. */
+  private async newScript(name: string): Promise<void> {
+    const folder = this.folder
+    if (!folder) return this.publishProject("the project needs a folder before scripts can be written")
+    const className = name.trim().replace(/[^\w$]+/g, "").replace(/^[0-9]+/, "")
+    if (!className) return
+    const path = `${SCRIPTS_DIR}/${slug(className)}.ts`
+    if (!(await folder.exists(path))) await folder.writeText(path, scriptTemplate(className.charAt(0).toUpperCase() + className.slice(1)))
+    await this.loadScriptFiles()
+    this.publishProject(`saved ${path}`)
+    if (this.selected && this.selected !== this._root) await this.attachScript(path)
+  }
+
+  /** Read every script file again and rebuild the scripts on every node, keeping their values. */
+  private async reloadScripts(): Promise<void> {
+    const root = this._root
+    if (!root) return
+    this.compiler?.invalidate()
+    const urls = new Set<string>()
+    root.walk((node) => {
+      for (const script of node.scripts) urls.add(script.url)
+      for (const json of node.pendingScripts) urls.add(json.url)
+    })
+    await Promise.all([...urls].map((url) => this.engine.scripts.reload(url, root)))
+    await this.loadScriptFiles()
+    this.publishProject(urls.size ? `rebuilt ${urls.size} script${urls.size === 1 ? "" : "s"}` : "no scripts in the scene")
+    this.publishSelection()
   }
 
   //=========================

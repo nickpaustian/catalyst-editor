@@ -37,6 +37,7 @@
       <div class="menu-items" $if="state.open === 'view'">
         <button $class="{ on: shared['editor:view'].visualised }" @click="run('toggleVisualisers')">Visualisers</button>
         <button $class="{ on: shared['editor:view'].physics }" @click="run('togglePhysics')">Physics running</button>
+        <button $class="{ on: shared['editor:view'].scripts }" @click="run('toggleScripts')">Scripts running</button>
         <hr />
         <button $class="{ on: shared['editor:view'].gizmo === 'translate' }" @click="setGizmo('translate')">Gizmo: translate</button>
         <button $class="{ on: shared['editor:view'].gizmo === 'rotate' }" @click="setGizmo('rotate')">Gizmo: rotate</button>
@@ -83,7 +84,7 @@ import { sendCommand } from '../commands.ts'
 import { preferences } from '../preferences.ts'
 
 shared('editor:project', { name: null, recipe: '', storage: null, status: '', supported: false, dirty: false })
-shared('editor:view', { view: 'orbit', visualised: true, gizmo: 'translate', physics: false, snap: { enabled: true, move: 0.25, rotate: 15 } })
+shared('editor:view', { view: 'orbit', visualised: true, gizmo: 'translate', physics: false, scripts: false, snap: { enabled: true, move: 0.25, rotate: 15 } })
 shared('editor:history', { canUndo: false, canRedo: false, undoLabel: null, redoLabel: null })
 shared('editor:selection', null)
 

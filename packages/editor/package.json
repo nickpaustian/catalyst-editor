@@ -13,8 +13,9 @@
     "@nickpaustian/helm": "^0.1.0",
     "@nickpaustian/requester": "^0.1.0",
     "@nickpaustian/signal": "^0.1.0",
-    "@nickpaustian/velora": "^0.1.0",
     "@nickpaustian/stelligra": "^0.1.0",
+    "@nickpaustian/velora": "^0.1.0",
+    "sucrase": "^3.35.1",
     "three": "^0.183.2"
   }
 }

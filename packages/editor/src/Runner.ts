@@ -2,6 +2,7 @@ import type { Catalyst, Node3D, NodeJSON } from "@nickpaustian/catalyst"
 import { Node3D as Node3DClass } from "@nickpaustian/catalyst"
 import { ProjectFolder, folderLoader } from "./ProjectFolder"
 import type { Recipe } from "./recipe"
+import { ScriptCompiler } from "./ScriptCompiler"
 
 export interface RunMessage {
   type: "catalyst:run"
@@ -41,6 +42,8 @@ export class Runner {
     this.stop()
     const folder = message.folder ? new ProjectFolder(message.folder) : null
     if (folder) this.engine.loader = folderLoader(folder)
+    this.engine.scripts.invalidate()
+    if (folder) this.engine.scripts.loader = new ScriptCompiler(folder).loader
     const made = this.engine.create(message.scene)
     const root = made instanceof Node3DClass ? made : new Node3DClass("scene").addNode(made).parent as Node3D
     this.root = root
