@@ -133,6 +133,7 @@ export type EditorCommand =
   | { type: "toggleExpand"; id: number }
   | { type: "move"; ids: number[]; targetId: number; place: DropPlace }
   | { type: "delete" }
+  | { type: "unparent" }
   | { type: "makePrefab" }
   | { type: "unpackPrefab" }
   | { type: "attachScript"; url: string }
@@ -686,6 +687,9 @@ export class EditorSession {
         break
       case "delete":
         this.deleteSelected()
+        break
+      case "unparent":
+        this.unparent()
         break
       case "makePrefab":
         await this.makePrefab()
@@ -1366,30 +1370,65 @@ export class EditorSession {
     if (nodes.length === 0 || nodes.some((node) => node.contains(target))) return
     const newParent = place === "inside" ? target : target.parent
     if (!(newParent instanceof Node3D)) return
-    for (const node of nodes) {
-      if (node.parent !== newParent && newParent.children.has(node.name)) return this.publishProject(`"${node.name}" already exists under ${newParent.name}`)
-    }
-    const before = nodes.map((node) => ({ node, parent: node.parent as Node3D, index: (node.parent as Node3D).indexOf(node), world: node.transform.worldMatrix.clone() }))
+    this.reparent(nodes, newParent, place === "inside" ? newParent.children.size : newParent.indexOf(target) + (place === "after" ? 1 : 0))
+  }
+
+  /** A name no child of the parent has, numbering the given one as `addNode` does. */
+  private freeName(parent: Node3D, name: string, except: Node3D): string {
+    const taken = (candidate: string) => parent.children.has(candidate) && parent.children.get(candidate) !== except
+    if (!taken(name)) return name
+    let n = 2
+    while (taken(`${name}${n}`)) n++
+    return `${name}${n}`
+  }
+
+  /**
+   * Put nodes under a parent at an index, keeping their world transforms
+   * and relative order, renaming one whose name the parent already has. Undo
+   * puts them back where they were, with their old names.
+   */
+  private reparent(nodes: Node3D[], newParent: Node3D, at: number): void {
+    const before = nodes.map((node) => ({ node, parent: node.parent as Node3D, index: (node.parent as Node3D).indexOf(node), name: node.name, world: node.transform.worldMatrix.clone() }))
+    const renamed: string[] = []
     const placeAll = () => {
       for (const node of nodes) node.remove()
-      let index = place === "inside" ? newParent.children.size : newParent.indexOf(target) + (place === "after" ? 1 : 0)
-      for (const { node, world } of before) {
-        newParent.insertNode(node, index++, node.name)
+      let index = at
+      for (const { node, name: was, world } of before) {
+        const name = this.freeName(newParent, node.name, node)
+        if (name !== node.name) {
+          node.rename(name)
+          renamed.push(`${was} → ${name}`)
+        }
+        newParent.insertNode(node, index++, name)
         node.transform.setWorldMatrix(world)
       }
     }
     const putBack = () => {
       for (const { node } of before) node.remove()
-      for (const { node, parent, index, world } of [...before].sort((a, b) => a.index - b.index)) {
-        parent.insertNode(node, index, node.name)
+      for (const { node, parent, index, name, world } of [...before].sort((a, b) => a.index - b.index)) {
+        node.rename(name)
+        parent.insertNode(node, index, name)
         node.transform.setWorldMatrix(world)
       }
     }
     placeAll()
     this.record(nodes.length > 1 ? `move ${nodes.length} nodes` : `move ${nodes[0].name}`, putBack, placeAll)
+    if (renamed.length) this.publishProject(`renamed ${renamed.join(", ")}: the name was taken under ${newParent.name}`)
     this.collapsed.delete(newParent)
     this.camera.syncFromTarget()
     this.publishTree()
     this.publishSelection()
+  }
+
+  /** Move the selected nodes up a level, beside their parent, keeping their world transforms. */
+  private unparent(): void {
+    const root = this._root
+    if (!root) return
+    const nodes = this.selectionRoots().filter((node) => node.parent instanceof Node3D && node.parent !== root)
+    if (nodes.length === 0) return
+    const parent = nodes[0].parent as Node3D
+    const grandparent = parent.parent as Node3D
+    if (!grandparent) return
+    this.reparent(nodes.filter((node) => node.parent === parent), grandparent, grandparent.indexOf(parent) + 1)
   }
 }
