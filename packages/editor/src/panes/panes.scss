@@ -5,6 +5,8 @@
   background: var(--cat-bg-app);
   --pane-gutter: 1px;
   --pane-header: var(--cat-panel-header);
+  --pane-min-width: 320px;
+  --pane-min-height: 120px;
 }
 
 .pane-root > * {
@@ -32,6 +34,18 @@
   flex: 1 1 0;
   min-width: 0;
   min-height: 0;
+}
+
+// A pane keeps enough room for a label column and three axis cells holding a
+// four-character angle; a split across the other axis carries its panes' floor along
+.pane-split.row > .pane,
+.pane-split.row > .pane-split.column {
+  min-width: var(--pane-min-width);
+}
+
+.pane-split.column > .pane,
+.pane-split.column > .pane-split.row {
+  min-height: var(--pane-min-height);
 }
 
 // A 1px seam, with a wider band either side to grab
