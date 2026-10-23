@@ -1,10 +1,18 @@
 import "@nickpaustian/catalyst-editor/styles.scss"
 import { createLightspeedApp } from "@lightspeed-js/core"
 import { components } from "virtual:lightspeed/components"
-import { EditorSession, PaneLayout, browserFolders, createEngine, preferences, projectFolderOfFile, sceneRecipe, type Recipe } from "@nickpaustian/catalyst-editor"
+import { EditorSession, PaneLayout, browserFolders, createEngine, preferences, projectFolderOfFile, sceneRecipe, type FolderSource, type Recipe } from "@nickpaustian/catalyst-editor"
 import { desktop } from "./desktop"
 
 const recipes: Recipe[] = [sceneRecipe]
+
+/** Dev builds reload often, so the page comes back to the project it had; a folder whose permission needs a click is left to the start screen. */
+const reopenLast = async (session: EditorSession, folders: FolderSource) => {
+  const last = await folders.last()
+  if (!last) return
+  const allowed = await last.ensurePermission().catch(() => false)
+  if (allowed) await session.open(last)
+}
 
 document.addEventListener("DOMContentLoaded", async () => {
   const app = createLightspeedApp()
@@ -66,6 +74,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     })())
     await openFile(await shell.takeOpenedFiles())
   }
+  if (import.meta.env.DEV && !session.root) await reopenLast(session, folders)
   for (const id of recipe.panel ?? []) {
     const host = document.createElement("div")
     document.getElementById("recipe-sections")!.appendChild(host)
