@@ -44,7 +44,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   const session = new EditorSession({ app, engine, recipe, folders, runner: shell?.runnerLink })
   if (shell) {
     app.shared("editor:startMode").set("off")
-    app.shared("editor:project").subscribe((project: { open: boolean } | undefined) => shell.showEditor(project?.open ?? false))
+    let shown: boolean | null = null
+    app.shared("editor:project").subscribe((project: { open: boolean } | undefined) => {
+      const open = project?.open ?? false
+      if (open === shown) return
+      shown = open
+      shell.showEditor(open)
+    })
     shell.onProjectChosen((transfer) => void session.open(folders.fromTransfer(transfer)))
     shell.onStartClosed(() => {
       if (!session.root) shell.quit()
