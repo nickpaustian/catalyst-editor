@@ -339,19 +339,34 @@ export class EditorCamera implements ViewPose {
   /**
    * The scene node under a point on the canvas: the nearest hit among the
    * mesh visuals nodes under `root` have attached (a prefab's or primitive's
-   * internals count for their owner), or null for empty space. The gizmo
-   * and the grid are lines and never hits.
+   * internals count for their owner), or, for a node with no mesh (a light,
+   * a camera, an empty), a small sphere about its origin that stays about
+   * `HANDLE_PIXELS` across on screen. Null for empty space. The gizmo and
+   * the grid are lines and never hits.
    */
   pick(clientX: number, clientY: number, root: Node3D): Node3D | null {
     const ray = this.rayAt(clientX, clientY)
+    const rect = this.canvas.getBoundingClientRect()
+    const worldPerPixel = (2 * Math.tan((this.fov * Math.PI) / 360)) / Math.max(1, rect.height)
     let best: { node: Node3D; t: number } | null = null
+    const consider = (node: Node3D, t: number) => {
+      if (!best || t < best.t) best = { node, t }
+    }
     root.walk((node) => {
       if (!(node instanceof Node3DClass) || node === root || !node.isVisible) return
+      let meshes = 0
       for (const visual of node.attachedObjects) {
         if (visual.isLines || !visual.visible) continue
+        meshes++
         const hit = pickMesh(visual.geometry as Geometry, visual.matrix, ray)
-        if (hit && (!best || hit.t < best.t)) best = { node, t: hit.t }
+        if (hit) consider(node, hit.t)
       }
+      if (meshes > 0 || node.internal) return
+      // No mesh to hit: a sphere about the origin, a steady size on screen.
+      const origin = node.getWorldPosition()
+      const radius = Math.max(0.05, (HANDLE_PIXELS * 1.4) * worldPerPixel * origin.distanceTo(this.position))
+      const t = ray.intersectSphere(origin, radius)
+      if (t !== null) consider(node, t)
     })
     if (!best) return null
     let node: Node3D | null = (best as { node: Node3D }).node
