@@ -1,13 +1,13 @@
 <view>
 <div class="code-pane">
   <div class="bar">
-    <select class="file" $model="state.path" @change="choose()">
+    <span class="well select file"><select aria-label="Script" $model="state.path" @change="choose()">
       <option value="">Choose a script…</option>
       <option $for="file in shared['editor:scripts']" $key="file.path" $value="file.path">{{ file.path }}</option>
-    </select>
+    </select></span>
     <span class="dirty" $if="state.dirty">unsaved</span>
     <span class="status" $class="{ error: state.error }">{{ state.status }}</span>
-    <button class="primary" $disabled="!state.path || !state.dirty" @click="save()">Save script</button>
+    <button class="button small primary" $disabled="!state.path || !state.dirty" @click="save()">Save script</button>
   </div>
   <div class="host" $ref="host"></div>
   <p class="hint" $if="!state.path">Open a script from the inspector's Scripts section, or choose one above. Saving writes the file and rebuilds every script in the scene.</p>
@@ -118,13 +118,7 @@ onUnmounted(() => {
 }
 
 .file {
-  font: inherit;
-  color: inherit;
-  background: var(--cat-bg-field);
-  border: 1px solid var(--cat-border);
-  border-radius: var(--cat-radius-sm);
-  padding: var(--cat-space-0-5) var(--cat-space-1-5);
-  max-width: 320px;
+  flex: 0 1 320px;
 }
 
 .dirty {
@@ -144,22 +138,6 @@ onUnmounted(() => {
 
 .status.error {
   color: var(--cat-danger);
-}
-
-.bar button {
-  font: inherit;
-  color: var(--cat-text-on-accent);
-  background: var(--cat-accent);
-  border: 1px solid var(--cat-accent);
-  font-weight: 500;
-  border-radius: var(--cat-radius-sm);
-  padding: var(--cat-space-0-5) var(--cat-space-2);
-  cursor: pointer;
-}
-
-.bar button:disabled {
-  opacity: 0.4;
-  cursor: default;
 }
 
 kbd {

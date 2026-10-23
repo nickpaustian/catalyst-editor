@@ -1,0 +1,636 @@
+// The controls every panel shares (design/DESIGN.md §4–5); a component's own parts stay in its .lsp
+
+$check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 8.5 3.5 3.5L13 4.5'/%3E%3C/svg%3E");
+$chevron-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+
+:root {
+  --glyph-check: #{$check};
+  --glyph-chevron-down: #{$chevron-down};
+}
+
+@mixin glyph($image, $size, $colour) {
+  content: "";
+  width: $size;
+  height: $size;
+  background: $colour;
+  mask: $image center / contain no-repeat;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+::placeholder {
+  color: var(--cat-text-tertiary);
+}
+
+.section-label {
+  margin: 0;
+  color: var(--cat-text-secondary);
+  font: 600 var(--cat-text-xs) / var(--cat-leading-tight) var(--cat-font-ui);
+  letter-spacing: var(--cat-tracking-section);
+  text-transform: uppercase;
+}
+
+.mono {
+  font-family: var(--cat-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+// ---- buttons ----
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cat-space-1-5);
+  height: var(--cat-h-md);
+  padding: 0 var(--cat-space-3);
+  box-sizing: border-box;
+  background: var(--cat-bg-field);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-sm);
+  color: var(--cat-text-primary);
+  font-size: var(--cat-text-sm);
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--cat-bg-hover);
+    border-color: var(--cat-border-strong);
+  }
+
+  &:active:not(:disabled) {
+    background: var(--cat-bg-active);
+    border-color: var(--cat-border-strong);
+  }
+
+  &:disabled {
+    background: var(--cat-bg-raised);
+    border-color: var(--cat-border-subtle);
+    color: var(--cat-text-disabled);
+    cursor: default;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--cat-focus-ring);
+  }
+
+  &.small {
+    height: var(--cat-h-sm);
+    padding: 0 var(--cat-space-2);
+  }
+
+  &.large {
+    height: var(--cat-h-lg);
+  }
+
+  &.primary {
+    background: var(--cat-accent);
+    border-color: var(--cat-accent);
+    color: var(--cat-text-on-accent);
+    font-weight: 500;
+
+    &:hover:not(:disabled) {
+      background: var(--cat-accent);
+      border-color: var(--cat-accent);
+      filter: brightness(1.1);
+    }
+
+    &:active:not(:disabled) {
+      background: var(--cat-accent);
+      border-color: var(--cat-accent);
+      filter: brightness(0.9);
+    }
+
+    &:disabled {
+      background: var(--cat-bg-hover);
+      border-color: var(--cat-bg-hover);
+      color: var(--cat-text-disabled);
+    }
+  }
+
+  &.ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--cat-text-secondary);
+
+    &:hover:not(:disabled) {
+      background: var(--cat-bg-hover);
+      border-color: transparent;
+      color: var(--cat-text-primary);
+    }
+
+    &:active:not(:disabled) {
+      background: var(--cat-bg-active);
+      border-color: transparent;
+    }
+
+    &:disabled {
+      background: transparent;
+      border-color: transparent;
+    }
+
+    &:focus-visible {
+      box-shadow: 0 0 0 2px var(--cat-accent-ring);
+    }
+  }
+
+  &.danger {
+    color: var(--cat-danger);
+
+    &:hover:not(:disabled) {
+      background: var(--cat-danger-surface);
+      border-color: var(--cat-danger-border);
+    }
+
+    &:active:not(:disabled) {
+      background: var(--cat-danger-surface-pressed);
+      border-color: var(--cat-danger-border);
+      color: var(--cat-danger-text-pressed);
+    }
+
+    &:disabled {
+      color: var(--cat-text-disabled);
+    }
+  }
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--cat-h-sm);
+  height: var(--cat-h-sm);
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--cat-radius-sm);
+  color: var(--cat-text-secondary);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--cat-bg-hover);
+    color: var(--cat-text-primary);
+  }
+
+  &:active:not(:disabled) {
+    background: var(--cat-bg-active);
+  }
+
+  &:disabled {
+    color: var(--cat-text-disabled);
+    cursor: default;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--cat-accent-ring);
+  }
+
+  &[aria-pressed="true"] {
+    background: var(--cat-accent-soft);
+    color: var(--cat-accent);
+  }
+
+  &.large {
+    width: var(--cat-h-md);
+    height: var(--cat-h-md);
+  }
+
+  :where(svg) {
+    width: var(--cat-icon);
+    height: var(--cat-icon);
+  }
+}
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--cat-h-xs);
+  height: var(--cat-h-xs);
+  padding: 0 var(--cat-space-1);
+  box-sizing: border-box;
+  background: var(--cat-bg-field);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-xs);
+  color: var(--cat-text-secondary);
+  font: var(--cat-text-xs) / 1 var(--cat-font-mono);
+}
+
+// ---- fields ----
+
+// A field's well: on an input itself, or on a wrapper around an input and its unit
+.well {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--cat-space-1);
+  min-width: 0;
+  height: var(--cat-h-sm);
+  padding: 0 var(--cat-space-2);
+  box-sizing: border-box;
+  background: var(--cat-bg-field);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-sm);
+  color: var(--cat-text-primary);
+
+  &:hover {
+    border-color: var(--cat-border-strong);
+  }
+
+  &:focus,
+  &:focus-within {
+    outline: none;
+    background: var(--cat-bg-app);
+    border-color: var(--cat-accent);
+  }
+
+  &:disabled,
+  &:has(:disabled) {
+    background: var(--cat-bg-raised);
+    border-color: var(--cat-border-subtle);
+    color: var(--cat-text-disabled);
+  }
+
+  &[aria-invalid="true"],
+  &:has([aria-invalid="true"]) {
+    border-color: var(--cat-danger);
+  }
+
+  &.large {
+    height: var(--cat-h-lg);
+  }
+
+  > input,
+  > select {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    outline: none;
+  }
+
+  > select {
+    appearance: none;
+    cursor: pointer;
+  }
+
+  &.select::after {
+    @include glyph($chevron-down, var(--cat-icon-xs), var(--cat-text-tertiary));
+    flex: 0 0 auto;
+    pointer-events: none;
+  }
+
+  .unit {
+    position: relative;
+    color: var(--cat-text-tertiary);
+    font-family: var(--cat-font-mono);
+  }
+
+  // A number with a range shows where its value sits
+  .fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    background: var(--cat-bg-active);
+    border-radius: var(--cat-radius-sm) 0 0 var(--cat-radius-sm);
+    pointer-events: none;
+  }
+}
+
+textarea.well {
+  height: auto;
+  min-height: calc(var(--cat-leading-body) * 4);
+  padding: var(--cat-space-1) var(--cat-space-2);
+  line-height: var(--cat-leading-body);
+  resize: vertical;
+}
+
+input[type="number"] {
+  appearance: textfield;
+  font-family: var(--cat-font-mono);
+  font-variant-numeric: tabular-nums;
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+}
+
+// A vector: equal cells, each led by its axis letter, which scrubs that axis
+.vector {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--cat-space-1);
+
+  .well {
+    padding: 0 var(--cat-space-1-5) 0 0;
+    overflow: hidden;
+  }
+}
+
+.axis {
+  flex: 0 0 var(--cat-axis-cell);
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: var(--cat-space-0-5);
+  border-right: 1px solid var(--cat-border);
+  font: 500 var(--cat-text-xs) / 1 var(--cat-font-mono);
+  cursor: ew-resize;
+  user-select: none;
+
+  &.x {
+    color: var(--cat-axis-x);
+  }
+
+  &.y {
+    color: var(--cat-axis-y);
+  }
+
+  &.z {
+    color: var(--cat-axis-z);
+  }
+
+  &.w {
+    color: var(--cat-axis-w);
+  }
+}
+
+// ---- booleans and choices ----
+
+.checkbox {
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  flex: 0 0 auto;
+  width: var(--cat-checkbox);
+  height: var(--cat-checkbox);
+  margin: 0;
+  box-sizing: border-box;
+  background: var(--cat-bg-field);
+  border: 1px solid var(--cat-border-strong);
+  border-radius: var(--cat-radius-xs);
+  cursor: pointer;
+
+  &:checked {
+    background: var(--cat-text-primary);
+    border-color: var(--cat-text-primary);
+
+    &::after {
+      @include glyph($check, calc(var(--cat-checkbox) - var(--cat-space-1)), var(--cat-text-on-accent));
+    }
+  }
+
+  &:indeterminate {
+    background: var(--cat-text-secondary);
+    border-color: var(--cat-text-secondary);
+
+    &::after {
+      content: "";
+      width: var(--cat-space-2);
+      height: var(--cat-space-0-5);
+      background: var(--cat-text-on-accent);
+    }
+  }
+
+  &:disabled {
+    background: var(--cat-bg-raised);
+    border-color: var(--cat-border);
+    cursor: default;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--cat-focus-ring);
+  }
+}
+
+// Two to four options; the chosen one is grey, not accent
+.segmented {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--cat-space-0-5);
+  padding: var(--cat-space-0-5);
+  background: var(--cat-bg-app);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-sm);
+
+  > button {
+    height: var(--cat-h-xs);
+    padding: 0 var(--cat-space-1-5);
+    background: transparent;
+    border: 0;
+    border-radius: var(--cat-radius-xs);
+    color: var(--cat-text-tertiary);
+    font-size: var(--cat-text-xs);
+    cursor: pointer;
+
+    &:hover {
+      color: var(--cat-text-primary);
+    }
+
+    &[aria-checked="true"] {
+      background: var(--cat-bg-active);
+      color: var(--cat-text-primary);
+    }
+
+    &:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--cat-accent-ring);
+    }
+  }
+}
+
+// ---- menus ----
+
+.menu-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: var(--cat-space-1);
+  box-sizing: border-box;
+  background: var(--cat-bg-raised);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-md);
+  box-shadow: var(--cat-shadow-e1);
+  color: var(--cat-text-primary);
+  font: var(--cat-text-sm) / var(--cat-leading-body) var(--cat-font-ui);
+  user-select: none;
+
+  hr {
+    width: 100%;
+    margin: var(--cat-space-1) 0;
+    border: 0;
+    border-top: 1px solid var(--cat-border);
+  }
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--cat-space-1-5);
+  width: 100%;
+  height: var(--cat-menu-item);
+  flex: 0 0 auto;
+  padding: 0 var(--cat-space-2);
+  box-sizing: border-box;
+  background: none;
+  border: 0;
+  border-radius: var(--cat-radius-sm);
+  color: var(--cat-text-primary);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--cat-bg-hover);
+  }
+
+  &:disabled {
+    color: var(--cat-text-disabled);
+    cursor: default;
+  }
+
+  &.danger {
+    color: var(--cat-danger);
+  }
+
+  kbd {
+    min-width: 0;
+    height: auto;
+    margin-left: auto;
+    padding: 0 0 0 var(--cat-space-4);
+    background: none;
+    border: 0;
+    color: var(--cat-text-tertiary);
+  }
+}
+
+// ---- dialogs ----
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--cat-space-4);
+  background: var(--cat-scrim);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--cat-space-4) + var(--cat-space-1));
+  width: 100%;
+  max-width: 440px;
+  box-sizing: border-box;
+  padding: var(--cat-space-6);
+  background: var(--cat-bg-raised);
+  border: 1px solid var(--cat-bg-active);
+  border-radius: var(--cat-radius-lg);
+  box-shadow: var(--cat-shadow-e2);
+  color: var(--cat-text-primary);
+  font: var(--cat-text-sm) / var(--cat-leading-body) var(--cat-font-ui);
+}
+
+.dialog-title {
+  margin: 0;
+  font: 600 var(--cat-text-lg) / var(--cat-leading-code) var(--cat-font-ui);
+}
+
+.dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cat-space-1-5);
+  color: var(--cat-text-secondary);
+
+  > .well {
+    color: var(--cat-text-primary);
+  }
+}
+
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--cat-space-2);
+  padding-top: var(--cat-space-1);
+}
+
+.dialog-keys {
+  margin-right: auto;
+  color: var(--cat-text-tertiary);
+  font-size: var(--cat-text-xs);
+}
+
+// ---- property rows ----
+
+// label | control, the inspector's atom; numeric labels scrub their value
+.properties {
+  display: grid;
+  grid-template-columns: var(--cat-label-col) minmax(0, 1fr);
+  column-gap: var(--cat-space-2);
+  row-gap: var(--cat-space-1);
+  align-items: center;
+
+  > label,
+  > .label {
+    overflow: hidden;
+    color: var(--cat-text-secondary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  > .control {
+    display: flex;
+    align-items: center;
+    gap: var(--cat-space-1);
+    min-width: 0;
+    min-height: var(--cat-row);
+  }
+
+  > .wide {
+    grid-column: 1 / -1;
+  }
+}
+
+.scrub {
+  cursor: ew-resize;
+  user-select: none;
+}
+
+body.scrubbing,
+body.scrubbing * {
+  cursor: ew-resize !important;
+  user-select: none;
+}
+
+@container (max-width: 360px) {
+  .properties {
+    grid-template-columns: var(--cat-label-col-narrow) minmax(0, 1fr);
+  }
+
+  .axis {
+    flex-basis: var(--cat-axis-cell-narrow);
+  }
+
+  .segmented > button {
+    height: calc(var(--cat-h-xs) - var(--cat-space-0-5));
+  }
+}

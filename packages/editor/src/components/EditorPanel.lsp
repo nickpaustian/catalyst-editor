@@ -1,6 +1,6 @@
 <view>
 <aside class="panel">
-  <h2>Selected</h2>
+  <h2 class="section-label">Selected</h2>
   <SelectionFields />
 
   <SceneSettings />
@@ -29,16 +29,6 @@ export {}
 }
 
 h2 {
-  font-size: var(--cat-text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--cat-text-secondary);
-  margin: var(--cat-space-3) 0 var(--cat-space-1);
-}
-
-.hint {
-  color: var(--cat-text-tertiary);
-  font-size: var(--cat-text-xs);
-  margin: var(--cat-space-1) 0;
+  margin-bottom: var(--cat-space-2);
 }
 </style>

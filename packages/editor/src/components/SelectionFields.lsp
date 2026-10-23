@@ -2,105 +2,108 @@
 <div class="selection">
   <p class="hint" $if="!shared['editor:selection']">Nothing selected</p>
   <template $else>
-    <p class="hint type"><span class="icon" $html="shared['editor:selection'].icon"></span>{{ shared['editor:selection'].type }}<span $if="shared['editor:selection'].count > 1"> · {{ shared['editor:selection'].count }} selected</span></p>
-    <div class="row">
-      <input class="name" type="text" $model="state.name" @change="rename" />
-    </div>
+    <p class="type"><span class="icon" $html="shared['editor:selection'].icon"></span>{{ shared['editor:selection'].type }}<span $if="shared['editor:selection'].count > 1"> · {{ shared['editor:selection'].count }} selected</span></p>
+    <input class="well name" type="text" aria-label="Name" $model="state.name" @change="rename" />
     <div class="buttons">
-      <button @click="send('focus')">Focus</button>
-      <button @click="send('delete')">Delete</button>
-    </div>
-    <div class="row">
-      <span class="hint">pos </span>
-      <label>x</label><input type="number" step="0.01" $model="state.px" @change="apply" @pointerdown="scrubTransform($event, 'px', 0.01)" />
-      <label>y</label><input type="number" step="0.01" $model="state.py" @change="apply" @pointerdown="scrubTransform($event, 'py', 0.01)" />
-      <label>z</label><input type="number" step="0.01" $model="state.pz" @change="apply" @pointerdown="scrubTransform($event, 'pz', 0.01)" />
-    </div>
-    <div class="row">
-      <span class="hint">rot° </span>
-      <label>x</label><input type="number" step="1" $model="state.rx" @change="apply" @pointerdown="scrubTransform($event, 'rx', 1)" />
-      <label>y</label><input type="number" step="1" $model="state.ry" @change="apply" @pointerdown="scrubTransform($event, 'ry', 1)" />
-      <label>z</label><input type="number" step="1" $model="state.rz" @change="apply" @pointerdown="scrubTransform($event, 'rz', 1)" />
+      <button class="button small" @click="send('focus')">Focus</button>
+      <button class="button small danger" @click="send('delete')">Delete</button>
     </div>
     <div class="properties">
-      <div class="row property" $for="field in state.fields" $key="field.key">
-        <label class="property-label">{{ field.label }}</label>
-        <input
-          $if="field.type === 'number'"
-          type="number"
-          $step="field.step"
-          $min="field.min"
-          $max="field.max"
-          $model="field.value"
-          @change="applyField(field)"
-          @pointerdown="scrubField($event, field)"
-        />
-        <input
-          $else-if="field.type === 'boolean'"
-          type="checkbox"
-          $model="field.value"
-          @change="applyField(field)"
-        />
-        <div class="tags" $else-if="field.type === 'tags'">
-          <span class="chip" $for="tag in field.value" $key="tag">
-            {{ tag }}<button class="remove" title="Remove tag" @click="removeTag(field, tag)">×</button>
-          </span>
-          <input
-            class="tag-input"
-            type="text"
-            placeholder="add tag"
-            @keydown="tagKey($event, field)"
-            @blur="addTagFrom($event.target, field)"
-          />
-        </div>
-        <div class="layers" $else-if="field.type === 'layers'">
-          <button
-            class="layer"
-            $for="n in state.layerNumbers"
-            $key="n"
-            $class="{ on: field.value.includes(n) }"
-            @click="toggleLayer(field, n)"
-          >{{ n }}</button>
-        </div>
-        <span class="colour" $else-if="field.type === 'colour'">
-          <input type="color" $value="field.hex" @input="applyColour($event, field)" />
-          <span class="hex">{{ field.hex }}</span>
-        </span>
-        <input $else type="text" $model="field.value" $disabled="field.readonly" @change="applyField(field)" />
+      <span class="label">Position</span>
+      <div class="vector">
+        <div class="well"><span class="axis x" @pointerdown="scrubTransform($event, 'px', 0.01)">X</span><input type="number" step="0.01" aria-label="Position X" $model="state.px" @change="apply" /></div>
+        <div class="well"><span class="axis y" @pointerdown="scrubTransform($event, 'py', 0.01)">Y</span><input type="number" step="0.01" aria-label="Position Y" $model="state.py" @change="apply" /></div>
+        <div class="well"><span class="axis z" @pointerdown="scrubTransform($event, 'pz', 0.01)">Z</span><input type="number" step="0.01" aria-label="Position Z" $model="state.pz" @change="apply" /></div>
       </div>
+      <span class="label">Rotation</span>
+      <div class="vector">
+        <div class="well"><span class="axis x" @pointerdown="scrubTransform($event, 'rx', 1)">X</span><input type="number" step="1" aria-label="Rotation X" $model="state.rx" @change="apply" /><span class="unit">°</span></div>
+        <div class="well"><span class="axis y" @pointerdown="scrubTransform($event, 'ry', 1)">Y</span><input type="number" step="1" aria-label="Rotation Y" $model="state.ry" @change="apply" /><span class="unit">°</span></div>
+        <div class="well"><span class="axis z" @pointerdown="scrubTransform($event, 'rz', 1)">Z</span><input type="number" step="1" aria-label="Rotation Z" $model="state.rz" @change="apply" /><span class="unit">°</span></div>
+      </div>
+      <template $for="field in state.fields" $key="field.key">
+        <label class="label" $class="{ scrub: field.type === 'number' }" $title="field.label" @pointerdown="scrubField($event, field)">{{ field.label }}</label>
+        <div class="control">
+          <div class="well" $if="field.type === 'number'">
+            <span class="fill" $if="field.ranged" $style="'width: ' + Math.min(100, Math.max(0, (field.value - field.min) / (field.max - field.min) * 100)) + '%'"></span>
+            <input type="number" $aria-label="field.label" $step="field.step" $min="field.min" $max="field.max" $model="field.value" @change="applyField(field)" />
+          </div>
+          <input $else-if="field.type === 'boolean'" class="checkbox" type="checkbox" $aria-label="field.label" $model="field.value" @change="applyField(field)" />
+          <div class="well tags" $else-if="field.type === 'tags'">
+            <span class="chip" $for="tag in field.value" $key="tag">
+              {{ tag }}<button class="remove" type="button" aria-label="Remove tag" @click="removeTag(field, tag)">×</button>
+            </span>
+            <input
+              type="text"
+              placeholder="add tag"
+              $aria-label="field.label"
+              @keydown="tagKey($event, field)"
+              @blur="addTagFrom($event.target, field)"
+            />
+          </div>
+          <div class="layers" $else-if="field.type === 'layers'">
+            <button
+              class="layer"
+              type="button"
+              $for="n in state.layerNumbers"
+              $key="n"
+              $aria-pressed="field.value.includes(n)"
+              @click="toggleLayer(field, n)"
+            >{{ n }}</button>
+          </div>
+          <label class="well colour" $else-if="field.type === 'colour'">
+            <input class="swatch" type="color" $aria-label="field.label" $value="field.hex" @input="applyColour($event, field)" />
+            <span class="mono">{{ field.hex }}</span>
+          </label>
+          <input $else class="well" type="text" $aria-label="field.label" $model="field.value" $disabled="field.readonly" @change="applyField(field)" />
+        </div>
+      </template>
     </div>
     <div class="scripts">
-      <h3>Scripts</h3>
+      <h3 class="section-label">Scripts</h3>
       <div class="script" $for="script in state.scripts" $key="script.index">
-        <div class="row script-head">
-          <span class="script-name" $title="script.url">{{ script.name }}</span>
+        <div class="script-head">
+          <span class="script-name mono" $title="script.url">{{ script.name }}</span>
           <span class="hint" $if="!script.built">not built</span>
-          <button class="small" title="Open in the code pane" @click="editScript(script)">Edit</button>
-          <button class="remove" title="Detach script" @click="detachScript(script)">×</button>
+          <button class="icon-button" type="button" title="Open in the code pane" aria-label="Open in the code pane" @click="editScript(script)">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2.5h4.5V7M13.5 2.5 7 9M11 9.5v4H2.5V5h4"/></svg>
+          </button>
+          <button class="icon-button" type="button" title="Detach script" aria-label="Detach script" @click="detachScript(script)">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>
+          </button>
         </div>
-        <div class="row property" $for="field in script.fields" $key="field.key">
-          <label class="property-label">{{ field.label }}</label>
-          <input $if="field.type === 'number'" type="number" $step="field.step" $min="field.min" $max="field.max" $model="field.value" @change="applyScriptField(script, field)" />
-          <input $else-if="field.type === 'boolean'" type="checkbox" $model="field.value" @change="applyScriptField(script, field)" />
-          <span class="colour" $else-if="field.type === 'colour'">
-            <input type="color" $value="field.hex" @input="applyScriptColour($event, script, field)" />
-            <span class="hex">{{ field.hex }}</span>
-          </span>
-          <input $else type="text" $model="field.value" $disabled="field.readonly" @change="applyScriptField(script, field)" />
+        <div class="properties">
+          <template $for="field in script.fields" $key="field.key">
+            <label class="label" $class="{ scrub: field.type === 'number' }" $title="field.label" @pointerdown="scrubScriptField($event, script, field)">{{ field.label }}</label>
+            <div class="control">
+              <div class="well" $if="field.type === 'number'">
+                <span class="fill" $if="field.ranged" $style="'width: ' + Math.min(100, Math.max(0, (field.value - field.min) / (field.max - field.min) * 100)) + '%'"></span>
+                <input type="number" $aria-label="field.label" $step="field.step" $min="field.min" $max="field.max" $model="field.value" @change="applyScriptField(script, field)" />
+              </div>
+              <input $else-if="field.type === 'boolean'" class="checkbox" type="checkbox" $aria-label="field.label" $model="field.value" @change="applyScriptField(script, field)" />
+              <label class="well colour" $else-if="field.type === 'colour'">
+                <input class="swatch" type="color" $aria-label="field.label" $value="field.hex" @input="applyScriptColour($event, script, field)" />
+                <span class="mono">{{ field.hex }}</span>
+              </label>
+              <input $else class="well" type="text" $aria-label="field.label" $model="field.value" $disabled="field.readonly" @change="applyScriptField(script, field)" />
+            </div>
+          </template>
         </div>
       </div>
-      <div class="row attach" $if="shared['editor:scripts'].length">
-        <select $model="state.attachPath">
-          <option $for="file in shared['editor:scripts']" $key="file.path" $value="file.path">{{ file.name }}</option>
-        </select>
-        <button @click="attachScript()">Attach</button>
+      <div class="attach" $if="shared['editor:scripts'].length">
+        <span class="well select">
+          <select aria-label="Script to attach" $model="state.attachPath">
+            <option $for="file in shared['editor:scripts']" $key="file.path" $value="file.path">{{ file.name }}</option>
+          </select>
+        </span>
+        <button class="button small" @click="attachScript()">Attach</button>
       </div>
-      <div class="row attach">
-        <input class="new-script" type="text" placeholder="New script class name" $model="state.newScriptName" @keydown="newScriptKey($event)" />
-        <button @click="newScript()">New</button>
+      <div class="attach">
+        <input class="well" type="text" placeholder="New script class name" aria-label="New script class name" $model="state.newScriptName" @keydown="newScriptKey($event)" />
+        <button class="button small" @click="newScript()">New</button>
       </div>
       <div class="buttons" $if="state.scripts.length">
-        <button @click="send('reloadScripts')">Reload scripts</button>
+        <button class="button small" @click="send('reloadScripts')">Reload scripts</button>
       </div>
     </div>
   </template>
@@ -111,13 +114,14 @@
 import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { SCRIPTS_DEFAULT } from '../cells.ts'
+import { scrub } from '../scrub.ts'
 
 const selection = shared('editor:selection', null)
 const scriptFiles = shared('editor:scripts', SCRIPTS_DEFAULT)
 
 // Local copies of the fields, so typing doesn't fight the scene publishing
 // the same values back on every gizmo move
-interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number; readonly?: boolean; hex?: string }
+interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number; readonly?: boolean; hex?: string; ranged?: boolean }
 interface ScriptEntry { index: number; url: string; name: string; built: boolean; fields: Field[] }
 
 const state = reactive({
@@ -128,6 +132,12 @@ const state = reactive({
   attachPath: '',
   newScriptName: '',
   layerNumbers: Array.from({ length: 32 }, (_, n) => n),
+})
+
+const local = (field: Field): Field => ({
+  ...field,
+  hex: field.type === 'colour' ? toHex(field.value) : undefined,
+  ranged: field.type === 'number' && field.min !== undefined && field.max !== undefined,
 })
 
 scriptFiles.subscribe((files: { path: string }[]) => {
@@ -143,8 +153,8 @@ selection.subscribe((next: any) => {
   state.rx = next.rotation.x
   state.ry = next.rotation.y
   state.rz = next.rotation.z
-  state.fields = (next.properties ?? []).map((field: Field) => ({ ...field, hex: field.type === 'colour' ? toHex(field.value) : undefined }))
-  state.scripts = (next.scripts ?? []).map((script: ScriptEntry) => ({ ...script, fields: script.fields.map((field) => ({ ...field, hex: field.type === 'colour' ? toHex(field.value) : undefined })) }))
+  state.fields = (next.properties ?? []).map(local)
+  state.scripts = (next.scripts ?? []).map((script: ScriptEntry) => ({ ...script, fields: script.fields.map(local) }))
 })
 
 function applyScriptField(script: ScriptEntry, field: Field) {
@@ -232,61 +242,11 @@ function toggleLayer(field: Field, layer: number) {
   applyField(field)
 }
 
-interface Scrub {
-  read: () => number
-  write: (value: number) => void
-  step: number
-  min?: number
-  max?: number
-}
-
-const DRAG_THRESHOLD = 3
-
-// Press and drag sideways to slide the value; a plain click still focuses the
-// input for typing. Shift scrubs ten times faster, alt ten times finer.
-function scrub(event: PointerEvent, { read, write, step, min, max }: Scrub) {
-  if (event.button !== 0) return
-  const input = event.currentTarget as HTMLInputElement
-  event.preventDefault()
-
-  const decimals = Math.max(0, Math.ceil(-Math.log10(step)) + 1)
-  const startX = event.clientX
-  let lastX = startX
-  let value = Number(read()) || 0
-  let dragging = false
-
-  const move = (e: PointerEvent) => {
-    if (!dragging) {
-      if (Math.abs(e.clientX - startX) < DRAG_THRESHOLD) return
-      dragging = true
-      lastX = e.clientX
-      input.classList.add('scrubbing')
-      document.body.classList.add('scrubbing')
-    }
-    const scale = e.shiftKey ? 10 : e.altKey ? 0.1 : 1
-    value += (e.clientX - lastX) * step * scale
-    lastX = e.clientX
-    if (min !== undefined) value = Math.max(min, value)
-    if (max !== undefined) value = Math.min(max, value)
-    write(Number(value.toFixed(decimals)))
-  }
-
-  const end = () => {
-    window.removeEventListener('pointermove', move)
-    window.removeEventListener('pointerup', end)
-    window.removeEventListener('pointercancel', end)
-    if (dragging) {
-      input.classList.remove('scrubbing')
-      document.body.classList.remove('scrubbing')
-    } else {
-      input.focus()
-      input.select()
-    }
-  }
-
-  window.addEventListener('pointermove', move)
-  window.addEventListener('pointerup', end)
-  window.addEventListener('pointercancel', end)
+// The input a scrub handle drives: inside the same well (an axis letter), or
+// in the control beside it (a property's label)
+function inputOf(event: PointerEvent): HTMLInputElement | null {
+  const handle = event.currentTarget as HTMLElement
+  return handle.closest('.well')?.querySelector('input') ?? handle.nextElementSibling?.querySelector('input') ?? null
 }
 
 type TransformKey = 'px' | 'py' | 'pz' | 'rx' | 'ry' | 'rz'
@@ -299,20 +259,31 @@ function scrubTransform(event: PointerEvent, key: TransformKey, step: number) {
       apply()
     },
     step,
+    input: inputOf(event),
   })
 }
 
-function scrubField(event: PointerEvent, field: Field) {
+function scrubNumber(event: PointerEvent, field: Field, commit: () => void) {
+  if (field.type !== 'number') return
   scrub(event, {
     read: () => Number(field.value),
     write: (value) => {
       field.value = value
-      applyField(field)
+      commit()
     },
     step: field.step ?? 0.01,
     min: field.min,
     max: field.max,
+    input: inputOf(event),
   })
+}
+
+function scrubField(event: PointerEvent, field: Field) {
+  scrubNumber(event, field, () => applyField(field))
+}
+
+function scrubScriptField(event: PointerEvent, script: ScriptEntry, field: Field) {
+  scrubNumber(event, field, () => applyScriptField(script, field))
 }
 
 function apply() {
@@ -325,210 +296,175 @@ function apply() {
 </logic>
 
 <style>
-.hint {
-  color: var(--cat-text-tertiary);
-  font-size: var(--cat-text-xs);
-  margin: var(--cat-space-1) 0;
+.selection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cat-space-2);
 }
 
-.row {
-  margin: var(--cat-space-0-5) 0;
+.hint {
+  margin: 0;
+  color: var(--cat-text-tertiary);
 }
 
 .type {
   display: flex;
   align-items: center;
-  gap: var(--cat-space-1);
+  gap: var(--cat-space-1-5);
+  margin: 0;
+  color: var(--cat-text-tertiary);
+  font: var(--cat-text-xs) / var(--cat-leading-tight) var(--cat-font-mono);
 }
 
 .icon {
-  width: 14px;
-  height: 14px;
+  width: var(--cat-icon-sm);
+  height: var(--cat-icon-sm);
   color: var(--cat-text-secondary);
 }
 
 .icon :global(svg) {
   display: block;
-  width: 14px;
-  height: 14px;
+  width: var(--cat-icon-sm);
+  height: var(--cat-icon-sm);
 }
 
-label {
-  display: inline-block;
-  width: 18px;
-  color: var(--cat-text-secondary);
+.name {
+  font: 500 var(--cat-text-md) / var(--cat-leading-body) var(--cat-font-ui);
 }
 
-input,
-select,
-button {
-  font: inherit;
-  color: inherit;
-  background: var(--cat-bg-field);
-  border: 1px solid var(--cat-border);
-  border-radius: var(--cat-radius-sm);
-  padding: var(--cat-space-0-5) var(--cat-space-1-5);
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cat-space-1);
 }
 
-input[type="number"] {
-  width: 64px;
-  font-family: var(--cat-font-mono);
-  font-variant-numeric: tabular-nums;
-  cursor: ew-resize;
-  appearance: textfield;
-  -moz-appearance: textfield;
-}
-
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button {
-  appearance: none;
-  margin: 0;
-}
-
-input[type="number"]:focus {
-  cursor: text;
-}
-
-input[type="number"].scrubbing {
-  user-select: none;
-  border-color: var(--cat-accent);
-}
-
-:global(body.scrubbing) {
-  cursor: ew-resize;
-  user-select: none;
-}
-
-input.name {
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.property-label {
-  width: 56px;
+.properties .label {
   text-transform: capitalize;
 }
 
-.property input[type="text"] {
-  width: 120px;
-}
-
-.row.property:has(.tags),
-.row.property:has(.layers) {
-  display: flex;
-  align-items: flex-start;
-}
-
-.row.property:has(.tags) .property-label,
-.row.property:has(.layers) .property-label {
-  flex: 0 0 56px;
-  padding-top: var(--cat-space-1);
+.control > .well:not(.colour) {
+  flex: 1 1 auto;
 }
 
 .tags {
-  display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  height: auto;
+  min-height: var(--cat-h-sm);
+  padding: var(--cat-space-0-5);
   gap: var(--cat-space-0-5);
-  flex: 1 1 auto;
+}
+
+.tags input {
+  flex: 1 1 48px;
+  height: var(--cat-h-xs);
+  padding: 0 var(--cat-space-1);
+  font-size: var(--cat-text-xs);
 }
 
 .chip {
   display: inline-flex;
   align-items: center;
   gap: var(--cat-space-0-5);
-  background: var(--cat-bg-active);
-  border-radius: var(--cat-radius-sm);
+  height: 18px;
   padding: 0 var(--cat-space-0-5) 0 var(--cat-space-1-5);
+  background: var(--cat-bg-active);
+  border-radius: var(--cat-radius-xs);
   font-size: var(--cat-text-xs);
 }
 
 .chip .remove {
+  padding: 0 var(--cat-space-0-5);
   background: none;
   border: none;
-  padding: 0 var(--cat-space-0-5);
-  margin: 0;
   color: var(--cat-text-secondary);
   line-height: 1;
+  cursor: pointer;
 }
 
 .chip .remove:hover {
   color: var(--cat-text-primary);
 }
 
-.tag-input {
-  width: 64px;
-  padding: var(--cat-space-0-5) var(--cat-space-1);
-  font-size: var(--cat-text-xs);
-}
-
 .colour {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--cat-space-1-5);
-}
-
-.colour input[type="color"] {
-  width: 32px;
-  height: 22px;
-  padding: 0 var(--cat-space-0-5);
+  gap: var(--cat-space-2);
+  padding-left: var(--cat-space-1);
   cursor: pointer;
 }
 
-.hex {
+.colour .swatch {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--cat-radius-xs);
+  background: none;
+  cursor: pointer;
+}
+
+.colour .swatch::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.colour .swatch::-webkit-color-swatch {
+  border: 0;
+  border-radius: var(--cat-radius-xs);
+}
+
+.layers {
+  display: grid;
+  grid-template-columns: repeat(8, 22px);
+  gap: 3px;
+  padding: var(--cat-space-0-5) 0;
+}
+
+.layer {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: var(--cat-bg-field);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-xs);
   color: var(--cat-text-secondary);
-  font-family: var(--cat-font-mono);
-  font-size: var(--cat-text-xs);
+  font: var(--cat-text-xs) / 1 var(--cat-font-mono);
+  cursor: pointer;
+}
+
+.layer:hover {
+  border-color: var(--cat-border-strong);
+}
+
+.layer[aria-pressed="true"] {
+  background: var(--cat-text-primary);
+  border-color: var(--cat-text-primary);
+  color: var(--cat-text-on-accent);
 }
 
 .scripts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cat-space-2);
   margin-top: var(--cat-space-2);
 }
 
-.scripts h3 {
-  margin: 0 0 var(--cat-space-1);
-  font-size: var(--cat-text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--cat-text-secondary);
-}
-
 .script {
-  margin: var(--cat-space-1) 0 var(--cat-space-1-5);
-  padding: var(--cat-space-1) var(--cat-space-1-5);
-  border: 1px solid var(--cat-border);
-  border-radius: var(--cat-radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--cat-space-1);
 }
 
 .script-head {
   display: flex;
   align-items: center;
-  gap: var(--cat-space-1-5);
+  gap: var(--cat-space-1);
 }
 
 .script-name {
   flex: 1 1 auto;
-  font-weight: 600;
-}
-
-.script-head .small {
-  font: inherit;
-  font-size: var(--cat-text-xs);
-  color: inherit;
-  background: var(--cat-bg-field);
-  border: 1px solid var(--cat-border);
-  border-radius: var(--cat-radius-sm);
-  padding: 0 var(--cat-space-1-5);
-  cursor: pointer;
-}
-
-.script-head .remove {
-  background: none;
-  border: none;
-  padding: 0 var(--cat-space-0-5);
-  color: var(--cat-text-secondary);
-  line-height: 1;
-  cursor: pointer;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .attach {
@@ -536,37 +472,7 @@ input.name {
   gap: var(--cat-space-1);
 }
 
-.attach select,
-.attach .new-script {
+.attach > .well {
   flex: 1 1 auto;
-  min-width: 0;
-}
-
-.layers {
-  display: grid;
-  grid-template-columns: repeat(8, 22px);
-  gap: var(--cat-space-0-5);
-}
-
-.layer {
-  width: 22px;
-  height: 18px;
-  padding: 0;
-  margin: 0;
-  font-size: var(--cat-text-xs);
-  color: var(--cat-text-tertiary);
-  background: var(--cat-bg-field);
-  border-color: var(--cat-border);
-}
-
-.layer.on {
-  color: var(--cat-text-on-accent);
-  background: var(--cat-text-primary);
-  border-color: var(--cat-text-primary);
-}
-
-button {
-  cursor: pointer;
-  margin: 0 var(--cat-space-1) var(--cat-space-1) 0;
 }
 </style>

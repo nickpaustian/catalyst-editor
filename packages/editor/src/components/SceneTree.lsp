@@ -1,8 +1,11 @@
 <view>
 <section class="tree">
-  <h2 class="heading">Scene</h2>
+  <h2 class="section-label heading">Scene</h2>
   <div class="adders">
-    <button class="add" @click="openAdd()"><span class="plus">+</span> Add node <kbd>⌘⇧A</kbd></button>
+    <button class="button small" @click="openAdd()">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"/></svg>
+      Add node <kbd>⌘⇧A</kbd>
+    </button>
   </div>
   <p class="hint">
     New nodes go under the selected node. Shift-click selects a range, ctrl- or cmd-click adds
@@ -102,7 +105,7 @@ function context(event: MouseEvent, row: Row) {
           { label: 'Add child…', kbd: '⌘⇧A', run: () => addDialog.set(true) },
           { label: 'Rename', disabled: many, run: () => startRename(event, row) },
           { label: 'Duplicate', kbd: '⌘D', run: () => sendCommand({ type: 'duplicate' }) },
-          { label: 'Delete', kbd: '⌦', run: () => sendCommand({ type: 'delete' }) },
+          { label: 'Delete', kbd: '⌦', danger: true, run: () => sendCommand({ type: 'delete' }) },
           { separator: true },
           { label: 'Unparent', disabled: row.depth <= 1, run: () => sendCommand({ type: 'unparent' }) },
           { label: 'Focus', kbd: 'F', run: () => sendCommand({ type: 'focus' }) },
@@ -244,45 +247,17 @@ function release() {
 
 <style>
 .heading {
-  font-size: var(--cat-text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--cat-text-secondary);
-  margin: var(--cat-space-3) 0 var(--cat-space-1);
+  margin-bottom: var(--cat-space-2);
 }
 
-.adders button {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--cat-space-1);
-  font: inherit;
-  color: inherit;
-  background: var(--cat-bg-field);
-  border: 1px solid var(--cat-border);
-  border-radius: var(--cat-radius-sm);
-  padding: var(--cat-space-0-5) var(--cat-space-1-5);
-  margin: 0 var(--cat-space-1) var(--cat-space-1) 0;
-  cursor: pointer;
-}
-
-.adders button:hover {
-  background: var(--cat-bg-hover);
-}
-
-.adders .plus {
-  font-weight: 600;
-  color: var(--cat-text-secondary);
+.adders svg {
+  width: var(--cat-icon-sm);
+  height: var(--cat-icon-sm);
 }
 
 .adders kbd {
-  font: var(--cat-text-xs) / 1 var(--cat-font-mono);
-  padding: 0 var(--cat-space-1);
-  border: 1px solid var(--cat-border);
-  border-bottom-width: 2px;
-  border-radius: var(--cat-radius-sm);
-  background: var(--cat-bg-field);
-  color: var(--cat-text-secondary);
   margin-left: var(--cat-space-1);
+  margin-right: calc(-1 * var(--cat-space-1));
 }
 
 .hint {
@@ -364,9 +339,10 @@ function release() {
   min-width: 0;
   font: inherit;
   color: var(--cat-text-primary);
-  background: var(--cat-bg-field);
+  background: var(--cat-bg-app);
   border: 1px solid var(--cat-accent);
   border-radius: var(--cat-radius-xs);
+  outline: none;
   padding: 0 var(--cat-space-1);
 }
 

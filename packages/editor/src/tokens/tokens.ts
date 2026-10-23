@@ -101,6 +101,7 @@ export const size = {
   iconSm: 14,
   iconXs: 12,
   axisCell: 18,
+  axisCellNarrow: 14,
   dropIndicator: 2,
 } as const;
 

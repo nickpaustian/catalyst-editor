@@ -1,6 +1,7 @@
 @use "./fonts/fonts.scss";
 @use "./tokens/tokens";
 @use "./panes/panes.scss";
+@use "./controls.scss";
 
 :root {
   --menu-bar-height: var(--cat-title-bar);

@@ -5,66 +5,70 @@
   <nav class="menus" data-tauri-drag-region>
     <div class="menu" $class="{ open: state.open === 'file' }">
       <button class="menu-title" @click="toggle('file')" @pointerenter="hover('file')">File</button>
-      <div class="menu-items" $if="state.open === 'file'">
-        <button @click="run('newProject')">New project <span class="dim" $if="shared['editor:project'].browserStorage">in the browser</span></button>
-        <button @click="run('openFolder')" $disabled="!shared['editor:project'].supported">Open folder…</button>
-        <button @click="run('reopenLast')" $disabled="!shared['editor:project'].supported">Reopen last</button>
-        <button @click="run('reloadProject')" $disabled="!shared['editor:project'].open">Reload from disk</button>
-        <button @click="run('closeProject')" $disabled="!shared['editor:project'].open">Close project</button>
+      <div class="menu-items menu-panel" role="menu" $if="state.open === 'file'">
+        <button class="menu-item" role="menuitem" @click="run('newProject')">New project <span class="dim" $if="shared['editor:project'].browserStorage">in the browser</span></button>
+        <button class="menu-item" role="menuitem" @click="run('openFolder')" $disabled="!shared['editor:project'].supported">Open folder…</button>
+        <button class="menu-item" role="menuitem" @click="run('reopenLast')" $disabled="!shared['editor:project'].supported">Reopen last</button>
+        <button class="menu-item" role="menuitem" @click="run('reloadProject')" $disabled="!shared['editor:project'].open">Reload from disk</button>
+        <button class="menu-item" role="menuitem" @click="run('closeProject')" $disabled="!shared['editor:project'].open">Close project</button>
         <hr />
-        <button @click="projectSettings()" $disabled="!shared['editor:project'].open">Project settings…</button>
+        <button class="menu-item" role="menuitem" @click="projectSettings()" $disabled="!shared['editor:project'].open">Project settings…</button>
         <hr />
-        <button @click="run('saveAll')">Save <span class="dim">scene and open script</span> <kbd>⌘S</kbd></button>
-        <button @click="run('saveAs')">Save as…</button>
+        <button class="menu-item" role="menuitem" @click="run('saveAll')">Save <span class="dim">scene and open script</span> <kbd>⌘S</kbd></button>
+        <button class="menu-item" role="menuitem" @click="run('saveAs')">Save as…</button>
         <hr />
-        <button @click="run('download')">Download scene file</button>
+        <button class="menu-item" role="menuitem" @click="run('download')">Download scene file</button>
         <hr />
-        <button @click="run('run')">Run <kbd>⌘R</kbd></button>
+        <button class="menu-item" role="menuitem" @click="run('run')">Run <kbd>⌘R</kbd></button>
       </div>
     </div>
 
     <div class="menu" $class="{ open: state.open === 'edit' }">
       <button class="menu-title" @click="toggle('edit')" @pointerenter="hover('edit')">Edit</button>
-      <div class="menu-items" $if="state.open === 'edit'">
-        <button $disabled="!shared['editor:history'].canUndo" @click="run('undo')">Undo{{ shared['editor:history'].undoLabel ? ' ' + shared['editor:history'].undoLabel : '' }} <kbd>⌘Z</kbd></button>
-        <button $disabled="!shared['editor:history'].canRedo" @click="run('redo')">Redo{{ shared['editor:history'].redoLabel ? ' ' + shared['editor:history'].redoLabel : '' }} <kbd>⌘⇧Z</kbd></button>
+      <div class="menu-items menu-panel" role="menu" $if="state.open === 'edit'">
+        <button class="menu-item" role="menuitem" $disabled="!shared['editor:history'].canUndo" @click="run('undo')">Undo{{ shared['editor:history'].undoLabel ? ' ' + shared['editor:history'].undoLabel : '' }} <kbd>⌘Z</kbd></button>
+        <button class="menu-item" role="menuitem" $disabled="!shared['editor:history'].canRedo" @click="run('redo')">Redo{{ shared['editor:history'].redoLabel ? ' ' + shared['editor:history'].redoLabel : '' }} <kbd>⌘⇧Z</kbd></button>
         <hr />
-        <button @click="run('duplicate')">Duplicate <kbd>⌘D</kbd></button>
-        <button @click="run('delete')">Delete selected <kbd>⌦</kbd></button>
-        <button @click="run('unparent')">Unparent <span class="dim">move the selection up beside its parent</span></button>
+        <button class="menu-item" role="menuitem" @click="run('duplicate')">Duplicate <kbd>⌘D</kbd></button>
+        <button class="menu-item" role="menuitem" @click="run('delete')">Delete selected <kbd>⌦</kbd></button>
+        <button class="menu-item" role="menuitem" @click="run('unparent')">Unparent <span class="dim">move the selection up beside its parent</span></button>
         <hr />
-        <button $disabled="!shared['editor:selection'] || shared['editor:selection'].count !== 1 || shared['editor:selection'].prefab !== null" @click="run('makePrefab')">Make prefab <span class="dim">save the selected node as a reusable file</span></button>
-        <button $disabled="!shared['editor:selection'] || shared['editor:selection'].count !== 1 || shared['editor:selection'].prefab === null" @click="run('unpackPrefab')">Unpack prefab <span class="dim">make the copy editable</span></button>
+        <button class="menu-item" role="menuitem" $disabled="!shared['editor:selection'] || shared['editor:selection'].count !== 1 || shared['editor:selection'].prefab !== null" @click="run('makePrefab')">Make prefab <span class="dim">save the selected node as a reusable file</span></button>
+        <button class="menu-item" role="menuitem" $disabled="!shared['editor:selection'] || shared['editor:selection'].count !== 1 || shared['editor:selection'].prefab === null" @click="run('unpackPrefab')">Unpack prefab <span class="dim">make the copy editable</span></button>
       </div>
     </div>
 
     <div class="menu" $class="{ open: state.open === 'view' }">
       <button class="menu-title" @click="toggle('view')" @pointerenter="hover('view')">View</button>
-      <div class="menu-items" $if="state.open === 'view'">
-        <button $class="{ on: shared['editor:view'].visualised }" @click="run('toggleVisualisers')">Visualisers</button>
-        <button $class="{ on: shared['editor:view'].physics }" @click="run('togglePhysics')">Physics running</button>
-        <button $class="{ on: shared['editor:view'].scripts }" @click="run('toggleScripts')">Scripts running</button>
+      <div class="menu-items menu-panel" role="menu" $if="state.open === 'view'">
+        <button class="menu-item" role="menuitemcheckbox" $class="{ on: shared['editor:view'].visualised }" $aria-checked="shared['editor:view'].visualised" @click="run('toggleVisualisers')">Visualisers</button>
+        <button class="menu-item" role="menuitemcheckbox" $class="{ on: shared['editor:view'].physics }" $aria-checked="shared['editor:view'].physics" @click="run('togglePhysics')">Physics running</button>
+        <button class="menu-item" role="menuitemcheckbox" $class="{ on: shared['editor:view'].scripts }" $aria-checked="shared['editor:view'].scripts" @click="run('toggleScripts')">Scripts running</button>
         <hr />
-        <button $class="{ on: shared['editor:view'].gizmo === 'translate' }" @click="setGizmo('translate')">Gizmo: translate</button>
-        <button $class="{ on: shared['editor:view'].gizmo === 'rotate' }" @click="setGizmo('rotate')">Gizmo: rotate</button>
+        <button class="menu-item" role="menuitemcheckbox" $class="{ on: shared['editor:view'].gizmo === 'translate' }" $aria-checked="shared['editor:view'].gizmo === 'translate'" @click="setGizmo('translate')">Gizmo: translate</button>
+        <button class="menu-item" role="menuitemcheckbox" $class="{ on: shared['editor:view'].gizmo === 'rotate' }" $aria-checked="shared['editor:view'].gizmo === 'rotate'" @click="setGizmo('rotate')">Gizmo: rotate</button>
         <hr />
-        <button $class="{ on: shared['editor:view'].snap.enabled }" @click="setSnap({ enabled: !shared['editor:view'].snap.enabled })">Snap <span class="dim">hold ⇧ for the opposite</span></button>
+        <button class="menu-item" role="menuitemcheckbox" $class="{ on: shared['editor:view'].snap.enabled }" $aria-checked="shared['editor:view'].snap.enabled" @click="setSnap({ enabled: !shared['editor:view'].snap.enabled })">Snap <span class="dim">hold ⇧ for the opposite</span></button>
         <div class="choices">
-          <span class="dim">move</span>
-          <button $for="step in state.moveSteps" $key="step" $class="{ on: shared['editor:view'].snap.move === step }" @click="setSnap({ move: step })">{{ step }}</button>
+          <span class="dim" id="snap-move">move</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="snap-move">
+            <button type="button" role="radio" class="mono" $for="step in state.moveSteps" $key="step" $aria-checked="shared['editor:view'].snap.move === step" @click="setSnap({ move: step })">{{ step }}</button>
+          </div>
         </div>
         <div class="choices">
-          <span class="dim">turn</span>
-          <button $for="step in state.rotateSteps" $key="step" $class="{ on: shared['editor:view'].snap.rotate === step }" @click="setSnap({ rotate: step })">{{ step }}°</button>
+          <span class="dim" id="snap-turn">turn</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="snap-turn">
+            <button type="button" role="radio" class="mono" $for="step in state.rotateSteps" $key="step" $aria-checked="shared['editor:view'].snap.rotate === step" @click="setSnap({ rotate: step })">{{ step }}°</button>
+          </div>
         </div>
         <hr />
-        <button @click="resetLayout()">Reset pane layout</button>
+        <button class="menu-item" role="menuitem" @click="resetLayout()">Reset pane layout</button>
       </div>
     </div>
 
     <div class="menu" $class="{ open: state.open === 'help' }">
       <button class="menu-title" @click="toggle('help')" @pointerenter="hover('help')">Help</button>
-      <div class="menu-items help" $if="state.open === 'help'">
+      <div class="menu-items menu-panel help" $if="state.open === 'help'">
         <p><b>Orbit:</b> drag to orbit, right-drag to pan, wheel to zoom. <kbd>F</kbd> focuses the selected node, <kbd>Delete</kbd> removes it. Drag the gizmo to move it.</p>
         <p><b>Tree:</b> shift-click selects a range, ctrl- or cmd-click adds or removes one. Drag a row onto another to reparent it.</p>
         <p><b>Panes:</b> drag a gutter to resize, a pane title to move it; <b>+</b> adds a pane, <b>×</b> closes one.</p>
@@ -72,7 +76,10 @@
     </div>
   </nav>
 
-  <button class="run" title="Run (⌘R / Ctrl+R)" @click="run('run')">▶ Run</button>
+  <button class="button small run" title="Run (⌘R / Ctrl+R)" @click="run('run')">
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.5v9l7-4.5z" fill="currentColor"/></svg>
+    Run
+  </button>
 
   <span class="status">
     <span>{{ shared['editor:project'].open ? (shared['editor:project'].name ?? 'untitled') : '' }}</span>
@@ -162,19 +169,10 @@ function resetLayout() {
   letter-spacing: 0.04em;
 }
 
-.run {
-  font: inherit;
-  color: var(--cat-text-primary);
-  background: var(--cat-bg-field);
-  border: 1px solid var(--cat-border);
-  border-radius: var(--cat-radius-sm);
-  padding: var(--cat-space-0-5) var(--cat-space-2);
-  cursor: pointer;
-}
-
-.run:hover {
-  background: var(--cat-bg-hover);
-  border-color: var(--cat-border-strong);
+.run svg {
+  width: var(--cat-icon-xs);
+  height: var(--cat-icon-xs);
+  color: var(--cat-success);
 }
 
 .menus {
@@ -211,75 +209,34 @@ function resetLayout() {
   top: 100%;
   left: 0;
   min-width: 190px;
-  display: flex;
-  flex-direction: column;
-  padding: var(--cat-space-1);
-  background: var(--cat-bg-raised);
-  border: 1px solid var(--cat-border);
   border-radius: 0 0 var(--cat-radius-md) var(--cat-radius-md);
-  box-shadow: var(--cat-shadow-e1);
 }
 
-.menu-items button {
-  font: inherit;
-  color: var(--cat-text-primary);
-  text-align: left;
-  background: none;
-  border: 0;
-  border-radius: var(--cat-radius-sm);
-  padding: var(--cat-space-1-5) var(--cat-space-2);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.menu-items button:hover {
-  background: var(--cat-bg-hover);
-}
-
-.menu-items button:disabled {
-  color: var(--cat-text-disabled);
-  cursor: default;
-  background: none;
-}
-
-.menu-items button.on::before {
-  content: "✓ ";
-}
-
-.menu-items button:not(.on)::before {
+.menu-items > button::before {
   content: "";
-  display: inline-block;
-  width: 1.1em;
+  flex: 0 0 var(--cat-icon-xs);
+  height: var(--cat-icon-xs);
+}
+
+.menu-items > button.on::before {
+  background: currentColor;
+  mask: var(--glyph-check) center / contain no-repeat;
 }
 
 .choices {
   display: flex;
   align-items: center;
-  gap: var(--cat-space-0-5);
-  padding: var(--cat-space-0-5) var(--cat-space-2) var(--cat-space-1) var(--cat-space-6);
+  gap: var(--cat-space-2);
+  padding: var(--cat-space-0-5) var(--cat-space-2) var(--cat-space-1) calc(var(--cat-space-2) + var(--cat-icon-xs) + var(--cat-space-1-5));
 }
 
 .choices .dim {
-  color: var(--cat-text-tertiary);
-  width: 34px;
+  flex: 0 0 auto;
+  width: var(--cat-space-8);
 }
 
-.choices button {
-  padding: var(--cat-space-0-5) var(--cat-space-1-5);
-  color: var(--cat-text-secondary);
-  border: 1px solid var(--cat-border);
-}
-
-.choices button.on {
-  color: var(--cat-text-primary);
-  background: var(--cat-bg-active);
-  border-color: var(--cat-border-strong);
-}
-
-.choices button::before,
-.choices button:not(.on)::before {
-  content: none;
-  width: 0;
+.choices .segmented {
+  grid-auto-columns: minmax(max-content, 1fr);
 }
 
 .menu-items .dim {
@@ -287,31 +244,16 @@ function resetLayout() {
   font-size: var(--cat-text-xs);
 }
 
-.menu-items hr {
-  border: 0;
-  border-top: 1px solid var(--cat-border);
-  margin: var(--cat-space-1) 0;
-}
-
 .menu-items.help {
   min-width: 300px;
   max-width: 360px;
   padding: var(--cat-space-2) var(--cat-space-3);
   color: var(--cat-text-secondary);
-  line-height: 1.4;
+  line-height: var(--cat-leading-body);
 }
 
 .menu-items.help p {
   margin: var(--cat-space-1) 0;
-}
-
-kbd {
-  font: var(--cat-text-xs) / 1 var(--cat-font-mono);
-  padding: 0 var(--cat-space-1);
-  border: 1px solid var(--cat-border);
-  border-bottom-width: 2px;
-  border-radius: var(--cat-radius-sm);
-  background: var(--cat-bg-field);
 }
 
 .status {

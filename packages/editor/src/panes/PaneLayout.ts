@@ -328,11 +328,12 @@ export class PaneLayout {
     }
     const open = new Set(leaves(this._layout).map((leaf) => leaf.kind))
     const menu = document.createElement("div")
-    menu.className = "pane-menu"
+    menu.className = "pane-menu menu-panel"
     for (const [kind, content] of Object.entries(this.kinds)) {
       if (open.has(kind)) continue
       const item = document.createElement("button")
       item.type = "button"
+      item.className = "menu-item"
       item.textContent = content.title
       item.addEventListener("click", () => this.addBeside(id, kind))
       menu.appendChild(item)

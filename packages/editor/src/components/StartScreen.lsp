@@ -8,17 +8,17 @@
     </header>
     <div class="columns">
       <section class="actions">
-        <button class="primary big" @click="newProject()">New project… <span class="dim">{{ shared['editor:project'].browserStorage ? 'kept in this browser' : 'a folder named after it' }}</span></button>
-        <button class="big" $disabled="!shared['editor:project'].supported" @click="run('openFolder')">Open folder…</button>
+        <button class="button large primary" @click="newProject()">New project… <span class="dim">{{ shared['editor:project'].browserStorage ? 'kept in this browser' : 'a folder named after it' }}</span></button>
+        <button class="button large" $disabled="!shared['editor:project'].supported" @click="run('openFolder')">Open folder…</button>
         <p class="hint" $if="!shared['editor:project'].supported && !shared['editor:project'].browserStorage">This browser can neither open folders nor keep projects of its own.</p>
       </section>
       <section class="recent">
-        <h2>Recent</h2>
+        <h2 class="section-label">Recent</h2>
         <p class="hint" $if="!shared['editor:recent'] || shared['editor:recent'].length === 0">Nothing yet.</p>
         <div class="project" $for="project in shared['editor:recent']" $key="project.id" @click="openRecent(project)">
           <span class="name">{{ project.name }}</span>
           <span class="location">{{ project.location }}</span>
-          <button class="forget" title="Remove from this list" @click="forget($event, project)">×</button>
+          <button class="icon-button forget" title="Remove from this list" aria-label="Remove from this list" @click="forget($event, project)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg></button>
         </div>
       </section>
     </div>
@@ -159,37 +159,6 @@ input {
   padding: var(--cat-space-1) var(--cat-space-2);
 }
 
-button {
-  font: inherit;
-  color: inherit;
-  background: var(--cat-bg-field);
-  border: 1px solid var(--cat-border);
-  border-radius: var(--cat-radius-sm);
-  padding: var(--cat-space-1-5) var(--cat-space-3);
-  cursor: pointer;
-  text-align: left;
-}
-
-button:hover {
-  background: var(--cat-bg-hover);
-}
-
-button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-button.primary {
-  background: var(--cat-accent);
-  border-color: var(--cat-accent);
-  color: var(--cat-text-on-accent);
-  font-weight: 500;
-}
-
-button.big {
-  padding: var(--cat-space-2) var(--cat-space-3);
-}
-
 .dim {
   color: var(--cat-text-secondary);
   font-size: var(--cat-text-xs);
@@ -201,11 +170,11 @@ button.primary .dim {
 }
 
 h2 {
-  margin: 0 0 var(--cat-space-2);
-  font-size: var(--cat-text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--cat-text-secondary);
+  margin-bottom: var(--cat-space-2);
+}
+
+.actions .button {
+  justify-content: flex-start;
 }
 
 .recent {
@@ -214,7 +183,7 @@ h2 {
 
 .project {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--cat-space-2);
   padding: var(--cat-space-1-5) var(--cat-space-2);
   border-radius: var(--cat-radius-sm);
@@ -239,18 +208,6 @@ h2 {
   font-size: var(--cat-text-xs);
   direction: rtl;
   text-align: left;
-}
-
-.forget {
-  padding: 0 var(--cat-space-1-5);
-  border: none;
-  background: none;
-  color: var(--cat-text-tertiary);
-  line-height: 1;
-}
-
-.forget:hover {
-  color: var(--cat-text-primary);
 }
 
 .hint {

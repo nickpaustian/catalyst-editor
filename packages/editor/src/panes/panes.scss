@@ -105,7 +105,7 @@ body.pane-dragging .pane-header {
   gap: var(--cat-space-0-5);
 }
 
-.pane-actions button {
+.pane-actions > button {
   font: var(--cat-text-md) / 1 var(--cat-font-ui);
   color: var(--cat-text-tertiary);
   background: none;
@@ -117,12 +117,12 @@ body.pane-dragging .pane-header {
   padding: 0;
 }
 
-.pane-actions button:hover:not(:disabled) {
+.pane-actions > button:hover:not(:disabled) {
   color: var(--cat-text-primary);
   background: var(--cat-bg-hover);
 }
 
-.pane-actions button:disabled {
+.pane-actions > button:disabled {
   color: var(--cat-text-disabled);
   cursor: default;
 }
@@ -132,36 +132,19 @@ body.pane-dragging .pane-header {
   top: 100%;
   right: 0;
   z-index: 20;
-  display: flex;
-  flex-direction: column;
   min-width: 140px;
-  padding: var(--cat-space-1);
-  background: var(--cat-bg-raised);
-  border: 1px solid var(--cat-border);
-  border-radius: var(--cat-radius-md);
-  box-shadow: var(--cat-shadow-e1);
   text-transform: none;
   letter-spacing: 0;
-}
-
-.pane-menu button {
-  width: auto;
-  height: var(--cat-menu-item);
-  padding: 0 var(--cat-space-2);
-  text-align: left;
-  font: var(--cat-text-sm) / var(--cat-leading-body) var(--cat-font-ui);
-  color: var(--cat-text-primary);
-  border-radius: var(--cat-radius-sm);
 }
 
 .pane-menu-note {
   padding: var(--cat-space-1) var(--cat-space-2);
   color: var(--cat-text-tertiary);
-  font: var(--cat-text-sm) / var(--cat-leading-body) var(--cat-font-ui);
 }
 
 .pane-body {
   flex: 1 1 0;
+  container-type: inline-size;
   position: relative;
   min-height: 0;
   overflow: hidden;

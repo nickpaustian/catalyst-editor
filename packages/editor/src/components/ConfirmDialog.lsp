@@ -1,10 +1,10 @@
 <view>
-<div class="backdrop" $if="state.open" @pointerdown="close()">
-  <div class="dialog" role="dialog" @pointerdown="$event.stopPropagation()">
-    <header class="title">{{ state.title }}</header>
+<div class="scrim" $if="state.open" @pointerdown="close()">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title" @pointerdown="$event.stopPropagation()">
+    <h2 class="dialog-title" id="confirm-title">{{ state.title }}</h2>
     <p class="message">{{ state.message }}</p>
-    <footer class="actions">
-      <button $for="action in state.actions" $key="action.key" type="button" $class="{ primary: action.primary }" @click="pick(action)">{{ action.label }}</button>
+    <footer class="dialog-actions">
+      <button $for="action in state.actions" $key="action.key" type="button" class="button large" $class="{ primary: action.primary }" @click="pick(action)">{{ action.label }}</button>
     </footer>
   </div>
 </div>
@@ -56,69 +56,13 @@ onMounted(() => {
 </logic>
 
 <style>
-.backdrop {
-  position: fixed;
-  inset: 0;
+.scrim {
   z-index: 1400;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--cat-scrim);
-}
-
-.dialog {
-  width: min(440px, 92vw);
-  display: flex;
-  flex-direction: column;
-  background: var(--cat-bg-panel);
-  border: 1px solid var(--cat-border);
-  border-radius: var(--cat-radius-md);
-  box-shadow: var(--cat-shadow-e2);
-  color: var(--cat-text-primary);
-  font: var(--cat-text-sm) / var(--cat-leading-body) var(--cat-font-ui);
-}
-
-.title {
-  padding: var(--cat-space-2) var(--cat-space-3);
-  border-bottom: 1px solid var(--cat-border);
-  font-size: var(--cat-text-md);
-  font-weight: 600;
 }
 
 .message {
   margin: 0;
-  padding: var(--cat-space-3);
   color: var(--cat-text-secondary);
   white-space: pre-line;
-}
-
-.actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--cat-space-2);
-  padding: var(--cat-space-2) var(--cat-space-3);
-  border-top: 1px solid var(--cat-border);
-}
-
-button {
-  font: inherit;
-  color: inherit;
-  background: var(--cat-bg-field);
-  border: 1px solid var(--cat-border);
-  border-radius: var(--cat-radius-sm);
-  padding: var(--cat-space-1) var(--cat-space-3);
-  cursor: pointer;
-}
-
-button.primary {
-  background: var(--cat-accent);
-  border-color: var(--cat-accent);
-  color: var(--cat-text-on-accent);
-  font-weight: 500;
-}
-
-button:focus-visible {
-  outline: 1px solid var(--cat-accent);
-  outline-offset: 1px;
 }
 </style>

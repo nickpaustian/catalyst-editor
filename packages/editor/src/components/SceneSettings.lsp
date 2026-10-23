@@ -1,11 +1,18 @@
 <view>
 <section class="settings" $if="shared['editor:settings']">
-  <h2 class="heading">{{ shared['editor:settings'].title }}</h2>
-  <div class="row" $for="field in state.fields" $key="field.key">
-    <label class="label">{{ field.label }}</label>
-    <input $if="field.type === 'number'" type="number" $step="field.step" $min="field.min" $max="field.max" $model="field.value" @change="apply(field)" />
-    <input $else-if="field.type === 'boolean'" type="checkbox" $model="field.value" @change="apply(field)" />
-    <input $else type="text" $model="field.value" @change="apply(field)" />
+  <h2 class="section-label">{{ shared['editor:settings'].title }}</h2>
+  <div class="properties">
+    <template $for="field in state.fields" $key="field.key">
+      <label class="label" $class="{ scrub: field.type === 'number' }" $title="field.label" @pointerdown="scrubField($event, field)">{{ field.label }}</label>
+      <div class="control">
+        <div class="well" $if="field.type === 'number'">
+          <span class="fill" $if="field.ranged" $style="'width: ' + Math.min(100, Math.max(0, (field.value - field.min) / (field.max - field.min) * 100)) + '%'"></span>
+          <input type="number" $aria-label="field.label" $step="field.step" $min="field.min" $max="field.max" $model="field.value" @change="apply(field)" />
+        </div>
+        <input $else-if="field.type === 'boolean'" class="checkbox" type="checkbox" $aria-label="field.label" $model="field.value" @change="apply(field)" />
+        <input $else class="well" type="text" $aria-label="field.label" $model="field.value" @change="apply(field)" />
+      </div>
+    </template>
   </div>
 </section>
 </view>
@@ -13,53 +20,46 @@
 <logic lang="ts">
 import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
+import { scrub } from '../scrub.ts'
 
-interface Field { key: string; label: string; type: string; value: unknown; min?: number; max?: number; step?: number }
+interface Field { key: string; label: string; type: string; value: unknown; min?: number; max?: number; step?: number; ranged?: boolean }
 
 const settings = shared('editor:settings', null)
 const state = reactive({ fields: [] as Field[] })
 
 settings.subscribe((next: any) => {
-  state.fields = (next?.fields ?? []).map((field: Field) => ({ ...field }))
+  state.fields = (next?.fields ?? []).map((field: Field) => ({ ...field, ranged: field.type === 'number' && field.min !== undefined && field.max !== undefined }))
 })
 
 function apply(field: Field) {
   sendCommand({ type: 'setSetting', key: field.key, value: field.value })
 }
+
+function scrubField(event: PointerEvent, field: Field) {
+  if (field.type !== 'number') return
+  scrub(event, {
+    read: () => Number(field.value),
+    write: (value) => {
+      field.value = value
+      apply(field)
+    },
+    step: field.step ?? 0.01,
+    min: field.min,
+    max: field.max,
+    input: (event.currentTarget as HTMLElement).nextElementSibling?.querySelector('input'),
+  })
+}
 </logic>
 
 <style>
-.heading {
-  font-size: var(--cat-text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--cat-text-secondary);
-  margin: var(--cat-space-3) 0 var(--cat-space-1);
-}
-
-.row {
+.settings {
   display: flex;
-  align-items: center;
-  margin: var(--cat-space-0-5) 0;
+  flex-direction: column;
+  gap: var(--cat-space-2);
+  margin-top: var(--cat-space-4);
 }
 
-.label {
-  width: 90px;
-  color: var(--cat-text-secondary);
-}
-
-input {
-  font: inherit;
-  color: inherit;
-  background: var(--cat-bg-field);
-  border: 1px solid var(--cat-border);
-  border-radius: var(--cat-radius-sm);
-  padding: var(--cat-space-0-5) var(--cat-space-1-5);
-}
-
-input[type="number"] {
-  width: 64px;
-  font-family: var(--cat-font-mono);
-  font-variant-numeric: tabular-nums;
+.control > .well {
+  flex: 1 1 auto;
 }
 </style>

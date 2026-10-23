@@ -1,17 +1,17 @@
 <view>
-<div class="backdrop" $if="shared['editor:addDialog']" @pointerdown="close()">
-  <div class="dialog" @pointerdown="$event.stopPropagation()">
-    <header class="title">Add node <button class="x" @click="close()">×</button></header>
+<div class="scrim" $if="shared['editor:addDialog']" @pointerdown="close()">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="add-node-title" @pointerdown="$event.stopPropagation()">
+    <h2 class="dialog-title" id="add-node-title">Add node</h2>
     <div class="body">
       <aside class="recent">
-        <h3>Recent</h3>
+        <h3 class="section-label">Recent</h3>
         <button class="row flat" $for="item in state.recent" $key="item.id" $class="{ picked: item.id === state.picked }" @click="pick(item.id)" @dblclick="create()">
           <span class="icon" $html="item.icon"></span><span class="label">{{ item.label }}</span>
         </button>
         <p class="hint" $if="state.recent.length === 0">Nothing yet.</p>
       </aside>
       <section class="matches">
-        <input class="search" type="search" placeholder="Search" $model="state.search" @input="refresh()" @keydown="key($event)" />
+        <input class="well large search" type="search" placeholder="Search" aria-label="Search node kinds" $model="state.search" @input="refresh()" @keydown="key($event)" />
         <div class="rows">
           <div class="row" $for="row in state.rows" $key="row.id" $class="{ picked: row.id === state.picked, base: !row.kind, dim: !row.kind }" @click="pick(row.id)" @dblclick="createRow(row)">
             <span class="indent" $for="n in row.depth" $key="n"></span>
@@ -29,9 +29,10 @@
         </div>
       </section>
     </div>
-    <footer class="actions">
-      <button @click="close()">Cancel</button>
-      <button class="primary" $disabled="!state.pickedNode || !state.pickedNode.kind" @click="create()">Create</button>
+    <footer class="dialog-actions">
+      <span class="dialog-keys">↑↓ move · ↵ create · Esc cancel</span>
+      <button class="button large" @click="close()">Cancel</button>
+      <button class="button large primary" $disabled="!state.pickedNode || !state.pickedNode.kind" @click="create()">Create</button>
     </footer>
   </div>
 </div>
@@ -198,45 +199,13 @@ document.addEventListener('keydown', (event) => {
 </logic>
 
 <style>
-.backdrop {
-  position: fixed;
-  inset: 0;
+.scrim {
   z-index: 1200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--cat-scrim);
 }
 
 .dialog {
-  width: min(760px, 92vw);
+  max-width: 760px;
   height: min(560px, 86vh);
-  display: flex;
-  flex-direction: column;
-  background: var(--cat-bg-panel);
-  border: 1px solid var(--cat-border);
-  border-radius: var(--cat-radius-md);
-  box-shadow: var(--cat-shadow-e2);
-  color: var(--cat-text-primary);
-  font: var(--cat-text-sm) / var(--cat-leading-body) var(--cat-font-ui);
-}
-
-.title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--cat-space-2) var(--cat-space-3);
-  border-bottom: 1px solid var(--cat-border);
-  font-size: var(--cat-text-md);
-  font-weight: 600;
-}
-
-.x {
-  font: var(--cat-text-lg) / 1 var(--cat-font-ui);
-  color: var(--cat-text-secondary);
-  background: none;
-  border: 0;
-  cursor: pointer;
 }
 
 .body {
@@ -247,17 +216,13 @@ document.addEventListener('keydown', (event) => {
 
 .recent {
   flex: 0 0 180px;
-  padding: var(--cat-space-2);
+  padding-right: var(--cat-space-4);
   border-right: 1px solid var(--cat-border);
   overflow-y: auto;
 }
 
 h3 {
-  margin: 0 0 var(--cat-space-1-5);
-  font-size: var(--cat-text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--cat-text-secondary);
+  margin-bottom: var(--cat-space-1-5);
 }
 
 .matches {
@@ -265,17 +230,8 @@ h3 {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  padding: var(--cat-space-2);
+  padding-left: var(--cat-space-4);
   gap: var(--cat-space-2);
-}
-
-.search {
-  font: inherit;
-  color: inherit;
-  background: var(--cat-bg-field);
-  border: 1px solid var(--cat-border);
-  border-radius: var(--cat-radius-sm);
-  padding: var(--cat-space-1) var(--cat-space-2);
 }
 
 .rows {
@@ -378,35 +334,5 @@ h3 {
 .hint {
   color: var(--cat-text-tertiary);
   margin: var(--cat-space-0-5) 0;
-}
-
-.actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--cat-space-2);
-  padding: var(--cat-space-2) var(--cat-space-3);
-  border-top: 1px solid var(--cat-border);
-}
-
-.actions button {
-  font: inherit;
-  color: inherit;
-  background: var(--cat-bg-field);
-  border: 1px solid var(--cat-border);
-  border-radius: var(--cat-radius-sm);
-  padding: var(--cat-space-1) var(--cat-space-3);
-  cursor: pointer;
-}
-
-.actions button.primary {
-  background: var(--cat-accent);
-  border-color: var(--cat-accent);
-  color: var(--cat-text-on-accent);
-  font-weight: 500;
-}
-
-.actions button:disabled {
-  opacity: 0.4;
-  cursor: default;
 }
 </style>

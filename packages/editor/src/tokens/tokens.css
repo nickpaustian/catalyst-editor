@@ -115,6 +115,8 @@
   --cat-icon: 16px;
   --cat-icon-sm: 14px;
   --cat-icon-xs: 12px;
+  --cat-axis-cell: 18px;
+  --cat-axis-cell-narrow: 14px;
 
   /* Elevation */
   --cat-shadow-e1: 0 4px 12px rgb(0 0 0 / 0.35);

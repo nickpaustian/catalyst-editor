@@ -1,36 +1,37 @@
 <view>
-<div class="backdrop" $if="shared['editor:projectDialog'].mode" @pointerdown="cancel()">
-  <form class="dialog" @pointerdown="$event.stopPropagation()" @submit="submit($event)">
-    <header class="title">{{ state.mode === 'create' ? 'New project' : 'Project settings' }}<button type="button" class="x" @click="cancel()">×</button></header>
-    <div class="body">
-      <label class="field">Name
-        <input class="name" type="text" $model="state.name" placeholder="My project" autofocus @input="state.folderName = folderName()" />
-      </label>
-      <label class="field" $if="state.mode === 'create' && shared['editor:projectDialog'].locations">Location
-        <span class="row">
-          <input type="text" $value="state.location || ''" placeholder="choose a folder" readonly />
-          <button type="button" @click="pickLocation()">Choose…</button>
-        </span>
-        <span class="hint" $if="state.location && state.folderName">The project is made at {{ state.location }}/{{ state.folderName }}</span>
-      </label>
-      <p class="hint" $else-if="state.mode === 'create'">Kept in this browser's storage; export it to take it elsewhere.</p>
-      <label class="field">Recipe
+<div class="scrim" $if="shared['editor:projectDialog'].mode" @pointerdown="cancel()">
+  <form class="dialog" role="dialog" aria-modal="true" aria-labelledby="project-dialog-title" @pointerdown="$event.stopPropagation()" @submit="submit($event)">
+    <h2 class="dialog-title" id="project-dialog-title">{{ state.mode === 'create' ? 'New project' : 'Project settings' }}</h2>
+    <label class="dialog-field">Name
+      <input class="well large name" type="text" $model="state.name" placeholder="My project" autofocus @input="state.folderName = folderName()" />
+    </label>
+    <div class="dialog-field" $if="state.mode === 'create' && shared['editor:projectDialog'].locations">
+      <span>Location</span>
+      <span class="location">
+        <input class="well large mono" type="text" aria-label="Location" $value="state.location || ''" placeholder="Choose a folder" readonly />
+        <button class="button large" type="button" @click="pickLocation()">Choose…</button>
+      </span>
+      <span class="hint" $if="state.location && state.folderName">Creates <span class="mono">{{ state.location }}/{{ state.folderName }}/</span></span>
+    </div>
+    <p class="hint" $else-if="state.mode === 'create'">Kept in this browser's storage; export it to take it elsewhere.</p>
+    <label class="dialog-field" title="What a project is: the node kinds it adds and how its folder becomes a scene.">Recipe
+      <span class="well large select">
         <select $model="state.recipe" $disabled="state.mode !== 'create'">
           <option $for="recipe in shared['editor:recipes']" $key="recipe" $value="recipe">{{ recipe }}</option>
         </select>
-        <span class="hint">What a project is: the node kinds it adds and how its folder becomes a scene.</span>
-      </label>
-      <label class="field">Description
-        <textarea rows="3" $model="state.description" placeholder="A line or two about it"></textarea>
-      </label>
-      <label class="check" $if="state.mode === 'create' && shared['editor:projectDialog'].canGit">
-        <input type="checkbox" $model="state.git" /> Start a git repository <span class="hint">git init, with a .gitignore for node_modules and .DS_Store</span>
-      </label>
-      <p class="error" $if="state.error">{{ state.error }}</p>
-    </div>
-    <footer class="actions">
-      <button type="button" @click="cancel()">Cancel</button>
-      <button type="submit" class="primary" $disabled="!state.name.trim() || (state.mode === 'create' && shared['editor:projectDialog'].locations && !state.location)">{{ state.mode === 'create' ? 'Create' : 'Save' }}</button>
+      </span>
+    </label>
+    <label class="dialog-field">Description
+      <textarea class="well" rows="3" $model="state.description" placeholder="A line or two about it"></textarea>
+    </label>
+    <label class="check" title="git init, with a .gitignore for node_modules and .DS_Store" $if="state.mode === 'create' && shared['editor:projectDialog'].canGit">
+      <input class="checkbox" type="checkbox" $model="state.git" /> Start a git repository
+    </label>
+    <p class="error" $if="state.error">{{ state.error }}</p>
+    <footer class="dialog-actions">
+      <span class="dialog-keys">↵ {{ state.mode === 'create' ? 'create' : 'save' }} · Esc cancel</span>
+      <button class="button large" type="button" @click="cancel()">Cancel</button>
+      <button class="button large primary" type="submit" $disabled="!state.name.trim() || (state.mode === 'create' && shared['editor:projectDialog'].locations && !state.location)">{{ state.mode === 'create' ? 'Create project' : 'Save' }}</button>
     </footer>
   </form>
 </div>
@@ -88,133 +89,41 @@ document.addEventListener('keydown', (event) => {
 </logic>
 
 <style>
-.backdrop {
-  position: fixed;
-  inset: 0;
+.scrim {
   z-index: 1300;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--cat-scrim);
 }
 
-.dialog {
-  width: min(520px, 92vw);
-  display: flex;
-  flex-direction: column;
-  background: var(--cat-bg-panel);
-  border: 1px solid var(--cat-border);
-  border-radius: var(--cat-radius-md);
-  box-shadow: var(--cat-shadow-e2);
-  color: var(--cat-text-primary);
-  font: var(--cat-text-sm) / var(--cat-leading-body) var(--cat-font-ui);
-}
-
-.title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--cat-space-2) var(--cat-space-3);
-  border-bottom: 1px solid var(--cat-border);
+.name {
   font-size: var(--cat-text-md);
-  font-weight: 600;
 }
 
-.x {
-  font: var(--cat-text-lg) / 1 var(--cat-font-ui);
-  color: var(--cat-text-secondary);
-  background: none;
-  border: 0;
-  cursor: pointer;
-}
-
-.body {
+.location {
   display: flex;
-  flex-direction: column;
-  gap: var(--cat-space-2);
-  padding: var(--cat-space-3);
+  gap: var(--cat-space-1-5);
 }
 
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--cat-space-1);
-  color: var(--cat-text-secondary);
-}
-
-.row {
-  display: flex;
-  gap: var(--cat-space-1);
-}
-
-.row input {
+.location .well {
   flex: 1 1 auto;
-  min-width: 0;
-}
-
-input,
-select,
-textarea {
-  font: inherit;
-  color: var(--cat-text-primary);
-  background: var(--cat-bg-field);
-  border: 1px solid var(--cat-border);
-  border-radius: var(--cat-radius-sm);
-  padding: var(--cat-space-1) var(--cat-space-2);
-}
-
-textarea {
-  resize: vertical;
 }
 
 .hint {
+  margin: 0;
   color: var(--cat-text-tertiary);
-  font-size: var(--cat-text-xs);
+}
+
+.hint .mono {
+  color: var(--cat-text-secondary);
 }
 
 .check {
   display: flex;
   align-items: center;
-  gap: var(--cat-space-1-5);
+  gap: var(--cat-space-2);
   color: var(--cat-text-secondary);
-}
-
-.check input {
-  margin: 0;
 }
 
 .error {
   margin: 0;
   color: var(--cat-danger);
-}
-
-.actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--cat-space-2);
-  padding: var(--cat-space-2) var(--cat-space-3);
-  border-top: 1px solid var(--cat-border);
-}
-
-button {
-  font: inherit;
-  color: inherit;
-  background: var(--cat-bg-field);
-  border: 1px solid var(--cat-border);
-  border-radius: var(--cat-radius-sm);
-  padding: var(--cat-space-1) var(--cat-space-3);
-  cursor: pointer;
-}
-
-button.primary {
-  background: var(--cat-accent);
-  border-color: var(--cat-accent);
-  color: var(--cat-text-on-accent);
-  font-weight: 500;
-}
-
-button:disabled {
-  opacity: 0.4;
-  cursor: default;
 }
 </style>

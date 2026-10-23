@@ -1,5 +1,5 @@
 /** One line of a context menu: a label with what clicking it does, or a separator. */
-export type MenuItem = { label: string; run: () => void; disabled?: boolean; kbd?: string; separator?: false } | { separator: true }
+export type MenuItem = { label: string; run: () => void; disabled?: boolean; danger?: boolean; kbd?: string; separator?: false } | { separator: true }
 
 export interface ContextMenuState {
   x: number
