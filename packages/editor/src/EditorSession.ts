@@ -84,6 +84,8 @@ export interface EditorCells {
   "editor:scripts": { path: string; name: string }[]
   /** The script file open in the code pane: its text as last read or saved, and what happened on the last save. */
   "editor:code": { path: string | null; text: string; status: string }
+  /** Bumped when everything should save: the code pane answers with its unsaved file. */
+  "editor:saveRequest": number
   "editor:selection": {
     id: number
     name: string
@@ -114,6 +116,7 @@ export type EditorCommand =
   | { type: "createProject"; name: string; recipe: string; description: string; location: string | null; git?: boolean }
   | { type: "saveProjectSettings"; name: string; description: string }
   | { type: "save" }
+  | { type: "saveAll" }
   | { type: "saveAs" }
   | { type: "download" }
   | { type: "run" }
@@ -216,6 +219,11 @@ export class EditorSession {
       void this.run()
       return
     }
+    if (key === "s" && !event.shiftKey) {
+      event.preventDefault()
+      void this.saveAll()
+      return
+    }
     const target = event.target as HTMLElement | null
     if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return
     if (key === "a" && event.shiftKey) {
@@ -283,6 +291,7 @@ export class EditorSession {
     this.publishSelection()
     this.set("editor:scripts", [])
     this.set("editor:code", { path: null, text: "", status: "" })
+    this.set("editor:saveRequest", 0)
     this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
     this.set("editor:recipes", [this.recipe.name])
     this.setView("orbit")
@@ -611,6 +620,9 @@ export class EditorSession {
         if (this.folder) await this.save(this.folder)
         else await this.saveAs()
         break
+      case "saveAll":
+        await this.saveAll()
+        break
       case "saveAs":
         await this.saveAs()
         break
@@ -841,6 +853,15 @@ export class EditorSession {
     const scene = this.recipe.serialise?.(this._root, this.engine) ?? this.engine.serialise(this._root)
     this.runner.send({ type: "catalyst:run", recipe: this.recipe.name, scene, folder: this.folder?.transfer() ?? null })
     this.publishProject("running")
+  }
+
+  private saveRequests = 0
+
+  /** Save everything unsaved: the code pane's file (it answers the request with a `saveScript`), then the scene. */
+  async saveAll(): Promise<void> {
+    this.set("editor:saveRequest", ++this.saveRequests)
+    if (this.folder) await this.save(this.folder)
+    else await this.saveAs()
   }
 
   private async save(folder: ProjectFolder): Promise<void> {

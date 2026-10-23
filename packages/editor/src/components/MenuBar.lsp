@@ -14,7 +14,7 @@
         <hr />
         <button @click="projectSettings()" $disabled="!shared['editor:project'].open">Project settings…</button>
         <hr />
-        <button @click="run('save')">Save</button>
+        <button @click="run('saveAll')">Save <span class="dim">scene and open script</span> <kbd>⌘S</kbd></button>
         <button @click="run('saveAs')">Save as…</button>
         <hr />
         <button @click="run('download')">Download scene file</button>

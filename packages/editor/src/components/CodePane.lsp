@@ -7,7 +7,7 @@
     </select>
     <span class="dirty" $if="state.dirty">unsaved</span>
     <span class="status" $class="{ error: state.error }">{{ state.status }}</span>
-    <button class="primary" $disabled="!state.path" @click="save()">Save <kbd>⌘S</kbd></button>
+    <button class="primary" $disabled="!state.path || !state.dirty" @click="save()">Save script</button>
   </div>
   <div class="host" $ref="host"></div>
   <p class="hint" $if="!state.path">Open a script from the inspector's Scripts section, or choose one above. Saving writes the file and rebuilds every script in the scene.</p>
@@ -28,6 +28,7 @@ interface Code { path: string | null; text: string; status: string }
 
 const code = shared('editor:code', { path: null, text: '', status: '' })
 shared('editor:scripts')
+const saveRequest = shared('editor:saveRequest', 0)
 const refs = defineRefs<{ host: HTMLElement }>()
 
 const state = reactive({ path: '', dirty: false, status: '', error: false })
@@ -41,6 +42,15 @@ function save(): boolean {
   sendCommand({ type: 'saveScript', path: state.path, text: view.state.doc.toString() })
   return true
 }
+
+function saveAll(): boolean {
+  sendCommand({ type: 'saveAll' })
+  return true
+}
+
+saveRequest.subscribe((n: number | undefined) => {
+  if (n && state.dirty) save()
+})
 
 function choose() {
   if (state.path) sendCommand({ type: 'openScript', path: state.path })
@@ -69,7 +79,7 @@ onMounted(() => {
       doc: '',
       extensions: [
         basicSetup,
-        keymap.of([{ key: 'Mod-s', run: save }, indentWithTab]),
+        keymap.of([{ key: 'Mod-s', run: saveAll }, indentWithTab]),
         javascript({ typescript: true }),
         oneDark,
         readOnly.of(EditorState.readOnly.of(true)),
