@@ -1,5 +1,5 @@
 <view>
-<div class="menu" $if="state.open" $ref="menu" $style="{ left: state.x + 'px', top: state.y + 'px' }" @pointerdown="$event.stopPropagation()" @contextmenu="$event.preventDefault()">
+<div class="menu" $if="state.open" $ref="menu" @pointerdown="$event.stopPropagation()" @contextmenu="$event.preventDefault()">
   <template $for="item in state.items" $key="item.key">
     <hr $if="item.separator" />
     <button $else type="button" $disabled="item.disabled" @click="pick(item)">
@@ -38,15 +38,23 @@ cell.subscribe((next: { x: number; y: number; items: any[] } | null | undefined)
   state.x = next.x
   state.y = next.y
   state.open = true
-  // Keep the menu inside the window once it has a size
-  setTimeout(() => {
-    const menu = refs.menu
-    if (!menu) return
-    const rect = menu.getBoundingClientRect()
-    if (rect.right > window.innerWidth) state.x = Math.max(0, window.innerWidth - rect.width - 4)
-    if (rect.bottom > window.innerHeight) state.y = Math.max(0, window.innerHeight - rect.height - 4)
-  }, 0)
+  setTimeout(place, 0)
 })
+
+// At the pointer, shifted back inside the window when it would not fit
+function place() {
+  const menu = refs.menu ?? document.querySelector<HTMLElement>('#context-menu .menu')
+  if (!menu) return
+  menu.style.visibility = 'hidden'
+  menu.style.left = `${state.x}px`
+  menu.style.top = `${state.y}px`
+  const rect = menu.getBoundingClientRect()
+  const x = rect.right > window.innerWidth ? Math.max(0, window.innerWidth - rect.width - 4) : state.x
+  const y = rect.bottom > window.innerHeight ? Math.max(0, window.innerHeight - rect.height - 4) : state.y
+  menu.style.left = `${x}px`
+  menu.style.top = `${y}px`
+  menu.style.visibility = ''
+}
 
 onMounted(() => {
   document.addEventListener('pointerdown', close, true)
