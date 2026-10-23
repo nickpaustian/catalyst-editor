@@ -4,14 +4,14 @@
     <header class="title">{{ state.mode === 'create' ? 'New project' : 'Project settings' }}<button type="button" class="x" @click="cancel()">×</button></header>
     <div class="body">
       <label class="field">Name
-        <input class="name" type="text" $model="state.name" placeholder="My project" autofocus />
+        <input class="name" type="text" $model="state.name" placeholder="My project" autofocus @input="state.folderName = folderName()" />
       </label>
       <label class="field" $if="state.mode === 'create' && shared['editor:projectDialog'].locations">Location
         <span class="row">
           <input type="text" $value="state.location || ''" placeholder="choose a folder" readonly />
           <button type="button" @click="pickLocation()">Choose…</button>
         </span>
-        <span class="hint" $if="state.location && state.name.trim()">The project is made at {{ state.location }}/{{ folderName() }}</span>
+        <span class="hint" $if="state.location && state.folderName">The project is made at {{ state.location }}/{{ state.folderName }}</span>
       </label>
       <p class="hint" $else-if="state.mode === 'create'">Kept in this browser's storage; export it to take it elsewhere.</p>
       <label class="field">Recipe
@@ -46,7 +46,7 @@ interface Dialog { mode: 'create' | 'edit' | null; name: string; recipe: string;
 const dialog = shared('editor:projectDialog', PROJECT_DIALOG_DEFAULT)
 shared('editor:recipes', ['scene'])
 
-const state = reactive({ mode: null as Dialog['mode'], name: '', recipe: 'scene', description: '', location: null as string | null, git: false, error: '' })
+const state = reactive({ mode: null as Dialog['mode'], name: '', recipe: 'scene', description: '', location: null as string | null, git: false, error: '', folderName: '' })
 
 dialog.subscribe((next: Dialog | undefined) => {
   if (!next) return
@@ -55,6 +55,7 @@ dialog.subscribe((next: Dialog | undefined) => {
     state.recipe = next.recipe
     state.description = next.description
     state.git = next.git
+    state.folderName = folderName()
   }
   state.mode = next.mode
   state.location = next.location
@@ -63,7 +64,8 @@ dialog.subscribe((next: Dialog | undefined) => {
 })
 
 function folderName(): string {
-  return state.name.trim().toLowerCase().replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'project'
+  const name = state.name.trim()
+  return name ? name.toLowerCase().replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'project' : ''
 }
 
 function pickLocation() {

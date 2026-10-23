@@ -51,6 +51,22 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "catalyst"
+        ],
+        "name": "Catalyst project",
+        "description": "A Catalyst project",
+        "role": "Editor",
+        "mimeType": "application/x-catalyst-project"
+      }
     ]
+  },
+  "plugins": {
+    "fs": {
+      "requireLiteralLeadingDot": false
+    }
   }
 }

@@ -4,7 +4,7 @@ export { EditorCamera, nodeTarget, groupTarget, type GizmoMode, type GizmoTarget
 export { EditorInput } from "./EditorInput"
 export { HandleFolder, NativeFolder, browserFolders, nativeFolders, folderLoader, pickFile, type ProjectFolder, type ProjectStorage, type FolderSource, type FolderTransfer, type FolderEntry, type NativeFs, type RecentProject } from "./ProjectFolder"
 export { windowRunnerLink, windowRunnerPageLink, type RunnerLink, type RunnerPageLink, type RunMessage } from "./RunnerLink"
-export { PROJECT_FILE, readProjectSettings, writeProjectSettings, createProject, slug as projectSlug, type ProjectSettings, type NewProject } from "./project"
+export { PROJECT_EXTENSION, LEGACY_PROJECT_FILE, projectFileOf, projectFolderOfFile, readProjectSettings, writeProjectSettings, createProject, slug as projectSlug, type ProjectSettings, type NewProject } from "./project"
 export { PROJECT_DIALOG_DEFAULT } from "./cells"
 export type { Recipe, NodeKind, RunContext, RecipeSettings } from "./recipe"
 export { sceneRecipe, SCENE_FILE, type SceneEnvironment } from "./recipes/scene"

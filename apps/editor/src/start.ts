@@ -19,7 +19,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   const recent = app.shared("editor:recent")
   const dialog = app.shared("editor:projectDialog")
   app.shared("editor:startMode").set("window")
-  app.shared("editor:recipes").set(["scene"])
   dialog.set(PROJECT_DIALOG_DEFAULT)
   const status = (text: string) => project.set({ open: false, name: null, recipe: "scene", storage: null, status: text, supported: folders.isSupported, browserStorage: folders.hasBrowserStorage, dirty: false })
   const refresh = async () => recent.set(await folders.recent())
@@ -80,6 +79,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   if (!(await app.mount("startscreen", "#start-screen"))) throw new Error("StartScreen did not mount")
   if (!(await app.mount("projectdialog", "#project-dialog"))) throw new Error("ProjectDialog did not mount")
+  app.shared("editor:recipes").set(["scene"])
   if (shell) {
     const { getCurrentWindow } = await import("@tauri-apps/api/window")
     void getCurrentWindow().onCloseRequested(() => shell.startClosed())

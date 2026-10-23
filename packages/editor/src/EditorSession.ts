@@ -722,10 +722,10 @@ export class EditorSession {
     const folder = this.folder
     if (!folder) return
     const next: ProjectSettings = { ...(this.settings ?? { recipe: this.recipe.name, created: new Date().toISOString() }), name: name.trim() || folder.name, description: description.trim() }
-    await writeProjectSettings(folder, next)
+    const file = await writeProjectSettings(folder, next)
     this.settings = next
     this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
-    this.publishProject("saved project.json")
+    this.publishProject(`saved ${file}`)
     void this.publishRecent()
   }
 

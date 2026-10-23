@@ -14,6 +14,9 @@ export interface DesktopShell {
   onStartClosed(listener: () => void): void
   /** Close this window; with the start window gone too, the app exits. */
   quit(): void
+  /** Project files the app was launched with, or opened while it runs, handed over once. */
+  takeOpenedFiles(): Promise<string[]>
+  onOpenedFiles(listener: (paths: string[]) => void): void
 }
 
 /** The desktop shell's folders and runner window when the page runs inside Tauri, else null. */

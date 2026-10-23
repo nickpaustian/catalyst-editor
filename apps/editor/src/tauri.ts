@@ -115,4 +115,8 @@ const shell = (): DesktopShell => ({
       await getCurrentWindow().close()
     })()
   },
+  takeOpenedFiles: () => invoke<string[]>("take_opened_files"),
+  onOpenedFiles(listener) {
+    void listen<string[]>("catalyst:open-files", (event) => listener(event.payload))
+  },
 })

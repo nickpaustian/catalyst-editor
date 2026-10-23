@@ -1,7 +1,7 @@
 import "@nickpaustian/catalyst-editor/styles.scss"
 import { createLightspeedApp } from "@lightspeed-js/core"
 import { components } from "virtual:lightspeed/components"
-import { EditorSession, PaneLayout, browserFolders, createEngine, preferences, sceneRecipe, type Recipe } from "@nickpaustian/catalyst-editor"
+import { EditorSession, PaneLayout, browserFolders, createEngine, preferences, projectFolderOfFile, sceneRecipe, type Recipe } from "@nickpaustian/catalyst-editor"
 import { desktop } from "./desktop"
 
 const recipes: Recipe[] = [sceneRecipe]
@@ -49,6 +49,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     shell.onStartClosed(() => {
       if (!session.root) shell.quit()
     })
+    const openFile = async (paths: string[]) => {
+      const file = paths[paths.length - 1]
+      if (file) await session.open(folders.fromTransfer({ kind: "path", path: projectFolderOfFile(file) }))
+    }
+    shell.onOpenedFiles((paths) => void (async () => {
+      await shell.takeOpenedFiles()
+      await openFile(paths)
+    })())
+    await openFile(await shell.takeOpenedFiles())
   }
   for (const id of recipe.panel ?? []) {
     const host = document.createElement("div")

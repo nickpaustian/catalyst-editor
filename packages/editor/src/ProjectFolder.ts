@@ -1,4 +1,5 @@
 import { fetchLoader, type Loader } from "@nickpaustian/catalyst"
+import { readProjectSettings } from "./project"
 
 declare global {
   interface Window {
@@ -100,15 +101,8 @@ const withStore = async <T>(mode: IDBTransactionMode, run: (store: IDBObjectStor
   })
 }
 
-/** The name `project.json` gives a project, or the folder's own when there is none. */
-const projectName = async (folder: ProjectFolder): Promise<string> => {
-  try {
-    const json = await folder.readJSON<{ name?: unknown }>("project.json")
-    return typeof json.name === "string" && json.name.trim() ? json.name : folder.name
-  } catch {
-    return folder.name
-  }
-}
+/** The name the project's file gives it, or the folder's own when there is none. */
+const projectName = async (folder: ProjectFolder): Promise<string> => (await readProjectSettings(folder))?.name ?? folder.name
 
 const importPath = async (folder: ProjectFolder, file: File, dir: string): Promise<string> => {
   const base = file.name.replace(/[^\w.-]+/g, "-")
