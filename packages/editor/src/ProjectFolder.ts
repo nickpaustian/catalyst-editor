@@ -42,6 +42,8 @@ export interface ProjectFolder {
   /** Remove everything in the project. */
   clear(): Promise<void>
   transfer(): FolderTransfer
+  /** Hear about files changed by something other than this folder, as relative paths; where the host can watch. */
+  watch?(listener: (paths: string[]) => void): Promise<() => void>
 }
 
 /** A project opened before, as the start screen lists it. */
@@ -328,6 +330,8 @@ export interface NativeFs {
   remove(path: string): Promise<void>
   /** Start a git repository at the path, where the shell has git. */
   initGit?(path: string): Promise<void>
+  /** Watch a directory tree; the listener gets absolute paths. Resolves to the way to stop. */
+  watch?(path: string, listener: (paths: string[]) => void): Promise<() => void>
 }
 
 const RECENT_PATHS_KEY = "catalyst-editor:recent-project-paths"
@@ -351,10 +355,13 @@ const setRecentPaths = (paths: string[]): void => {
 const basename = (path: string): string => path.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? path
 
 /** A project at an absolute path, through a native filesystem. */
+const OWN_WRITE_MS = 1500
+
 export class NativeFolder implements ProjectFolder {
   readonly path: string
   readonly storage: ProjectStorage = "native"
   private readonly fs: NativeFs
+  private readonly written = new Map<string, number>()
 
   constructor(fs: NativeFs, path: string) {
     this.fs = fs
@@ -403,8 +410,13 @@ export class NativeFolder implements ProjectFolder {
     }
   }
 
+  private noteWrite(path: string): void {
+    this.written.set(this.at(path), Date.now())
+  }
+
   async writeText(path: string, text: string): Promise<void> {
     await this.ensureDir(path)
+    this.noteWrite(path)
     await this.fs.writeText(this.at(path), text)
   }
 
@@ -415,7 +427,24 @@ export class NativeFolder implements ProjectFolder {
   async writeFile(path: string, data: Blob | ArrayBuffer): Promise<void> {
     await this.ensureDir(path)
     const buffer = data instanceof Blob ? await data.arrayBuffer() : data
+    this.noteWrite(path)
     await this.fs.writeBinary(this.at(path), new Uint8Array(buffer))
+  }
+
+  async watch(listener: (paths: string[]) => void): Promise<() => void> {
+    if (!this.fs.watch) return () => undefined
+    const root = `${this.path}/`
+    return this.fs.watch(this.path, (absolute) => {
+      const now = Date.now()
+      const changed = absolute
+        .filter((path) => path.startsWith(root))
+        .filter((path) => {
+          const at = this.written.get(path)
+          return !(at !== undefined && now - at < OWN_WRITE_MS)
+        })
+        .map((path) => path.slice(root.length))
+      if (changed.length) listener([...new Set(changed)])
+    })
   }
 
   async importFile(file: File, dir = "assets"): Promise<string> {

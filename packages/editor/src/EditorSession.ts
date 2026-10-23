@@ -10,7 +10,7 @@ import { preferences, type SnapSettings } from "./preferences"
 import { browserFolders, folderLoader, type FolderSource, type ProjectFolder, type ProjectStorage, type RecentProject } from "./ProjectFolder"
 import { windowRunnerLink, type RunnerLink } from "./RunnerLink"
 import { SCRIPTS_DIR, ScriptCompiler, scriptTemplate } from "./ScriptCompiler"
-import { createProject, readProjectSettings, writeProjectSettings, type NewProject, type ProjectSettings } from "./project"
+import { LEGACY_PROJECT_FILE, PROJECT_EXTENSION, createProject, readProjectSettings, writeProjectSettings, type NewProject, type ProjectSettings } from "./project"
 import { PROJECT_DIALOG_DEFAULT } from "./cells"
 import type { NodeKind, Recipe } from "./recipe"
 
@@ -176,6 +176,9 @@ export class EditorSession {
   private readonly input: EditorInput | null
   private folder: ProjectFolder | null = null
   private settings: ProjectSettings | null = null
+  private unwatch: (() => void) | null = null
+  private watchTimer: ReturnType<typeof setTimeout> | null = null
+  private changedOnDisk = new Set<string>()
   private _root: Node3D | null = null
   private view: ViewMode = "orbit"
   private visualised = true
@@ -307,6 +310,13 @@ export class EditorSession {
     this.camera.focusPoint(new THREE.Vector3(0, 0.5, 0), 8)
     if (folder) await folder.remember()
     void this.publishRecent()
+    if (folder?.watch) {
+      try {
+        this.unwatch = await folder.watch((paths) => this.onDiskChange(paths))
+      } catch (error) {
+        this.engine.log(`the project folder is not watched: ${error instanceof Error ? error.message : error}`, "editor")
+      }
+    }
   }
 
   /** Take the project out of the viewport and show the start screen again. */
@@ -322,6 +332,8 @@ export class EditorSession {
   }
 
   private close(): void {
+    this.unwatch?.()
+    this.unwatch = null
     this.select(null)
     this._root?.dispose()
     this._root = null
@@ -727,6 +739,54 @@ export class EditorSession {
     this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
     this.publishProject(`saved ${file}`)
     void this.publishRecent()
+  }
+
+  //=========================
+  // Files changed outside
+  //=========================
+
+  /** Changes on disk from other programs, gathered for a moment, then: scripts rebuilt, prefabs rebuilt, the project file re-read. */
+  private onDiskChange(paths: string[]): void {
+    for (const path of paths) this.changedOnDisk.add(path)
+    if (this.watchTimer) clearTimeout(this.watchTimer)
+    this.watchTimer = setTimeout(() => {
+      this.watchTimer = null
+      const changed = [...this.changedOnDisk]
+      this.changedOnDisk.clear()
+      void this.applyDiskChanges(changed)
+    }, 300)
+  }
+
+  private async applyDiskChanges(changed: string[]): Promise<void> {
+    const folder = this.folder
+    const root = this._root
+    if (!folder || !root) return
+    const scripts = changed.filter((path) => path.startsWith(`${SCRIPTS_DIR}/`))
+    const prefabs = changed.filter((path) => path.startsWith(`${PREFABS_DIR}/`) && path.endsWith(".json"))
+    const project = changed.some((path) => !path.includes("/") && (path.endsWith(PROJECT_EXTENSION) || path === LEGACY_PROJECT_FILE))
+    const notes: string[] = []
+    if (scripts.length) {
+      await this.reloadScripts()
+      const code = this.app.shared("editor:code").value as EditorCells["editor:code"] | undefined
+      if (code?.path && scripts.includes(code.path)) {
+        try {
+          this.set("editor:code", { path: code.path, text: await folder.readText(code.path), status: `reloaded ${code.path} from disk` })
+        } catch {}
+      }
+      notes.push(`${scripts.length} script${scripts.length === 1 ? "" : "s"}`)
+    }
+    if (prefabs.length) {
+      await this.loadPrefabs()
+      for (const path of prefabs) await this.reloadInstances(path)
+      notes.push(`${prefabs.length} prefab${prefabs.length === 1 ? "" : "s"}`)
+    }
+    if (project) {
+      this.settings = await readProjectSettings(folder)
+      void this.publishRecent()
+      notes.push("the project file")
+    }
+    if (notes.length) this.publishProject(`changed on disk: ${notes.join(", ")}`)
+    this.publishSelection()
   }
 
   //=========================

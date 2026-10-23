@@ -53,8 +53,8 @@ function show(next: Code) {
   const replace = path !== state.path || (!state.dirty && next.text !== shown)
   state.path = path
   state.status = next.status
-  state.error = Boolean(next.status) && !next.status.startsWith('saved ')
-  if (replace || next.status.startsWith('saved ')) {
+  state.error = Boolean(next.status) && !/^(saved|reloaded) /.test(next.status)
+  if (replace || /^(saved|reloaded) /.test(next.status)) {
     if (replace) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next.text } })
     shown = next.text
     state.dirty = false
