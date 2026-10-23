@@ -65,6 +65,19 @@ export class PaneLayout {
     this.onChange(layout)
   }
 
+  public isOpen(kind: PaneKind): boolean {
+    return leaves(this._layout).some((leaf) => leaf.kind === kind)
+  }
+
+  /** Show a kind that is closed: under `beside` (or the first pane) with a share of its height. */
+  public open(kind: PaneKind, beside?: PaneKind, extent = 0.4): void {
+    if (this.isOpen(kind)) return
+    const all = leaves(this._layout)
+    const target = all.find((leaf) => leaf.kind === beside) ?? all[0]
+    if (!target) return
+    this.layout = insertBeside(this._layout, target.id, "bottom", pane(kind), extent)
+  }
+
   /** The body element currently showing a kind, if it is open. */
   public bodyOf(kind: PaneKind): HTMLElement | null {
     return this.root.querySelector<HTMLElement>(`.pane-body[data-kind="${kind}"]`)

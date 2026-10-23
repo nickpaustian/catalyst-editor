@@ -75,6 +75,7 @@
         <div class="row script-head">
           <span class="script-name" $title="script.url">{{ script.name }}</span>
           <span class="hint" $if="!script.built">not built</span>
+          <button class="small" title="Open in the code pane" @click="editScript(script)">Edit</button>
           <button class="remove" title="Detach script" @click="detachScript(script)">×</button>
         </div>
         <div class="row property" $for="field in script.fields" $key="field.key">
@@ -153,6 +154,10 @@ function applyScriptColour(event: Event, script: ScriptEntry, field: Field) {
   field.hex = (event.target as HTMLInputElement).value
   field.value = parseInt(field.hex.slice(1), 16)
   applyScriptField(script, field)
+}
+
+function editScript(script: ScriptEntry) {
+  sendCommand({ type: 'openScript', path: script.url })
 }
 
 function detachScript(script: ScriptEntry) {
@@ -501,6 +506,17 @@ input.name {
 .script-name {
   flex: 1 1 auto;
   font-weight: 600;
+}
+
+.script-head .small {
+  font: inherit;
+  font-size: 10px;
+  color: inherit;
+  background: #222;
+  border: 1px solid #444;
+  border-radius: 3px;
+  padding: 0 6px;
+  cursor: pointer;
 }
 
 .script-head .remove {

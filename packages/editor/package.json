@@ -8,6 +8,8 @@
     "./styles.scss": "./src/editor.scss"
   },
   "dependencies": {
+    "@codemirror/lang-javascript": "^6.2.5",
+    "@codemirror/theme-one-dark": "^6.1.3",
     "@lightspeed-js/core": "^0.4.9",
     "@nickpaustian/catalyst": "^0.1.2",
     "@nickpaustian/helm": "^0.1.0",
@@ -15,6 +17,7 @@
     "@nickpaustian/signal": "^0.1.0",
     "@nickpaustian/stelligra": "^0.1.0",
     "@nickpaustian/velora": "^0.1.0",
+    "codemirror": "^6.0.2",
     "sucrase": "^3.35.1",
     "three": "^0.183.2"
   }

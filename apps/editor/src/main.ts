@@ -17,6 +17,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       scene: { title: "Scene", element: document.getElementById("scene-panel")! },
       viewport: { title: "Viewport", element: document.getElementById("app")! },
       inspector: { title: "Inspector", element: document.getElementById("editor-panel")! },
+      code: { title: "Code", element: document.getElementById("code-panel")! },
     },
     layout: preferences.layout,
     onChange: preferences.setLayout,
@@ -26,6 +27,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!(await app.mount("scenepane", "#scene-panel"))) throw new Error("ScenePane did not mount")
   if (!(await app.mount("editorpanel", "#editor-panel"))) throw new Error("EditorPanel did not mount")
   if (!(await app.mount("menubar", "#menu-bar"))) throw new Error("MenuBar did not mount")
+  if (!(await app.mount("codepane", "#code-panel"))) throw new Error("CodePane did not mount")
+  app.shared("editor:code").subscribe((code: { path: string | null } | undefined) => {
+    if (code?.path) panes.open("code", "viewport")
+  })
 
   const recipe = recipes.find((r) => r.name === new URLSearchParams(location.search).get("recipe")) ?? recipes[0]
   const engine = createEngine(recipe, { container: "#app" })

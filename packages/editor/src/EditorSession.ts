@@ -70,6 +70,8 @@ export interface EditorCells {
   "editor:addDialog": boolean
   /** The script files in the project, offered to attach. */
   "editor:scripts": { path: string; name: string }[]
+  /** The script file open in the code pane: its text as last read or saved, and what happened on the last save. */
+  "editor:code": { path: string | null; text: string; status: string }
   "editor:selection": {
     id: number
     name: string
@@ -114,6 +116,9 @@ export type EditorCommand =
   | { type: "setScriptProperty"; index: number; key: string; value: unknown }
   | { type: "newScript"; name: string }
   | { type: "reloadScripts" }
+  | { type: "openScript"; path: string }
+  | { type: "saveScript"; path: string; text: string }
+  | { type: "closeScript" }
   | { type: "focus" }
   | { type: "setTransform"; position: { x: number; y: number; z: number }; rotation: { x: number; y: number; z: number } }
   | { type: "setProperty"; key: string; value: unknown }
@@ -245,6 +250,7 @@ export class EditorSession {
     this.publishTree()
     this.publishSelection()
     this.set("editor:scripts", [])
+    this.set("editor:code", { path: null, text: "", status: "" })
     this.setView("orbit")
   }
 
@@ -262,6 +268,7 @@ export class EditorSession {
     this.folder = folder
     this.engine.loader = folder ? folderLoader(folder) : this.engine.loader
     this.useFolderScripts()
+    this.set("editor:code", { path: null, text: "", status: "" })
     this.publishProject(folder ? `opening ${folder.name}` : "new project")
     const root = await this.recipe.load(folder, this.engine)
     this._root = root
@@ -584,6 +591,15 @@ export class EditorSession {
       case "reloadScripts":
         await this.reloadScripts()
         break
+      case "openScript":
+        await this.openScript(command.path)
+        break
+      case "saveScript":
+        await this.saveScript(command.path, command.text)
+        break
+      case "closeScript":
+        this.set("editor:code", { path: null, text: "", status: "" })
+        break
       case "focus":
         this.focusSelected()
         break
@@ -751,6 +767,34 @@ export class EditorSession {
     await this.loadScriptFiles()
     this.publishProject(`saved ${path}`)
     if (this.selected && this.selected !== this._root) await this.attachScript(path)
+  }
+
+  /** Put a script file's text in the code pane. */
+  private async openScript(path: string): Promise<void> {
+    const folder = this.folder
+    if (!folder) return
+    try {
+      this.set("editor:code", { path, text: await folder.readText(path), status: "" })
+    } catch {
+      this.publishProject(`${path} could not be read`)
+    }
+  }
+
+  /** Write a script file from the code pane and rebuild every script, reporting a build error against the file. */
+  private async saveScript(path: string, text: string): Promise<void> {
+    const folder = this.folder
+    if (!folder) return
+    await folder.writeText(path, text)
+    await this.reloadScripts()
+    this.compiler?.invalidate(path)
+    this.engine.scripts.invalidate(path)
+    let status = `saved ${path}`
+    try {
+      await this.engine.scripts.load(path)
+    } catch (error) {
+      status = error instanceof Error ? error.message : String(error)
+    }
+    this.set("editor:code", { path, text, status })
   }
 
   /** Read every script file again and rebuild the scripts on every node, keeping their values. */

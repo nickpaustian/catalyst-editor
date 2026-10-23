@@ -118,7 +118,8 @@ export class ScriptCompiler {
     try {
       code = transform(source, { transforms: ["typescript"], disableESTransforms: true, keepUnusedImports: true, filePath: path }).code
     } catch (error) {
-      throw new Error(`${path}: ${error instanceof Error ? error.message : error}`)
+      const message = error instanceof Error ? error.message : String(error)
+      throw new Error(message.includes(path) ? message : `${path}: ${message}`)
     }
     const specifiers = new Map<string, string>()
     for (const match of code.matchAll(IMPORT)) specifiers.set(match[3], "")

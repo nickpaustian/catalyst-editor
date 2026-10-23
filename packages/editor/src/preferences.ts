@@ -76,7 +76,7 @@ export class Preference<T> {
 
 import { isValidLayout, pane, split, type LayoutNode, type PaneKind } from "./panes/layout"
 
-export const PANE_KINDS: PaneKind[] = ["scene", "viewport", "inspector"]
+export const PANE_KINDS: PaneKind[] = ["scene", "viewport", "inspector", "code"]
 
 /** Scene on the left, inspector on the right, the viewport between, as Godot lays it out. */
 export const defaultLayout = (): LayoutNode =>
