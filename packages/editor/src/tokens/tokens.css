@@ -1,4 +1,4 @@
-/* Catalyst editor design tokens — mirrors tokens.json (the source of truth).
+/* Generated from tokens.json by scripts/tokens.mjs; edit the json and run `npm run tokens`.
    Dark theme only (v1). A light theme later redefines the same names. */
 
 :root {
@@ -26,7 +26,7 @@
   /* Accent — Hot pink. Selected / focused / active only (+ primary button). */
   --cat-accent: #FF4FC8;
   --cat-accent-soft: rgb(255 79 200 / 0.16);
-  --cat-accent-ring: rgb(255 79 200 / 0.40);
+  --cat-accent-ring: rgb(255 79 200 / 0.4);
   --cat-selection-inactive: var(--cat-bg-active);
 
   /* Status */

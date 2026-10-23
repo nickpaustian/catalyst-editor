@@ -16,6 +16,7 @@
     "build:editor": "cd apps/editor && tsc && vite build",
     "preview": "cd apps/player && vite preview",
     "typecheck": "cd apps/editor && tsc && cd ../player && tsc",
+    "tokens": "node scripts/tokens.mjs",
     "link:engine": "npm install --no-save ../catalyst",
     "unlink": "npm ci",
     "build:wasm": "cd packages/stelligra/stelligra-wasm && wasm-pack build --target web --release"
