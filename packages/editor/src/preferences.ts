@@ -3,7 +3,7 @@
  * Modelled on the copyright-free viewer's Preference store; here reactivity is
  * the `editor:preferences` shared cell, which carries every current value.
  */
-const PREFIX = "vitrine-editor:"
+const PREFIX = "catalyst-editor:"
 const CELL = "editor:preferences"
 
 const storage = {

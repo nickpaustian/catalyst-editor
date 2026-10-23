@@ -1,7 +1,7 @@
-import "@vitrine/editor/styles.scss"
+import "@nickpaustian/catalyst-editor/styles.scss"
 import { createLightspeedApp } from "@lightspeed-js/core"
 import { components } from "virtual:lightspeed/components"
-import { EditorSession, PaneLayout, ProjectFolder, createEngine, preferences, sceneRecipe, type Recipe } from "@vitrine/editor"
+import { EditorSession, PaneLayout, ProjectFolder, createEngine, preferences, sceneRecipe, type Recipe } from "@nickpaustian/catalyst-editor"
 
 const recipes: Recipe[] = [sceneRecipe]
 

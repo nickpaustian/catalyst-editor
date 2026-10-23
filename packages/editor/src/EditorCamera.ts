@@ -58,7 +58,7 @@ export class EditorCamera {
   constructor(engine: Catalyst) {
     this.engine = engine
     const renderer = engine.renderer
-    if (!renderer) throw new Error("[vitrine] the editor camera needs the engine's renderer")
+    if (!renderer) throw new Error("[catalyst-editor] the editor camera needs the engine's renderer")
     this.view = new THREE.PerspectiveCamera(50, engine.width / engine.height, 0.05, 500)
     this.view.position.set(6, 5, 8)
     this.orbit = new OrbitControls(this.view, renderer.domElement)

@@ -44,7 +44,7 @@ import { sendCommand } from '../commands.ts'
 interface KindNode { id: string; label: string; icon: string; description: string; kind: string | null; children: KindNode[] }
 interface Row extends KindNode { depth: number; hasChildren: boolean; expanded: boolean }
 
-const RECENT_KEY = 'vitrine-editor:recent-kinds'
+const RECENT_KEY = 'catalyst-editor:recent-kinds'
 const RECENT_MAX = 8
 
 const open = shared('editor:addDialog', false)

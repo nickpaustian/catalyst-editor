@@ -1,4 +1,4 @@
-import { Runner, createEngine, sceneRecipe, type Recipe } from "@vitrine/editor"
+import { Runner, createEngine, sceneRecipe, type Recipe } from "@nickpaustian/catalyst-editor"
 
 const recipes: Recipe[] = [sceneRecipe]
 

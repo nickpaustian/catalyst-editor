@@ -1,6 +1,6 @@
 <view>
 <header class="bar">
-  <span class="brand">Vitrine</span>
+  <span class="brand">Catalyst</span>
 
   <nav class="menus">
     <div class="menu" $class="{ open: state.open === 'file' }">

@@ -1,15 +1,15 @@
-# Vitrine
+# Catalyst editor
 
 An editor for Catalyst projects: open a folder, see its scene as a tree, select, move with a gizmo, edit what each node exposes, add and remove nodes, save. What a project *is* comes from a **recipe**: the node kinds it adds, the panel sections it shows, and how its folder becomes a scene and back. A plain Catalyst scene is the built-in recipe; an exhibition (the Beruk work this grew from) is the next.
 
 ## Layout
 
-npm workspace. The editor packages are consumed from source; the engine packages are file links to their repos until they are published.
+npm workspace. The editor packages are consumed from source; the engine packages come from npm.
 
 | Path | Package | What it is |
 | --- | --- | --- |
-| `packages/editor` | `@vitrine/editor` | The editor: `EditorSession` (tree, selection, fields, add, delete, move, rename, save), `EditorCamera` (orbit and gizmo), `ProjectFolder` and `folderLoader` (File System Access), the `Recipe` interface and the `sceneRecipe`, the pane layout, preferences, and the Lightspeed panel components |
-| `apps/editor` | `@vitrine/editor-app` | The app: makes the engine with the core modules (physics, input, interaction, resources, splats), mounts the scene pane, the inspector and the menu bar, and runs a session under a recipe |
+| `packages/editor` | `@nickpaustian/catalyst-editor` | The editor: `EditorSession` (tree, selection, fields, add, delete, move, rename, save), `EditorCamera` (orbit and gizmo), `ProjectFolder` and `folderLoader` (File System Access), the `Recipe` interface and the `sceneRecipe`, the pane layout, preferences, and the Lightspeed panel components |
+| `apps/editor` | `catalyst-editor-app` | The app: makes the engine with the core modules (physics, input, interaction, resources, splats), mounts the scene pane, the inspector and the menu bar, and runs a session under a recipe |
 | `apps/editor/exhibition` | | The exhibition editor's sections and session as they were, kept as the reference for the exhibition recipe |
 | `packages/runtime`, `apps/player`, and the vendored `packages/catalyst`, `stelligra`, `spektra`, `telemetry`, `assets`, `debug` | | The exhibition player and its copies of the engine, as ported from Beruk. They go once the exhibition recipe runs on the published packages |
 

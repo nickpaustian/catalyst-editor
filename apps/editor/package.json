@@ -1,5 +1,5 @@
 {
-  "name": "@vitrine/editor-app",
+  "name": "catalyst-editor-app",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -12,7 +12,7 @@
   "dependencies": {
     "@lightspeed-js/core": "^0.4.9",
     "@nickpaustian/catalyst": "^0.1.0",
-    "@vitrine/editor": "*",
+    "@nickpaustian/catalyst-editor": "*",
     "three": "^0.183.2"
   }
 }

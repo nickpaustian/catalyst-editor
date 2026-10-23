@@ -4,7 +4,7 @@ import { ProjectFolder, folderLoader } from "./ProjectFolder"
 import type { Recipe } from "./recipe"
 
 export interface RunMessage {
-  type: "vitrine:run"
+  type: "catalyst:run"
   recipe: string
   scene: NodeJSON
   folder: FileSystemDirectoryHandle | null
@@ -21,7 +21,7 @@ export class Runner {
   private readonly engine: Catalyst
   private readonly recipe: Recipe
   private readonly onMessage = (event: MessageEvent): void => {
-    if (event.origin !== location.origin || event.data?.type !== "vitrine:run") return
+    if (event.origin !== location.origin || event.data?.type !== "catalyst:run") return
     void this.play(event.data as RunMessage)
   }
 
@@ -30,7 +30,7 @@ export class Runner {
     this.recipe = recipe
     for (const { kind, cls } of recipe.kinds) if (!engine.registry.has(kind) && typeof cls === "function") engine.register({ [kind]: cls as any })
     window.addEventListener("message", this.onMessage)
-    window.opener?.postMessage({ type: "vitrine:ready" }, location.origin)
+    window.opener?.postMessage({ type: "catalyst:ready" }, location.origin)
   }
 
   get isPlaying(): boolean {

@@ -144,7 +144,7 @@ export class EditorSession {
   private runner: Window | null = null
   private runnerReady = false
   private readonly onMessage = (event: MessageEvent): void => {
-    if (event.origin !== location.origin || event.data?.type !== "vitrine:ready") return
+    if (event.origin !== location.origin || event.data?.type !== "catalyst:ready") return
     this.runnerReady = true
     this.sendToRunner()
   }
@@ -550,14 +550,14 @@ export class EditorSession {
     this.runnerReady = false
     const url = new URL("play.html", location.href)
     url.searchParams.set("recipe", this.recipe.name)
-    this.runner = window.open(url.href, "vitrine-run")
+    this.runner = window.open(url.href, "catalyst-run")
     if (!this.runner) this.publishProject("the browser blocked the runner window")
   }
 
   private sendToRunner(): void {
     if (!this.runner || this.runner.closed || !this._root) return
     const scene = this.recipe.serialise?.(this._root, this.engine) ?? this.engine.serialise(this._root)
-    this.runner.postMessage({ type: "vitrine:run", recipe: this.recipe.name, scene, folder: this.folder?.handle ?? null }, location.origin)
+    this.runner.postMessage({ type: "catalyst:run", recipe: this.recipe.name, scene, folder: this.folder?.handle ?? null }, location.origin)
     this.publishProject("running")
   }
 

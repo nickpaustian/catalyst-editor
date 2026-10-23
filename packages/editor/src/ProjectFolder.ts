@@ -6,7 +6,7 @@ declare global {
   }
 }
 
-const HANDLE_DB = "vitrine-editor"
+const HANDLE_DB = "catalyst-editor"
 const HANDLE_STORE = "handles"
 const HANDLE_KEY = "last-folder"
 
@@ -81,7 +81,7 @@ export class ProjectFolder {
   static async pick(): Promise<ProjectFolder | null> {
     if (!window.showDirectoryPicker) return null
     try {
-      return new ProjectFolder(await window.showDirectoryPicker({ mode: "readwrite", id: "vitrine-project" }))
+      return new ProjectFolder(await window.showDirectoryPicker({ mode: "readwrite", id: "catalyst-project" }))
     } catch (error) {
       if ((error as DOMException).name === "AbortError") return null
       throw error
