@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@lightspeed-js/core": "^0.4.9",
-    "@nickpaustian/catalyst": "^0.1.0",
+    "@nickpaustian/catalyst": "^0.1.2",
     "@nickpaustian/helm": "^0.1.0",
     "@nickpaustian/requester": "^0.1.0",
     "@nickpaustian/signal": "^0.1.0",

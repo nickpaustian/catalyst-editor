@@ -1,5 +1,5 @@
 import * as THREE from "three"
-import { Node3D, editorIcon, exposedProperties, readExposed, writeExposed, type Catalyst, type ExposedProperty, type NodeClass } from "@nickpaustian/catalyst"
+import { Node3D, Prefab, editorIcon, exposedProperties, readExposed, writeExposed, type Catalyst, type ExposedProperty, type NodeClass, type NodeJSON } from "@nickpaustian/catalyst"
 import { Input } from "@nickpaustian/catalyst/input"
 import { Physics } from "@nickpaustian/catalyst/physics"
 import type { LightspeedRuntime } from "@lightspeed-js/core"
@@ -8,7 +8,7 @@ import { EditorInput } from "./EditorInput"
 import { History } from "./History"
 import { preferences, type SnapSettings } from "./preferences"
 import { ProjectFolder, folderLoader } from "./ProjectFolder"
-import type { Recipe } from "./recipe"
+import type { NodeKind, Recipe } from "./recipe"
 
 export interface TreeRow {
   id: number
@@ -65,6 +65,8 @@ export interface EditorCells {
     icon: string
     count: number
     parent: string | null
+    /** The file a prefab instance follows, or null for any other node. */
+    prefab: string | null
     position: { x: number; y: number; z: number }
     rotation: { x: number; y: number; z: number }
     properties: SelectionProperty[]
@@ -91,6 +93,8 @@ export type EditorCommand =
   | { type: "toggleExpand"; id: number }
   | { type: "move"; ids: number[]; targetId: number; place: DropPlace }
   | { type: "delete" }
+  | { type: "makePrefab" }
+  | { type: "unpackPrefab" }
   | { type: "focus" }
   | { type: "setTransform"; position: { x: number; y: number; z: number }; rotation: { x: number; y: number; z: number } }
   | { type: "setProperty"; key: string; value: unknown }
@@ -100,6 +104,9 @@ export type EditorCommand =
 const round = (n: number, places = 4) => Number(n.toFixed(places))
 const toStrings = (value: unknown): string[] => (Array.isArray(value) ? value.map(String) : String(value ?? "").split(","))
 const LIST_TYPES: ExposedProperty["type"][] = ["tags", "layers"]
+export const PREFABS_DIR = "prefabs"
+const PREFAB_KIND = "prefab:"
+const slug = (name: string) => name.trim().toLowerCase().replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "prefab"
 
 const download = (name: string, text: string) => {
   const url = URL.createObjectURL(new Blob([text], { type: "application/json" }))
@@ -139,6 +146,7 @@ export class EditorSession {
   private nodesById = new Map<number, Node3D>()
   private nextId = 1
   private collapsed = new Set<Node3D>()
+  private prefabs: { path: string; name: string }[] = []
   private unsubscribeCommands: () => void
   private unsubscribeBlur: () => void
   private runner: Window | null = null
@@ -235,6 +243,7 @@ export class EditorSession {
     this._root = root
     this.engine.add(root)
     this.setVisualised(this.visualised)
+    await this.loadPrefabs()
     this.history.clear()
     this.publishSettings()
     this.publishProject(folder ? "" : "unsaved")
@@ -292,6 +301,16 @@ export class EditorSession {
       for (const node of list) sort(node.children)
     }
     sort(roots)
+    if (this.prefabs.length) {
+      roots.push({
+        id: "Prefabs",
+        label: "Prefabs",
+        icon: editorIcon(Prefab),
+        description: `The node trees saved under ${PREFABS_DIR}/ in this project. Edit → Make prefab saves the selected node as one.`,
+        kind: null,
+        children: this.prefabs.map(({ path, name }) => ({ id: `${PREFAB_KIND}${path}`, label: name, icon: editorIcon(Prefab), description: `A copy of ${path}. Every copy follows the file.`, kind: `${PREFAB_KIND}${path}`, children: [] })),
+      })
+    }
     this.set("editor:kinds", roots)
     this.set("editor:addDialog", false)
   }
@@ -419,6 +438,7 @@ export class EditorSession {
       icon: editorIcon(node),
       count: this.selection.size,
       parent: node.parent instanceof Node3D && node.parent !== this._root ? node.parent.name : null,
+      prefab: node instanceof Prefab ? node.url : null,
       position: { x: round(p.x), y: round(p.y), z: round(p.z) },
       rotation: { x: round(THREE.MathUtils.radToDeg(e.x), 2), y: round(THREE.MathUtils.radToDeg(e.y), 2), z: round(THREE.MathUtils.radToDeg(e.z), 2) },
       properties: exposedProperties(node)
@@ -513,6 +533,12 @@ export class EditorSession {
       case "delete":
         this.deleteSelected()
         break
+      case "makePrefab":
+        await this.makePrefab()
+        break
+      case "unpackPrefab":
+        await this.unpackPrefab()
+        break
       case "focus":
         this.focusSelected()
         break
@@ -581,6 +607,99 @@ export class EditorSession {
     this.folder = folder
     this.engine.loader = folderLoader(folder)
     await this.save(folder)
+    await this.loadPrefabs()
+  }
+
+  //=========================
+  // Prefabs
+  //=========================
+
+  /** The prefab files in the project, offered as kinds to add. */
+  private async loadPrefabs(): Promise<void> {
+    const files = this.folder ? await this.folder.list(PREFABS_DIR) : []
+    this.prefabs = files.filter((file) => file.kind === "file" && file.name.endsWith(".json")).map((file) => ({ path: file.path, name: file.name.slice(0, -5) }))
+    this.publishKinds()
+  }
+
+  /**
+   * Save the selected node's tree as a prefab file named after it, and put
+   * an instance of the file in its place. Saving over a prefab of the same
+   * name updates every instance of it in the scene.
+   */
+  private async makePrefab(): Promise<void> {
+    const node = this.selected
+    const folder = this.folder
+    const root = this._root
+    if (!node || !root || node === root || this.selection.size > 1) return
+    if (!folder) return this.publishProject("the project needs a folder before prefabs can be saved")
+    if (node instanceof Prefab) return this.publishProject(`${node.name} is already a prefab instance`)
+    const path = `${PREFABS_DIR}/${slug(node.name)}.json`
+    const { transform: _transform, ...json } = this.engine.serialise(node)
+    await folder.writeJSON(path, json)
+    const parent = node.parent as Node3D
+    const index = parent.indexOf(node)
+    const instance = new Prefab({ name: node.name, url: path, visualise: this.visualised })
+    instance.transform.position.copy(node.transform.position)
+    instance.transform.rotation.copy(node.transform.rotation)
+    instance.transform.scale.copy(node.transform.scale)
+    const swapIn = () => {
+      node.remove()
+      parent.insertNode(instance, index, instance.name)
+    }
+    const swapOut = () => {
+      instance.remove()
+      parent.insertNode(node, index, node.name)
+    }
+    swapIn()
+    this.record(`make prefab ${node.name}`, swapOut, swapIn)
+    await this.reloadInstances(path, instance)
+    await this.loadPrefabs()
+    this.publishProject(`saved ${path}`)
+    this.select(instance)
+  }
+
+  /** Replace the selected prefab instance with an editable copy of its file's tree, at the same place and pose. */
+  private async unpackPrefab(): Promise<void> {
+    const instance = this.selected
+    const root = this._root
+    if (!(instance instanceof Prefab) || !root || this.selection.size > 1) return
+    let json: NodeJSON
+    try {
+      json = await this.engine.loader.json<NodeJSON>(instance.url)
+    } catch {
+      return this.publishProject(`${instance.url} could not be read`)
+    }
+    if (this.selected !== instance) return
+    const made = this.engine.create({ ...json, name: instance.name })
+    if (!(made instanceof Node3D)) return this.publishProject(`${instance.url} is not a spatial node`)
+    const parent = instance.parent as Node3D
+    const index = parent.indexOf(instance)
+    const name = instance.name
+    const world = instance.transform.worldMatrix.clone().multiply(made.transform.matrix)
+    const unpack = () => {
+      instance.remove()
+      parent.insertNode(made, index, name)
+      made.transform.setWorldMatrix(world)
+    }
+    const pack = () => {
+      made.remove()
+      parent.insertNode(instance, index, name)
+    }
+    unpack()
+    if (this.visualised) made.walk((child) => {
+      if (child instanceof Node3D) child.visualised = true
+    })
+    this.record(`unpack ${name}`, pack, unpack)
+    this.select(made)
+  }
+
+  /** After a prefab file is written: every instance of it in the scene follows. */
+  private async reloadInstances(path: string, except?: Prefab): Promise<void> {
+    const reloads: Promise<void>[] = []
+    this._root?.walk((node) => {
+      if (node instanceof Prefab && node !== except && node.url === path) reloads.push(node.reload())
+    })
+    await Promise.all(reloads)
   }
 
   //=========================
@@ -770,7 +889,7 @@ export class EditorSession {
   /** New nodes go under the selected node (or the root), at the orbit target in world space. A kind that needs a file asks for it first. */
   private async addNode(kind: string, given?: Record<string, unknown>): Promise<void> {
     const parent = this.selected ?? this._root
-    const definition = this.recipe.kinds.find((k) => k.kind === kind)
+    const definition = kind.startsWith(PREFAB_KIND) ? this.prefabKind(kind.slice(PREFAB_KIND.length)) : this.recipe.kinds.find((k) => k.kind === kind)
     if (!parent || !definition) return
     let picked: Record<string, unknown> = given ?? {}
     if (!given && definition.pick) {
@@ -780,7 +899,7 @@ export class EditorSession {
       picked = result
     }
     if (parent !== (this.selected ?? this._root)) return
-    const node = definition.make({ name: `${kind.charAt(0).toLowerCase()}${kind.slice(1)}`, visualise: this.visualised, ...picked })
+    const node = definition.make({ name: `${definition.kind.charAt(0).toLowerCase()}${definition.kind.slice(1)}`, visualise: this.visualised, ...picked })
     parent.addNode(node)
     node.transform.setWorldPosition(this.camera.isActive ? this.camera.orbitTarget : new THREE.Vector3(0, 1, 0))
     if (this.visualised) node.visualised = true
@@ -788,6 +907,13 @@ export class EditorSession {
     const index = parent.indexOf(node)
     this.record(`add ${definition.label.toLowerCase()}`, () => node.remove(), () => parent.insertNode(node, index, node.name))
     this.select(node)
+  }
+
+  /** A kind for one of the project's prefab files, named after the file. */
+  private prefabKind(path: string): NodeKind | undefined {
+    const prefab = this.prefabs.find((p) => p.path === path)
+    if (!prefab) return undefined
+    return { kind: prefab.name, label: prefab.name, cls: Prefab, make: (o) => new Prefab({ ...o, url: path }) }
   }
 
   private deleteSelected(): void {

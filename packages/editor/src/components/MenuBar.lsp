@@ -26,6 +26,9 @@
         <button $disabled="!shared['editor:history'].canRedo" @click="run('redo')">Redo{{ shared['editor:history'].redoLabel ? ' ' + shared['editor:history'].redoLabel : '' }} <kbd>⌘⇧Z</kbd></button>
         <hr />
         <button @click="run('delete')">Delete selected <kbd>⌦</kbd></button>
+        <hr />
+        <button $disabled="!shared['editor:selection'] || shared['editor:selection'].count !== 1 || shared['editor:selection'].prefab !== null" @click="run('makePrefab')">Make prefab <span class="dim">save the selected node as a reusable file</span></button>
+        <button $disabled="!shared['editor:selection'] || shared['editor:selection'].count !== 1 || shared['editor:selection'].prefab === null" @click="run('unpackPrefab')">Unpack prefab <span class="dim">make the copy editable</span></button>
       </div>
     </div>
 
@@ -82,6 +85,7 @@ import { preferences } from '../preferences.ts'
 shared('editor:project', { name: null, recipe: '', storage: null, status: '', supported: false, dirty: false })
 shared('editor:view', { view: 'orbit', visualised: true, gizmo: 'translate', physics: false, snap: { enabled: true, move: 0.25, rotate: 15 } })
 shared('editor:history', { canUndo: false, canRedo: false, undoLabel: null, redoLabel: null })
+shared('editor:selection', null)
 
 const state = reactive({ open: null as string | null, moveSteps: [0.05, 0.1, 0.25, 0.5, 1], rotateSteps: [5, 15, 45, 90] })
 

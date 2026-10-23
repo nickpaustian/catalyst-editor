@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@lightspeed-js/core": "^0.4.9",
-    "@nickpaustian/catalyst": "^0.1.0",
+    "@nickpaustian/catalyst": "^0.1.2",
     "@nickpaustian/catalyst-editor": "*",
     "three": "^0.183.2"
   }
