@@ -63,6 +63,15 @@ export interface FolderSource {
   inBrowser(name: string): Promise<ProjectFolder>
   browserProjects(): Promise<string[]>
   fromTransfer(transfer: FolderTransfer): ProjectFolder
+  /** Whether projects are made in a chosen location (folders), rather than in the browser. */
+  readonly hasLocations: boolean
+  /** Ask for a parent folder for a new project; null when cancelled or where there are no locations. */
+  pickLocation(): Promise<string | null>
+  /** Make a project's folder: named after the project under `location`, or in the browser. */
+  create(name: string, location: string | null): Promise<ProjectFolder>
+  /** Whether a git repository can be started in a project's folder. */
+  readonly canInitGit: boolean
+  initGit(folder: ProjectFolder): Promise<void>
   /** Projects opened before, most recent first. */
   recent(): Promise<RecentProject[]>
   openRecent(id: string): Promise<ProjectFolder | null>
@@ -89,6 +98,16 @@ const withStore = async <T>(mode: IDBTransactionMode, run: (store: IDBObjectStor
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error)
   })
+}
+
+/** The name `project.json` gives a project, or the folder's own when there is none. */
+const projectName = async (folder: ProjectFolder): Promise<string> => {
+  try {
+    const json = await folder.readJSON<{ name?: unknown }>("project.json")
+    return typeof json.name === "string" && json.name.trim() ? json.name : folder.name
+  } catch {
+    return folder.name
+  }
 }
 
 const importPath = async (folder: ProjectFolder, file: File, dir: string): Promise<string> => {
@@ -274,11 +293,16 @@ export const browserFolders: FolderSource = {
     if (transfer.kind !== "handle") throw new Error("[catalyst-editor] a path cannot be opened through the browser")
     return new HandleFolder(transfer.handle)
   },
+  hasLocations: false,
+  pickLocation: async () => null,
+  canInitGit: false,
+  initGit: async () => undefined,
+  create: (name) => HandleFolder.inBrowser(name.trim().replace(/[\\/]+/g, "-") || "untitled"),
   recent: async () => {
     const out: RecentProject[] = []
     const last = await HandleFolder.last()
     if (last && last.storage === "disk") out.push({ id: "last", name: last.name, location: "a folder on disk, last opened", storage: "disk" })
-    for (const name of await HandleFolder.browserProjects()) out.push({ id: `browser:${name}`, name, location: "in the browser", storage: "browser" })
+    for (const name of await HandleFolder.browserProjects()) out.push({ id: `browser:${name}`, name: await projectName(await HandleFolder.inBrowser(name)), location: "in the browser", storage: "browser" })
     return out
   },
   openRecent: async (id) => {
@@ -308,6 +332,8 @@ export interface NativeFs {
   readDir(path: string): Promise<{ name: string; isDirectory: boolean }[]>
   mkdir(path: string): Promise<void>
   remove(path: string): Promise<void>
+  /** Start a git repository at the path, where the shell has git. */
+  initGit?(path: string): Promise<void>
 }
 
 const RECENT_PATHS_KEY = "catalyst-editor:recent-project-paths"
@@ -434,7 +460,21 @@ export const nativeFolders = (fs: NativeFs): FolderSource => ({
     const path = recentPaths()[0]
     return path && (await fs.exists(path)) ? new NativeFolder(fs, path) : null
   },
-  recent: async () => recentPaths().map((path) => ({ id: path, name: basename(path), location: path, storage: "native" as const })),
+  hasLocations: true,
+  pickLocation: () => fs.pickDirectory(),
+  canInitGit: typeof fs.initGit === "function",
+  initGit: async (folder) => {
+    if (!(folder instanceof NativeFolder)) throw new Error("[catalyst-editor] git can only be started in a folder on disk")
+    await fs.initGit?.(folder.path)
+  },
+  create: async (name, location) => {
+    if (!location) throw new Error("[catalyst-editor] a new project needs a location")
+    const clean = name.trim().toLowerCase().replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "project"
+    const path = `${location.replace(/[\\/]+$/, "")}/${clean}`
+    if (!(await fs.exists(path))) await fs.mkdir(path)
+    return new NativeFolder(fs, path)
+  },
+  recent: () => Promise.all(recentPaths().map(async (path) => ({ id: path, name: (await fs.exists(path)) ? await projectName(new NativeFolder(fs, path)) : basename(path), location: path, storage: "native" as const }))),
   openRecent: async (path) => ((await fs.exists(path)) ? new NativeFolder(fs, path) : null),
   forget: async (path) => setRecentPaths(recentPaths().filter((p) => p !== path)),
   inBrowser: () => Promise.reject(new Error("[catalyst-editor] projects live on disk here")),

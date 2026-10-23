@@ -10,6 +10,8 @@ import { preferences, type SnapSettings } from "./preferences"
 import { browserFolders, folderLoader, type FolderSource, type ProjectFolder, type ProjectStorage, type RecentProject } from "./ProjectFolder"
 import { windowRunnerLink, type RunnerLink } from "./RunnerLink"
 import { SCRIPTS_DIR, ScriptCompiler, scriptTemplate } from "./ScriptCompiler"
+import { createProject, readProjectSettings, writeProjectSettings, type NewProject, type ProjectSettings } from "./project"
+import { PROJECT_DIALOG_DEFAULT } from "./cells"
 import type { NodeKind, Recipe } from "./recipe"
 
 export interface TreeRow {
@@ -65,6 +67,10 @@ export interface EditorCells {
   "editor:recent": RecentProject[]
   /** How the start screen shows: over the editor, as the whole page of its own window, or not at all here. */
   "editor:startMode": "overlay" | "window" | "off"
+  /** The new-project or project-settings dialog: closed when `mode` is null. */
+  "editor:projectDialog": typeof PROJECT_DIALOG_DEFAULT
+  /** The recipes a project may use. */
+  "editor:recipes": string[]
   "editor:history": { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
   /** The recipe's project-wide settings, or null when it has none. */
   "editor:settings": { title: string; fields: SelectionProperty[] } | null
@@ -101,6 +107,11 @@ export type EditorCommand =
   | { type: "openRecent"; id: string }
   | { type: "forgetRecent"; id: string }
   | { type: "closeProject" }
+  | { type: "openProjectDialog"; mode: "create" | "edit" }
+  | { type: "closeProjectDialog" }
+  | { type: "pickLocation" }
+  | { type: "createProject"; name: string; recipe: string; description: string; location: string | null; git?: boolean }
+  | { type: "saveProjectSettings"; name: string; description: string }
   | { type: "save" }
   | { type: "saveAs" }
   | { type: "download" }
@@ -164,6 +175,7 @@ export class EditorSession {
   private readonly camera: EditorCamera
   private readonly input: EditorInput | null
   private folder: ProjectFolder | null = null
+  private settings: ProjectSettings | null = null
   private _root: Node3D | null = null
   private view: ViewMode = "orbit"
   private visualised = true
@@ -261,6 +273,8 @@ export class EditorSession {
     this.publishSelection()
     this.set("editor:scripts", [])
     this.set("editor:code", { path: null, text: "", status: "" })
+    this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
+    this.set("editor:recipes", [this.recipe.name])
     this.setView("orbit")
     void this.publishRecent()
   }
@@ -273,9 +287,11 @@ export class EditorSession {
   async open(folder: ProjectFolder | null): Promise<void> {
     this.close()
     this.folder = folder
+    this.settings = folder ? await readProjectSettings(folder) : null
     this.engine.loader = folder ? folderLoader(folder) : this.engine.loader
     this.useFolderScripts()
     this.set("editor:code", { path: null, text: "", status: "" })
+    this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
     this.publishProject(folder ? `opening ${folder.name}` : "new project")
     const root = await this.recipe.load(folder, this.engine)
     this._root = root
@@ -297,6 +313,7 @@ export class EditorSession {
   closeProject(): void {
     this.close()
     this.folder = null
+    this.settings = null
     this.set("editor:code", { path: null, text: "", status: "" })
     this.publishSettings()
     this.publishTree()
@@ -374,7 +391,7 @@ export class EditorSession {
 
   private publishProject(status?: string): void {
     const dirty = this.history.isDirty
-    this.set("editor:project", { open: this._root !== null, name: this.folder?.name ?? null, recipe: this.recipe.name, storage: this.folder?.storage ?? null, status: status ?? (dirty ? "unsaved changes" : ""), supported: this.folders.isSupported, browserStorage: this.folders.hasBrowserStorage, dirty })
+    this.set("editor:project", { open: this._root !== null, name: this.settings?.name ?? this.folder?.name ?? null, recipe: this.recipe.name, storage: this.folder?.storage ?? null, status: status ?? (dirty ? "unsaved changes" : ""), supported: this.folders.isSupported, browserStorage: this.folders.hasBrowserStorage, dirty })
   }
 
   private publishSettings(): void {
@@ -543,6 +560,23 @@ export class EditorSession {
       case "closeProject":
         this.closeProject()
         break
+      case "openProjectDialog":
+        this.openProjectDialog(command.mode)
+        break
+      case "closeProjectDialog":
+        this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
+        break
+      case "pickLocation": {
+        const location = await this.folders.pickLocation()
+        if (location) this.set("editor:projectDialog", { ...this.app.shared("editor:projectDialog").value, location })
+        break
+      }
+      case "createProject":
+        await this.createProject(command)
+        break
+      case "saveProjectSettings":
+        await this.saveProjectSettings(command.name, command.description)
+        break
       case "save":
         if (this.folder) await this.save(this.folder)
         else await this.saveAs()
@@ -659,26 +693,40 @@ export class EditorSession {
     }
   }
 
-  /**
-   * A fresh project: in the browser's storage under a name, or, where
-   * projects are folders, in a folder the user picks (an empty one, or a
-   * new one made in the picker).
-   */
+  /** A fresh project: straight into the browser's storage under a name when one is given, else through the dialog. */
   private async newProject(name?: string): Promise<void> {
-    if (this.folders.hasBrowserStorage) {
-      const clean = (name ?? "untitled").trim().replace(/[\\/]+/g, "-") || "untitled"
-      const folder = await this.folders.inBrowser(clean)
-      if (!name) await folder.clear()
+    if (name && this.folders.hasBrowserStorage) {
+      await this.open(await createProject(this.folders, { name, recipe: this.recipe.name, description: "", location: null }))
+      return
+    }
+    this.openProjectDialog("create")
+  }
+
+  private openProjectDialog(mode: "create" | "edit"): void {
+    if (mode === "edit" && !this.folder) return
+    const current = mode === "edit" ? this.settings : null
+    this.set("editor:projectDialog", { mode, name: current?.name ?? (mode === "edit" ? this.folder!.name : ""), recipe: current?.recipe ?? this.recipe.name, description: current?.description ?? "", location: null, locations: this.folders.hasLocations, git: this.folders.canInitGit, canGit: this.folders.canInitGit, error: "" })
+  }
+
+  private async createProject(fields: NewProject): Promise<void> {
+    try {
+      const folder = await createProject(this.folders, fields)
+      if (!(await folder.ensurePermission())) return
       await this.open(folder)
-      return
+    } catch (error) {
+      this.set("editor:projectDialog", { ...this.app.shared("editor:projectDialog").value, error: error instanceof Error ? error.message : String(error) })
     }
-    if (this.folders.isSupported) {
-      const folder = await this.folders.pick()
-      if (!folder) return
-      if (await folder.ensurePermission()) await this.open(folder)
-      return
-    }
-    await this.open(null)
+  }
+
+  private async saveProjectSettings(name: string, description: string): Promise<void> {
+    const folder = this.folder
+    if (!folder) return
+    const next: ProjectSettings = { ...(this.settings ?? { recipe: this.recipe.name, created: new Date().toISOString() }), name: name.trim() || folder.name, description: description.trim() }
+    await writeProjectSettings(folder, next)
+    this.settings = next
+    this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
+    this.publishProject("saved project.json")
+    void this.publishRecent()
   }
 
   //=========================

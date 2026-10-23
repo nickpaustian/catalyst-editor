@@ -11,6 +11,8 @@
         <button @click="run('reopenLast')" $disabled="!shared['editor:project'].supported">Reopen last</button>
         <button @click="run('closeProject')" $disabled="!shared['editor:project'].open">Close project</button>
         <hr />
+        <button @click="projectSettings()" $disabled="!shared['editor:project'].open">Project settings…</button>
+        <hr />
         <button @click="run('save')">Save</button>
         <button @click="run('saveAs')">Save as…</button>
         <hr />
@@ -108,6 +110,11 @@ function hover(name: string) {
 function run(type: string) {
   state.open = null
   sendCommand({ type })
+}
+
+function projectSettings() {
+  state.open = null
+  sendCommand({ type: 'openProjectDialog', mode: 'edit' })
 }
 
 function setGizmo(mode: string) {

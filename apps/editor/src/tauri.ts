@@ -1,6 +1,7 @@
 import { nativeFolders, type FolderTransfer, type NativeFs, type RunMessage, type RunnerLink, type RunnerPageLink } from "@nickpaustian/catalyst-editor"
 import { open } from "@tauri-apps/plugin-dialog"
 import { exists, mkdir, readDir, readFile, readTextFile, remove, writeFile, writeTextFile } from "@tauri-apps/plugin-fs"
+import { invoke } from "@tauri-apps/api/core"
 import { emitTo, listen } from "@tauri-apps/api/event"
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow"
 import { getCurrentWindow } from "@tauri-apps/api/window"
@@ -35,6 +36,7 @@ const fs: NativeFs = {
   readDir: async (path) => (await readDir(path)).map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory })),
   mkdir: (path) => mkdir(path, { recursive: true }),
   remove: (path) => remove(path, { recursive: true }),
+  initGit: (path) => invoke("init_git", { path }),
 }
 
 /** The runner as a second Tauri window, spoken to with Tauri events rather than `postMessage`. */

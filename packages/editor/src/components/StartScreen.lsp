@@ -8,12 +8,7 @@
     </header>
     <div class="columns">
       <section class="actions">
-        <template $if="shared['editor:project'].browserStorage">
-          <label class="field">New project in the browser
-            <span class="row"><input type="text" $model="state.name" placeholder="name" @keydown="nameKey($event)" /><button class="primary" @click="create()">Create</button></span>
-          </label>
-        </template>
-        <button class="primary big" $else @click="run('newProject')">New project… <span class="dim">pick or make a folder</span></button>
+        <button class="primary big" @click="newProject()">New project… <span class="dim">{{ shared['editor:project'].browserStorage ? 'kept in this browser' : 'a folder named after it' }}</span></button>
         <button class="big" $disabled="!shared['editor:project'].supported" @click="run('openFolder')">Open folder…</button>
         <p class="hint" $if="!shared['editor:project'].supported && !shared['editor:project'].browserStorage">This browser can neither open folders nor keep projects of its own.</p>
       </section>
@@ -33,7 +28,7 @@
 </view>
 
 <logic lang="ts">
-import { reactive, shared } from '@lightspeed-js/core'
+import { shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { PROJECT_DEFAULT } from '../cells.ts'
 
@@ -43,18 +38,12 @@ shared('editor:project', PROJECT_DEFAULT)
 shared('editor:recent')
 shared('editor:startMode', 'overlay')
 
-const state = reactive({ name: 'untitled' })
-
 function run(type: string) {
   sendCommand({ type })
 }
 
-function create() {
-  sendCommand({ type: 'newProject', name: state.name.trim() || 'untitled' })
-}
-
-function nameKey(event: KeyboardEvent) {
-  if (event.key === 'Enter') create()
+function newProject() {
+  sendCommand({ type: 'openProjectDialog', mode: 'create' })
 }
 
 function openRecent(project: Project) {

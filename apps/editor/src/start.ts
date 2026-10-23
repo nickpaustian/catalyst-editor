@@ -1,7 +1,7 @@
 import "@nickpaustian/catalyst-editor/styles.scss"
 import { createLightspeedApp } from "@lightspeed-js/core"
 import { components } from "virtual:lightspeed/components"
-import { browserFolders, type FolderSource, type ProjectFolder } from "@nickpaustian/catalyst-editor"
+import { PROJECT_DIALOG_DEFAULT, browserFolders, createProject, type FolderSource, type ProjectFolder } from "@nickpaustian/catalyst-editor"
 import { desktop } from "./desktop"
 
 /**
@@ -17,7 +17,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   const folders: FolderSource = shell?.folders ?? browserFolders
   const project = app.shared("editor:project")
   const recent = app.shared("editor:recent")
+  const dialog = app.shared("editor:projectDialog")
   app.shared("editor:startMode").set("window")
+  app.shared("editor:recipes").set(["scene"])
+  dialog.set(PROJECT_DIALOG_DEFAULT)
   const status = (text: string) => project.set({ open: false, name: null, recipe: "scene", storage: null, status: text, supported: folders.isSupported, browserStorage: folders.hasBrowserStorage, dirty: false })
   const refresh = async () => recent.set(await folders.recent())
   status("")
@@ -53,11 +56,30 @@ document.addEventListener("DOMContentLoaded", async () => {
           await folders.forget(command.id)
           await refresh()
           break
+        case "openProjectDialog":
+          dialog.set({ ...PROJECT_DIALOG_DEFAULT, mode: "create", locations: folders.hasLocations, git: folders.canInitGit, canGit: folders.canInitGit })
+          break
+        case "closeProjectDialog":
+          dialog.set(PROJECT_DIALOG_DEFAULT)
+          break
+        case "pickLocation": {
+          const location = await folders.pickLocation()
+          if (location) dialog.set({ ...dialog.value, location })
+          break
+        }
+        case "createProject":
+          try {
+            await chosen(await createProject(folders, { name: command.name, recipe: command.recipe, description: command.description, location: command.location, git: command.git }))
+          } catch (error) {
+            dialog.set({ ...dialog.value, error: error instanceof Error ? error.message : String(error) })
+          }
+          break
       }
     })()
   })
 
   if (!(await app.mount("startscreen", "#start-screen"))) throw new Error("StartScreen did not mount")
+  if (!(await app.mount("projectdialog", "#project-dialog"))) throw new Error("ProjectDialog did not mount")
   if (shell) {
     const { getCurrentWindow } = await import("@tauri-apps/api/window")
     void getCurrentWindow().onCloseRequested(() => shell.startClosed())
