@@ -21,3 +21,4 @@ logs
 # npm is the package manager; bun run is fine for scripts but its lockfile stays local
 bun.lock
 bun.lockb
+design/
