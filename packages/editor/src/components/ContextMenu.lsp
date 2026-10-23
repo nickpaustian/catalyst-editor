@@ -63,8 +63,16 @@ function place(menu: HTMLElement) {
   menu.classList.add('placed')
 }
 
+// A press anywhere outside the menu closes it; one on an item must not, or
+// the item is gone before its click can fire in a webview that renders
+// the removal at once.
+function closeFromOutside(event: PointerEvent) {
+  if ((event.target as Element | null)?.closest?.('#context-menu')) return
+  close()
+}
+
 onMounted(() => {
-  document.addEventListener('pointerdown', close, true)
+  document.addEventListener('pointerdown', closeFromOutside, true)
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') close()
   })
