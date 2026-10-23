@@ -46,7 +46,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     app.shared("editor:project").subscribe((project: { open: boolean } | undefined) => shell.showEditor(project?.open ?? false))
     shell.onProjectChosen((transfer) => void session.open(folders.fromTransfer(transfer)))
     shell.onStartClosed(() => {
-      if (!session.root) window.close()
+      if (!session.root) shell.quit()
     })
   }
   for (const id of recipe.panel ?? []) {

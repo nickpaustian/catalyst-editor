@@ -12,6 +12,8 @@ export interface DesktopShell {
   /** From the start window: closed with nothing open, so the app quits. */
   startClosed(): void
   onStartClosed(listener: () => void): void
+  /** Close this window; with the start window gone too, the app exits. */
+  quit(): void
 }
 
 /** The desktop shell's folders and runner window when the page runs inside Tauri, else null. */

@@ -107,4 +107,10 @@ const shell = (): DesktopShell => ({
   onStartClosed(listener) {
     void listen("catalyst:start-closed", () => listener())
   },
+  quit() {
+    void (async () => {
+      await (await startWindow())?.close().catch(() => undefined)
+      await getCurrentWindow().close()
+    })()
+  },
 })
