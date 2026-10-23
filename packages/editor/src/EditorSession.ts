@@ -109,11 +109,13 @@ export type EditorCommand =
   | { type: "reopenLast" }
   | { type: "openRecent"; id: string }
   | { type: "forgetRecent"; id: string }
+  | { type: "locateRecent"; id: string }
   | { type: "closeProject" }
   | { type: "reloadProject" }
   | { type: "openProjectDialog"; mode: "create" | "edit" }
   | { type: "closeProjectDialog" }
   | { type: "pickLocation" }
+  | { type: "checkProjectName"; name: string; location: string | null }
   | { type: "createProject"; name: string; recipe: string; description: string; location: string | null; git?: boolean }
   | { type: "saveProjectSettings"; name: string; description: string }
   | { type: "save" }
@@ -606,6 +608,13 @@ export class EditorSession {
         await this.folders.forget(command.id)
         await this.publishRecent()
         break
+      case "locateRecent": {
+        const folder = await this.folders.pick()
+        if (!folder) return
+        await this.folders.forget(command.id)
+        if (await folder.ensurePermission()) await this.open(folder)
+        break
+      }
       case "closeProject":
         this.closeProject()
         break
@@ -613,7 +622,7 @@ export class EditorSession {
         await this.reloadProject()
         break
       case "openProjectDialog":
-        this.openProjectDialog(command.mode)
+        await this.openProjectDialog(command.mode)
         break
       case "closeProjectDialog":
         this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
@@ -621,6 +630,11 @@ export class EditorSession {
       case "pickLocation": {
         const location = await this.folders.pickLocation()
         if (location) this.set("editor:projectDialog", { ...this.app.shared("editor:projectDialog").value, location })
+        break
+      }
+      case "checkProjectName": {
+        const taken = await this.folders.isTaken(command.name, command.location)
+        this.set("editor:projectDialog", { ...this.app.shared("editor:projectDialog").value, taken: taken ? command.name : "" })
         break
       }
       case "createProject":
@@ -763,10 +777,11 @@ export class EditorSession {
     this.openProjectDialog("create")
   }
 
-  private openProjectDialog(mode: "create" | "edit"): void {
+  private async openProjectDialog(mode: "create" | "edit"): Promise<void> {
     if (mode === "edit" && !this.folder) return
     const current = mode === "edit" ? this.settings : null
-    this.set("editor:projectDialog", { mode, name: current?.name ?? (mode === "edit" ? this.folder!.name : ""), recipe: current?.recipe ?? this.recipe.name, description: current?.description ?? "", location: null, locations: this.folders.hasLocations, git: this.folders.canInitGit, canGit: this.folders.canInitGit, error: "" })
+    const location = mode === "create" ? await this.folders.defaultLocation() : null
+    this.set("editor:projectDialog", { ...PROJECT_DIALOG_DEFAULT, mode, name: current?.name ?? (mode === "edit" ? this.folder!.name : PROJECT_DIALOG_DEFAULT.name), recipe: current?.recipe ?? this.recipe.name, description: current?.description ?? "", location, locations: this.folders.hasLocations, git: this.folders.canInitGit, canGit: this.folders.canInitGit })
   }
 
   private async createProject(fields: NewProject): Promise<void> {

@@ -55,9 +55,21 @@ document.addEventListener("DOMContentLoaded", async () => {
           await folders.forget(command.id)
           await refresh()
           break
-        case "openProjectDialog":
-          dialog.set({ ...PROJECT_DIALOG_DEFAULT, mode: "create", locations: folders.hasLocations, git: folders.canInitGit, canGit: folders.canInitGit })
+        case "locateRecent": {
+          const folder = await folders.pick()
+          if (!folder) break
+          await folders.forget(command.id)
+          await chosen(folder)
           break
+        }
+        case "openProjectDialog":
+          dialog.set({ ...PROJECT_DIALOG_DEFAULT, mode: "create", location: await folders.defaultLocation(), locations: folders.hasLocations, git: folders.canInitGit, canGit: folders.canInitGit })
+          break
+        case "checkProjectName": {
+          const taken = await folders.isTaken(command.name, command.location)
+          dialog.set({ ...dialog.value, taken: taken ? command.name : "" })
+          break
+        }
         case "closeProjectDialog":
           dialog.set(PROJECT_DIALOG_DEFAULT)
           break
