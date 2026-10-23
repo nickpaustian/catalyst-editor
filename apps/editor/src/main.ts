@@ -31,6 +31,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!(await app.mount("codepane", "#code-panel"))) throw new Error("CodePane did not mount")
   if (!(await app.mount("startscreen", "#start-screen"))) throw new Error("StartScreen did not mount")
   if (!(await app.mount("projectdialog", "#project-dialog"))) throw new Error("ProjectDialog did not mount")
+  if (!(await app.mount("contextmenu", "#context-menu"))) throw new Error("ContextMenu did not mount")
   app.shared("editor:code").subscribe((code: { path: string | null } | undefined) => {
     if (code?.path) panes.open("code", "viewport")
   })

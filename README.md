@@ -1,6 +1,6 @@
 # Catalyst editor
 
-An editor for Catalyst projects: open a folder, see its scene as a tree, select in the tree or by clicking in the viewport (⌘-click adds, empty space clears; a prefab's or primitive's parts select their owner), move with a gizmo, reparent by dragging rows in the tree (a node whose name the new parent already has is numbered, as a new one would be) or with Edit → Unparent, edit what each node exposes, add and remove nodes, save. What a project *is* comes from a **recipe**: the node kinds it adds, the panel sections it shows, and how its folder becomes a scene and back. A plain Catalyst scene is the built-in recipe; an exhibition (the Beruk work this grew from) is the next.
+An editor for Catalyst projects: open a folder, see its scene as a tree, select in the tree or by clicking in the viewport (⌘-click adds, empty space clears; a prefab's or primitive's parts select their owner), move with a gizmo, reparent by dragging rows in the tree (a node whose name the new parent already has is numbered, as a new one would be) or with Edit → Unparent, right-click a row for its menu (add child, rename inline, duplicate, delete, unparent, focus, make or unpack prefab) or double-click its name to rename, edit what each node exposes, add and remove nodes, save. What a project *is* comes from a **recipe**: the node kinds it adds, the panel sections it shows, and how its folder becomes a scene and back. A plain Catalyst scene is the built-in recipe; an exhibition (the Beruk work this grew from) is the next.
 
 ## Layout
 

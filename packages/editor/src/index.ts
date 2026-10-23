@@ -6,6 +6,7 @@ export { HandleFolder, NativeFolder, browserFolders, nativeFolders, folderLoader
 export { windowRunnerLink, windowRunnerPageLink, type RunnerLink, type RunnerPageLink, type RunMessage } from "./RunnerLink"
 export { PROJECT_EXTENSION, LEGACY_PROJECT_FILE, projectFileOf, projectFolderOfFile, readProjectSettings, writeProjectSettings, createProject, slug as projectSlug, type ProjectSettings, type NewProject } from "./project"
 export { PROJECT_DIALOG_DEFAULT } from "./cells"
+export { openContextMenu, closeContextMenu, CONTEXT_MENU_CELL, type MenuItem, type ContextMenuState } from "./contextMenu"
 export type { Recipe, NodeKind, RunContext, RecipeSettings } from "./recipe"
 export { sceneRecipe, SCENE_FILE, type SceneEnvironment } from "./recipes/scene"
 export { PlayerStart } from "./recipes/playerStart"

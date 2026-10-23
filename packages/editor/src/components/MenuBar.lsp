@@ -29,6 +29,7 @@
         <button $disabled="!shared['editor:history'].canUndo" @click="run('undo')">Undo{{ shared['editor:history'].undoLabel ? ' ' + shared['editor:history'].undoLabel : '' }} <kbd>⌘Z</kbd></button>
         <button $disabled="!shared['editor:history'].canRedo" @click="run('redo')">Redo{{ shared['editor:history'].redoLabel ? ' ' + shared['editor:history'].redoLabel : '' }} <kbd>⌘⇧Z</kbd></button>
         <hr />
+        <button @click="run('duplicate')">Duplicate <kbd>⌘D</kbd></button>
         <button @click="run('delete')">Delete selected <kbd>⌦</kbd></button>
         <button @click="run('unparent')">Unparent <span class="dim">move the selection up beside its parent</span></button>
         <hr />

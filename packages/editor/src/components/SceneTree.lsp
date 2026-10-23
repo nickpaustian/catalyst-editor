@@ -9,7 +9,7 @@
     or removes one. Drag a row onto another: its top edge puts it before, its bottom edge after,
     the middle makes it a child. World position is kept.
   </p>
-  <div class="rows">
+  <div class="rows" @contextmenu="contextEmpty($event)">
     <div
       class="row"
       $for="row in shared['editor:tree']"
@@ -17,11 +17,22 @@
       $class="{ selected: row.selected, active: row.active, root: row.isRoot }"
       @pointerdown="press($event, row)"
       @click="select($event, row)"
+      @contextmenu="context($event, row)"
     >
       <span class="indent" $for="n in row.depth" $key="n"></span>
       <span class="twisty" $class="{ hidden: !row.hasChildren, open: row.expanded }" @click="toggle($event, row)">▸</span>
       <span class="icon" $html="row.icon"></span>
-      <span class="name">{{ row.name }}</span>
+      <input
+        $if="state.renaming === row.id"
+        class="rename"
+        type="text"
+        $value="row.name"
+        @keydown="renameKey($event, row)"
+        @blur="finishRename($event.target, row)"
+        @pointerdown="$event.stopPropagation()"
+        @click="$event.stopPropagation()"
+      />
+      <span $else class="name" @dblclick="startRename($event, row)">{{ row.name }}</span>
       <span class="type">{{ row.type }}</span>
     </div>
   </div>
@@ -29,14 +40,84 @@
 </view>
 
 <logic lang="ts">
-import { shared } from '@lightspeed-js/core'
+import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
+import { openContextMenu, type MenuItem } from '../contextMenu.ts'
 
 interface Row { id: number; name: string; type: string; icon: string; depth: number; hasChildren: boolean; expanded: boolean; selected: boolean; active: boolean; isRoot: boolean }
 type Place = 'before' | 'after' | 'inside'
 
 shared('editor:tree', [])
 const addDialog = shared('editor:addDialog', false)
+const selection = shared('editor:selection', null)
+const state = reactive({ renaming: null as number | null })
+
+// ---- inline rename ----
+
+// Selecting republishes the tree, which rebuilds the rows, so the input is
+// shown only once that has settled, and focused once it exists
+function startRename(event: Event, row: Row) {
+  event.stopPropagation()
+  if (row.isRoot) return
+  if (!row.selected || !row.active) sendCommand({ type: 'select', id: row.id })
+  setTimeout(() => {
+    state.renaming = row.id
+    setTimeout(() => {
+      const input = document.querySelector<HTMLInputElement>('#scene-panel .rename')
+      input?.focus()
+      input?.select()
+    }, 20)
+  }, 30)
+}
+
+function finishRename(input: HTMLInputElement, row: Row) {
+  if (state.renaming !== row.id) return
+  state.renaming = null
+  const name = input.value.trim()
+  if (name && name !== row.name) sendCommand({ type: 'rename', name })
+}
+
+function renameKey(event: KeyboardEvent, row: Row) {
+  if (event.key === 'Enter') (event.target as HTMLInputElement).blur()
+  if (event.key === 'Escape') {
+    state.renaming = null
+    event.stopPropagation()
+  }
+}
+
+// ---- context menu ----
+
+function context(event: MouseEvent, row: Row) {
+  event.preventDefault()
+  event.stopPropagation()
+  if (!row.selected) sendCommand({ type: 'select', id: row.id })
+  // The selection cell has caught up by the next tick, so the menu reads it
+  setTimeout(() => {
+    const picked = selection.value as { count: number; prefab: string | null } | null
+    const many = (picked?.count ?? 1) > 1
+    const items: MenuItem[] = row.isRoot
+      ? [{ label: 'Add node…', kbd: '⌘⇧A', run: () => addDialog.set(true) }]
+      : [
+          { label: 'Add child…', kbd: '⌘⇧A', run: () => addDialog.set(true) },
+          { label: 'Rename', disabled: many, run: () => startRename(event, row) },
+          { label: 'Duplicate', kbd: '⌘D', run: () => sendCommand({ type: 'duplicate' }) },
+          { label: 'Delete', kbd: '⌦', run: () => sendCommand({ type: 'delete' }) },
+          { separator: true },
+          { label: 'Unparent', disabled: row.depth <= 1, run: () => sendCommand({ type: 'unparent' }) },
+          { label: 'Focus', kbd: 'F', run: () => sendCommand({ type: 'focus' }) },
+          { separator: true },
+          picked?.prefab
+            ? { label: 'Unpack prefab', disabled: many, run: () => sendCommand({ type: 'unpackPrefab' }) }
+            : { label: 'Make prefab', disabled: many, run: () => sendCommand({ type: 'makePrefab' }) },
+        ]
+    openContextMenu(event.clientX, event.clientY, items)
+  }, 0)
+}
+
+function contextEmpty(event: MouseEvent) {
+  event.preventDefault()
+  openContextMenu(event.clientX, event.clientY, [{ label: 'Add node…', kbd: '⌘⇧A', run: () => addDialog.set(true) }])
+}
 
 const DRAG_THRESHOLD = 4
 let drag: { ids: number[]; startX: number; startY: number; list: HTMLElement; active: boolean; label: string; ghost: HTMLElement | null } | null = null
@@ -275,6 +356,17 @@ function release() {
 
 .twisty.hidden {
   visibility: hidden;
+}
+
+.rename {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  color: #eee;
+  background: #222;
+  border: 1px solid #6a8fd8;
+  border-radius: 2px;
+  padding: 0 4px;
 }
 
 .name {

@@ -133,6 +133,7 @@ export type EditorCommand =
   | { type: "toggleExpand"; id: number }
   | { type: "move"; ids: number[]; targetId: number; place: DropPlace }
   | { type: "delete" }
+  | { type: "duplicate" }
   | { type: "unparent" }
   | { type: "makePrefab" }
   | { type: "unpackPrefab" }
@@ -223,6 +224,13 @@ export class EditorSession {
     if (key === "s" && !event.shiftKey) {
       event.preventDefault()
       void this.saveAll()
+      return
+    }
+    if (key === "d" && !event.shiftKey) {
+      const target = event.target as HTMLElement | null
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return
+      event.preventDefault()
+      this.duplicateSelected()
       return
     }
     const target = event.target as HTMLElement | null
@@ -690,6 +698,9 @@ export class EditorSession {
         break
       case "unparent":
         this.unparent()
+        break
+      case "duplicate":
+        this.duplicateSelected()
         break
       case "makePrefab":
         await this.makePrefab()
@@ -1416,6 +1427,36 @@ export class EditorSession {
     if (renamed.length) this.publishProject(`renamed ${renamed.join(", ")}: the name was taken under ${newParent.name}`)
     this.collapsed.delete(newParent)
     this.camera.syncFromTarget()
+    this.publishTree()
+    this.publishSelection()
+  }
+
+  /** Copies of the selected nodes through the scene JSON, each after its original with a free name; the copies become the selection. */
+  private duplicateSelected(): void {
+    const nodes = this.selectionRoots()
+    if (nodes.length === 0) return
+    const copies = nodes.map((node) => {
+      const parent = node.parent as Node3D
+      const copy = this.engine.create(this.engine.serialise(node)) as Node3D
+      copy.rename(this.freeName(parent, node.name, copy))
+      return { copy, parent, index: parent.indexOf(node) + 1 }
+    })
+    const place = () => {
+      for (const { copy, parent, index } of [...copies].reverse()) parent.insertNode(copy, index, copy.name)
+    }
+    const remove = () => {
+      for (const { copy } of copies) copy.remove()
+    }
+    place()
+    if (this.visualised) for (const { copy } of copies) copy.walk((node) => {
+      if (node instanceof Node3D) node.visualised = true
+    })
+    this.record(copies.length > 1 ? `duplicate ${copies.length} nodes` : `duplicate ${nodes[0].name}`, remove, place)
+    const last = copies[copies.length - 1].copy
+    this.selection = new Set(copies.map((c) => c.copy))
+    this.selected = last
+    this.anchor = last
+    this.attachGizmo(last)
     this.publishTree()
     this.publishSelection()
   }
