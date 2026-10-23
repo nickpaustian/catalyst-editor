@@ -6,9 +6,60 @@ declare global {
   }
 }
 
+export type ProjectStorage = "disk" | "browser" | "native"
+
+export interface FolderEntry {
+  path: string
+  name: string
+  kind: "file" | "directory"
+}
+
+/** What a folder sends to another window (the runner) so it can open the same project. */
+export type FolderTransfer = { kind: "handle"; handle: FileSystemDirectoryHandle } | { kind: "path"; path: string }
+
+/**
+ * A project: files read and written by path under one folder. On disk
+ * through the File System Access API, in the browser's own storage, or
+ * through a native filesystem when the editor runs in a desktop shell.
+ */
+export interface ProjectFolder {
+  readonly name: string
+  readonly storage: ProjectStorage
+  remember(): Promise<void>
+  ensurePermission(): Promise<boolean>
+  exists(path: string): Promise<boolean>
+  readFile(path: string): Promise<File>
+  readText(path: string): Promise<string>
+  readJSON<T = unknown>(path: string): Promise<T>
+  writeText(path: string, text: string): Promise<void>
+  writeJSON(path: string, value: unknown): Promise<void>
+  writeFile(path: string, data: Blob | ArrayBuffer): Promise<void>
+  /** Copy a file the user chose into the project, under `dir`, and give back its path; a name clash gets a number. */
+  importFile(file: File, dir?: string): Promise<string>
+  /** The entries directly under a directory, with their paths. */
+  list(dir?: string): Promise<FolderEntry[]>
+  /** Remove everything in the project. */
+  clear(): Promise<void>
+  transfer(): FolderTransfer
+}
+
+/** Where projects come from: the browser's pickers and storage, or a desktop shell's. */
+export interface FolderSource {
+  /** Whether folders on disk can be opened. */
+  readonly isSupported: boolean
+  /** Whether projects can live in the browser's own storage. */
+  readonly hasBrowserStorage: boolean
+  pick(): Promise<ProjectFolder | null>
+  last(): Promise<ProjectFolder | null>
+  inBrowser(name: string): Promise<ProjectFolder>
+  browserProjects(): Promise<string[]>
+  fromTransfer(transfer: FolderTransfer): ProjectFolder
+}
+
 const HANDLE_DB = "catalyst-editor"
 const HANDLE_STORE = "handles"
 const HANDLE_KEY = "last-folder"
+const BROWSER_PROJECTS = "projects"
 
 const openDB = (): Promise<IDBDatabase> =>
   new Promise((resolve, reject) => {
@@ -27,19 +78,25 @@ const withStore = async <T>(mode: IDBTransactionMode, run: (store: IDBObjectStor
   })
 }
 
+const importPath = async (folder: ProjectFolder, file: File, dir: string): Promise<string> => {
+  const base = file.name.replace(/[^\w.-]+/g, "-")
+  const dot = base.lastIndexOf(".")
+  const stem = dot > 0 ? base.slice(0, dot) : base
+  const ext = dot > 0 ? base.slice(dot) : ""
+  let path = `${dir}/${base}`
+  for (let n = 2; await folder.exists(path); n++) path = `${dir}/${stem}-${n}${ext}`
+  return path
+}
+
 /**
- * A project on disk, through the File System Access API: files read and
- * written by path under one folder the user picked. The last folder is
- * remembered across reloads, though the browser asks for a click before
- * giving it back.
+ * A project behind a `FileSystemDirectoryHandle`: a folder the user picked
+ * through the File System Access API (Chromium), or one in the origin
+ * private file system, which every current browser has. The last picked
+ * folder is remembered across reloads, though the browser asks for a click
+ * before giving it back.
  */
-export type ProjectStorage = "disk" | "browser"
-
-const BROWSER_PROJECTS = "projects"
-
-export class ProjectFolder {
+export class HandleFolder implements ProjectFolder {
   readonly handle: FileSystemDirectoryHandle
-  /** On disk through a folder the user picked, or in the browser's own storage. */
   readonly storage: ProjectStorage
 
   constructor(handle: FileSystemDirectoryHandle, storage: ProjectStorage = "disk") {
@@ -51,26 +108,23 @@ export class ProjectFolder {
     return this.handle.name
   }
 
-  /** Whether folders on disk can be opened: the File System Access API, Chromium only. */
   static get isSupported(): boolean {
     return typeof window !== "undefined" && typeof window.showDirectoryPicker === "function"
   }
 
-  /** Whether projects can live in the browser's own storage (the origin private file system): everywhere current. */
   static get hasBrowserStorage(): boolean {
     return typeof navigator !== "undefined" && typeof navigator.storage?.getDirectory === "function"
   }
 
   /** A project kept by the browser, made if need be. Nothing on disk; import files into it and export it out. */
-  static async inBrowser(name: string): Promise<ProjectFolder> {
+  static async inBrowser(name: string): Promise<HandleFolder> {
     const root = await navigator.storage.getDirectory()
     const projects = await root.getDirectoryHandle(BROWSER_PROJECTS, { create: true })
-    return new ProjectFolder(await projects.getDirectoryHandle(name, { create: true }), "browser")
+    return new HandleFolder(await projects.getDirectoryHandle(name, { create: true }), "browser")
   }
 
-  /** The names of the projects the browser keeps. */
   static async browserProjects(): Promise<string[]> {
-    if (!ProjectFolder.hasBrowserStorage) return []
+    if (!HandleFolder.hasBrowserStorage) return []
     const root = await navigator.storage.getDirectory()
     const projects = await root.getDirectoryHandle(BROWSER_PROJECTS, { create: true })
     const names: string[] = []
@@ -78,10 +132,10 @@ export class ProjectFolder {
     return names.sort()
   }
 
-  static async pick(): Promise<ProjectFolder | null> {
+  static async pick(): Promise<HandleFolder | null> {
     if (!window.showDirectoryPicker) return null
     try {
-      return new ProjectFolder(await window.showDirectoryPicker({ mode: "readwrite", id: "catalyst-project" }))
+      return new HandleFolder(await window.showDirectoryPicker({ mode: "readwrite", id: "catalyst-project" }))
     } catch (error) {
       if ((error as DOMException).name === "AbortError") return null
       throw error
@@ -92,10 +146,10 @@ export class ProjectFolder {
     await withStore("readwrite", (store) => store.put(this.handle, HANDLE_KEY))
   }
 
-  static async last(): Promise<ProjectFolder | null> {
+  static async last(): Promise<HandleFolder | null> {
     try {
       const handle = await withStore<FileSystemDirectoryHandle | undefined>("readonly", (store) => store.get(HANDLE_KEY))
-      return handle ? new ProjectFolder(handle, await isInBrowserStorage(handle) ? "browser" : "disk") : null
+      return handle ? new HandleFolder(handle, (await isInBrowserStorage(handle)) ? "browser" : "disk") : null
     } catch {
       return null
     }
@@ -154,39 +208,35 @@ export class ProjectFolder {
     await writable.close()
   }
 
-  /** Copy a file the user chose into the project, under `dir`, and give back its path; a name clash gets a number. */
   async importFile(file: File, dir = "assets"): Promise<string> {
-    const base = file.name.replace(/[^\w.-]+/g, "-")
-    const dot = base.lastIndexOf(".")
-    const stem = dot > 0 ? base.slice(0, dot) : base
-    const ext = dot > 0 ? base.slice(dot) : ""
-    let path = `${dir}/${base}`
-    for (let n = 2; await this.exists(path); n++) path = `${dir}/${stem}-${n}${ext}`
+    const path = await importPath(this, file, dir)
     await this.writeFile(path, file)
     return path
   }
 
-  /** The files directly under a directory, with their paths. */
-  async list(dir = ""): Promise<{ path: string; name: string; kind: "file" | "directory" }[]> {
+  async list(dir = ""): Promise<FolderEntry[]> {
     let handle = this.handle
     try {
       for (const part of dir.split("/").filter(Boolean)) handle = await handle.getDirectoryHandle(part)
     } catch {
       return []
     }
-    const out: { path: string; name: string; kind: "file" | "directory" }[] = []
+    const out: FolderEntry[] = []
     for await (const [name, entry] of handle as unknown as AsyncIterable<[string, FileSystemHandle]>) out.push({ path: dir ? `${dir}/${name}` : name, name, kind: entry.kind })
     return out.sort((a, b) => a.name.localeCompare(b.name))
   }
 
-  /** Remove everything in the project. */
   async clear(): Promise<void> {
     for await (const [name] of this.handle as unknown as AsyncIterable<[string, FileSystemHandle]>) await this.handle.removeEntry(name, { recursive: true })
+  }
+
+  transfer(): FolderTransfer {
+    return { kind: "handle", handle: this.handle }
   }
 }
 
 const isInBrowserStorage = async (handle: FileSystemDirectoryHandle): Promise<boolean> => {
-  if (!ProjectFolder.hasBrowserStorage) return false
+  if (!HandleFolder.hasBrowserStorage) return false
   try {
     const root = await navigator.storage.getDirectory()
     return (await root.resolve(handle)) !== null
@@ -194,6 +244,159 @@ const isInBrowserStorage = async (handle: FileSystemDirectoryHandle): Promise<bo
     return false
   }
 }
+
+/** Projects through the browser: the File System Access picker on disk, the origin private file system otherwise. */
+export const browserFolders: FolderSource = {
+  get isSupported() {
+    return HandleFolder.isSupported
+  },
+  get hasBrowserStorage() {
+    return HandleFolder.hasBrowserStorage
+  },
+  pick: () => HandleFolder.pick(),
+  last: () => HandleFolder.last(),
+  inBrowser: (name) => HandleFolder.inBrowser(name),
+  browserProjects: () => HandleFolder.browserProjects(),
+  fromTransfer: (transfer) => {
+    if (transfer.kind !== "handle") throw new Error("[catalyst-editor] a path cannot be opened through the browser")
+    return new HandleFolder(transfer.handle)
+  },
+}
+
+/** A filesystem a desktop shell gives the editor: absolute paths, the shell's own picker. */
+export interface NativeFs {
+  pickDirectory(): Promise<string | null>
+  exists(path: string): Promise<boolean>
+  readText(path: string): Promise<string>
+  readBinary(path: string): Promise<Uint8Array>
+  writeText(path: string, text: string): Promise<void>
+  writeBinary(path: string, data: Uint8Array): Promise<void>
+  readDir(path: string): Promise<{ name: string; isDirectory: boolean }[]>
+  mkdir(path: string): Promise<void>
+  remove(path: string): Promise<void>
+}
+
+const LAST_PATH_KEY = "catalyst-editor:last-project-path"
+
+const basename = (path: string): string => path.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? path
+
+/** A project at an absolute path, through a native filesystem. */
+export class NativeFolder implements ProjectFolder {
+  readonly path: string
+  readonly storage: ProjectStorage = "native"
+  private readonly fs: NativeFs
+
+  constructor(fs: NativeFs, path: string) {
+    this.fs = fs
+    this.path = path
+  }
+
+  get name(): string {
+    return basename(this.path)
+  }
+
+  private at(path: string): string {
+    return path ? `${this.path}/${path.split("/").filter(Boolean).join("/")}` : this.path
+  }
+
+  async remember(): Promise<void> {
+    try {
+      localStorage.setItem(LAST_PATH_KEY, this.path)
+    } catch {}
+  }
+
+  async ensurePermission(): Promise<boolean> {
+    return this.fs.exists(this.path)
+  }
+
+  exists(path: string): Promise<boolean> {
+    return this.fs.exists(this.at(path))
+  }
+
+  async readFile(path: string): Promise<File> {
+    const bytes = await this.fs.readBinary(this.at(path))
+    return new File([bytes as BlobPart], basename(path))
+  }
+
+  readText(path: string): Promise<string> {
+    return this.fs.readText(this.at(path))
+  }
+
+  async readJSON<T = unknown>(path: string): Promise<T> {
+    return JSON.parse(await this.readText(path)) as T
+  }
+
+  private async ensureDir(path: string): Promise<void> {
+    const parts = path.split("/").filter(Boolean).slice(0, -1)
+    let dir = ""
+    for (const part of parts) {
+      dir = dir ? `${dir}/${part}` : part
+      if (!(await this.fs.exists(this.at(dir)))) await this.fs.mkdir(this.at(dir))
+    }
+  }
+
+  async writeText(path: string, text: string): Promise<void> {
+    await this.ensureDir(path)
+    await this.fs.writeText(this.at(path), text)
+  }
+
+  async writeJSON(path: string, value: unknown): Promise<void> {
+    await this.writeText(path, JSON.stringify(value, null, 2) + "\n")
+  }
+
+  async writeFile(path: string, data: Blob | ArrayBuffer): Promise<void> {
+    await this.ensureDir(path)
+    const buffer = data instanceof Blob ? await data.arrayBuffer() : data
+    await this.fs.writeBinary(this.at(path), new Uint8Array(buffer))
+  }
+
+  async importFile(file: File, dir = "assets"): Promise<string> {
+    const path = await importPath(this, file, dir)
+    await this.writeFile(path, file)
+    return path
+  }
+
+  async list(dir = ""): Promise<FolderEntry[]> {
+    try {
+      const entries = await this.fs.readDir(this.at(dir))
+      return entries.map((entry) => ({ path: dir ? `${dir}/${entry.name}` : entry.name, name: entry.name, kind: entry.isDirectory ? ("directory" as const) : ("file" as const) })).sort((a, b) => a.name.localeCompare(b.name))
+    } catch {
+      return []
+    }
+  }
+
+  async clear(): Promise<void> {
+    for (const entry of await this.fs.readDir(this.path)) await this.fs.remove(`${this.path}/${entry.name}`)
+  }
+
+  transfer(): FolderTransfer {
+    return { kind: "path", path: this.path }
+  }
+}
+
+/** Projects through a desktop shell's filesystem: folders picked by path, the last one remembered by path. */
+export const nativeFolders = (fs: NativeFs): FolderSource => ({
+  isSupported: true,
+  hasBrowserStorage: false,
+  pick: async () => {
+    const path = await fs.pickDirectory()
+    return path ? new NativeFolder(fs, path) : null
+  },
+  last: async () => {
+    try {
+      const path = localStorage.getItem(LAST_PATH_KEY)
+      return path && (await fs.exists(path)) ? new NativeFolder(fs, path) : null
+    } catch {
+      return null
+    }
+  },
+  inBrowser: () => Promise.reject(new Error("[catalyst-editor] projects live on disk here")),
+  browserProjects: async () => [],
+  fromTransfer: (transfer) => {
+    if (transfer.kind !== "path") throw new Error("[catalyst-editor] a handle cannot be opened through the native filesystem")
+    return new NativeFolder(fs, transfer.path)
+  },
+})
 
 /** Ask the user for a file through the browser's own chooser; null when they cancel. */
 export const pickFile = (accept: string): Promise<File | null> =>

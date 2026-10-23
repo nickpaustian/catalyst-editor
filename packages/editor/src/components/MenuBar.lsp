@@ -6,7 +6,7 @@
     <div class="menu" $class="{ open: state.open === 'file' }">
       <button class="menu-title" @click="toggle('file')" @pointerenter="hover('file')">File</button>
       <div class="menu-items" $if="state.open === 'file'">
-        <button @click="run('newProject')">New project <span class="dim">in the browser</span></button>
+        <button @click="run('newProject')">New project <span class="dim" $if="shared['editor:project'].browserStorage">in the browser</span></button>
         <button @click="run('openFolder')" $disabled="!shared['editor:project'].supported">Open folder…</button>
         <button @click="run('reopenLast')" $disabled="!shared['editor:project'].supported">Reopen last</button>
         <hr />
@@ -83,7 +83,7 @@ import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { preferences } from '../preferences.ts'
 
-shared('editor:project', { name: null, recipe: '', storage: null, status: '', supported: false, dirty: false })
+shared('editor:project', { name: null, recipe: '', storage: null, status: '', supported: false, browserStorage: false, dirty: false })
 shared('editor:view', { view: 'orbit', visualised: true, gizmo: 'translate', physics: false, scripts: false, snap: { enabled: true, move: 0.25, rotate: 15 } })
 shared('editor:history', { canUndo: false, canRedo: false, undoLabel: null, redoLabel: null })
 shared('editor:selection', null)

@@ -1,7 +1,8 @@
 import "@nickpaustian/catalyst-editor/styles.scss"
 import { createLightspeedApp } from "@lightspeed-js/core"
 import { components } from "virtual:lightspeed/components"
-import { EditorSession, PaneLayout, ProjectFolder, createEngine, preferences, sceneRecipe, type Recipe } from "@nickpaustian/catalyst-editor"
+import { EditorSession, PaneLayout, browserFolders, createEngine, preferences, sceneRecipe, type Recipe } from "@nickpaustian/catalyst-editor"
+import { desktop } from "./desktop"
 
 const recipes: Recipe[] = [sceneRecipe]
 
@@ -36,15 +37,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   const engine = createEngine(recipe, { container: "#app" })
   engine.start()
 
-  const session = new EditorSession({ app, engine, recipe })
+  const shell = await desktop()
+  const folders = shell?.folders ?? browserFolders
+  const session = new EditorSession({ app, engine, recipe, folders, runner: shell?.runnerLink })
   for (const id of recipe.panel ?? []) {
     const host = document.createElement("div")
     document.getElementById("recipe-sections")!.appendChild(host)
     await app.mount(id, host)
   }
-  Object.assign(window, { engine, session, ProjectFolder })
+  Object.assign(window, { engine, session, folders })
 
-  const last = ProjectFolder.isSupported ? await ProjectFolder.last() : null
+  const last = folders.isSupported ? await folders.last() : null
   await session.open(null)
-  if (last) (window as any).lightspeed.shared("editor:project").set({ name: null, recipe: recipe.name, status: `last folder: ${last.name}, use File → Reopen last`, supported: true, dirty: false })
+  if (last) (window as any).lightspeed.shared("editor:project").set({ name: null, recipe: recipe.name, storage: null, status: `last folder: ${last.name}, use File → Reopen last`, supported: true, browserStorage: folders.hasBrowserStorage, dirty: false })
 })

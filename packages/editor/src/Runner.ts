@@ -1,15 +1,11 @@
-import type { Catalyst, Node3D, NodeJSON } from "@nickpaustian/catalyst"
+import type { Catalyst, Node3D } from "@nickpaustian/catalyst"
 import { Node3D as Node3DClass } from "@nickpaustian/catalyst"
-import { ProjectFolder, folderLoader } from "./ProjectFolder"
+import { browserFolders, folderLoader, type FolderSource } from "./ProjectFolder"
 import type { Recipe } from "./recipe"
+import { windowRunnerPageLink, type RunMessage, type RunnerPageLink } from "./RunnerLink"
 import { ScriptCompiler } from "./ScriptCompiler"
 
-export interface RunMessage {
-  type: "catalyst:run"
-  recipe: string
-  scene: NodeJSON
-  folder: FileSystemDirectoryHandle | null
-}
+export type { RunMessage } from "./RunnerLink"
 
 /**
  * The runner window's side: tells the editor it is ready, takes each scene
@@ -21,17 +17,17 @@ export class Runner {
   private teardown: (() => void) | null = null
   private readonly engine: Catalyst
   private readonly recipe: Recipe
-  private readonly onMessage = (event: MessageEvent): void => {
-    if (event.origin !== location.origin || event.data?.type !== "catalyst:run") return
-    void this.play(event.data as RunMessage)
-  }
+  private readonly folders: FolderSource
+  private readonly unsubscribe: () => void
 
-  constructor(engine: Catalyst, recipe: Recipe) {
+  constructor(engine: Catalyst, recipe: Recipe, options: { folders?: FolderSource; link?: RunnerPageLink } = {}) {
     this.engine = engine
     this.recipe = recipe
+    this.folders = options.folders ?? browserFolders
+    const link = options.link ?? windowRunnerPageLink()
     for (const { kind, cls } of recipe.kinds) if (!engine.registry.has(kind) && typeof cls === "function") engine.register({ [kind]: cls as any })
-    window.addEventListener("message", this.onMessage)
-    window.opener?.postMessage({ type: "catalyst:ready" }, location.origin)
+    this.unsubscribe = link.onRun((message) => void this.play(message))
+    link.ready()
   }
 
   get isPlaying(): boolean {
@@ -40,12 +36,12 @@ export class Runner {
 
   async play(message: RunMessage): Promise<void> {
     this.stop()
-    const folder = message.folder ? new ProjectFolder(message.folder) : null
+    const folder = message.folder ? this.folders.fromTransfer(message.folder) : null
     if (folder) this.engine.loader = folderLoader(folder)
     this.engine.scripts.invalidate()
     if (folder) this.engine.scripts.loader = new ScriptCompiler(folder).loader
     const made = this.engine.create(message.scene)
-    const root = made instanceof Node3DClass ? made : new Node3DClass("scene").addNode(made).parent as Node3D
+    const root = made instanceof Node3DClass ? made : (new Node3DClass("scene").addNode(made).parent as Node3D)
     this.root = root
     this.engine.add(root)
     this.teardown = await this.recipe.run({ engine: this.engine, root, scene: message.scene, folder })
@@ -61,6 +57,6 @@ export class Runner {
 
   dispose(): void {
     this.stop()
-    window.removeEventListener("message", this.onMessage)
+    this.unsubscribe()
   }
 }

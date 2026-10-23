@@ -10,10 +10,15 @@ npm workspace. The editor packages are consumed from source; the engine packages
 | --- | --- | --- |
 | `packages/editor` | `@nickpaustian/catalyst-editor` | The editor: `EditorSession` (tree, selection, fields, add, delete, move, rename, save), `EditorCamera` (orbit and gizmo), `ProjectFolder` and `folderLoader` (File System Access), the `Recipe` interface and the `sceneRecipe`, the pane layout, preferences, and the Lightspeed panel components |
 | `apps/editor` | `catalyst-editor-app` | The app: makes the engine with the core modules (physics, input, interaction, resources, splats), mounts the scene pane, the inspector and the menu bar, and runs a session under a recipe |
+| `apps/desktop` | `catalyst-desktop` | The Tauri 2 shell: a native window around the same editor page, with projects as folders on disk through the fs and dialog plugins and the runner as a second window |
 | `apps/editor/exhibition` | | The exhibition editor's sections and session as they were, kept as the reference for the exhibition recipe |
 | `packages/runtime`, `apps/player`, and the vendored `packages/catalyst`, `stelligra`, `spektra`, `telemetry`, `assets`, `debug` | | The exhibition player and its copies of the engine, as ported from Beruk. They go once the exhibition recipe runs on the published packages |
 
 The engine comes from `@nickpaustian/catalyst` and its peers (`helm`, `velora`, `signal`, `requester`, `@nickpaustian/stelligra`) from npm. Vite dedupes `three` so the packages and the app share one copy, and the app's `tsconfig` maps `three` to one set of types.
+
+## The desktop app
+
+`npm run dev:desktop` opens the editor in a native window (Tauri 2, Rust and Xcode's command line tools needed once) against the dev server, which it starts; `npm run build:desktop` makes `Catalyst.app` and a `.dmg` from the built editor. Inside the shell the page is the same, but projects are folders on disk opened through the system picker, read and written by path with no browser sandbox in the way, so a save is a real file and a refresh loses nothing; the last folder reopens without a permission click; scripts can be edited in any editor alongside the code pane; and Run opens the runner as a second window. The page tells which shell it is in at start-up (`apps/editor/src/desktop.ts`) and hands the session a `FolderSource` and a `RunnerLink` for it (`apps/editor/src/tauri.ts`); in a browser it uses the File System Access API and `postMessage` as before.
 
 ## Running
 

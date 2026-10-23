@@ -7,7 +7,8 @@ import { EditorCamera, groupTarget, type GizmoMode } from "./EditorCamera"
 import { EditorInput } from "./EditorInput"
 import { History } from "./History"
 import { preferences, type SnapSettings } from "./preferences"
-import { ProjectFolder, folderLoader } from "./ProjectFolder"
+import { browserFolders, folderLoader, type FolderSource, type ProjectFolder, type ProjectStorage } from "./ProjectFolder"
+import { windowRunnerLink, type RunnerLink } from "./RunnerLink"
 import { SCRIPTS_DIR, ScriptCompiler, scriptTemplate } from "./ScriptCompiler"
 import type { NodeKind, Recipe } from "./recipe"
 
@@ -58,7 +59,7 @@ export type ViewMode = "orbit"
 
 /** What the panel shows. Each key is a Lightspeed shared cell. */
 export interface EditorCells {
-  "editor:project": { name: string | null; recipe: string; storage: "disk" | "browser" | null; status: string; supported: boolean; dirty: boolean }
+  "editor:project": { name: string | null; recipe: string; storage: ProjectStorage | null; status: string; supported: boolean; browserStorage: boolean; dirty: boolean }
   "editor:history": { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
   /** The recipe's project-wide settings, or null when it has none. */
   "editor:settings": { title: string; fields: SelectionProperty[] } | null
@@ -175,13 +176,10 @@ export class EditorSession {
   private compiler: ScriptCompiler | null = null
   private unsubscribeCommands: () => void
   private unsubscribeBlur: () => void
-  private runner: Window | null = null
+  private readonly folders: FolderSource
+  private readonly runner: RunnerLink
   private runnerReady = false
-  private readonly onMessage = (event: MessageEvent): void => {
-    if (event.origin !== location.origin || event.data?.type !== "catalyst:ready") return
-    this.runnerReady = true
-    this.sendToRunner()
-  }
+  private readonly unsubscribeRunner: () => void
   private readonly onKeyUp = (event: KeyboardEvent): void => {
     if (event.key === "Shift") this.setSnapInverted(false)
   }
@@ -208,10 +206,16 @@ export class EditorSession {
     }
   }
 
-  constructor(options: { app: LightspeedRuntime; engine: Catalyst; recipe: Recipe }) {
+  constructor(options: { app: LightspeedRuntime; engine: Catalyst; recipe: Recipe; folders?: FolderSource; runner?: RunnerLink }) {
     this.app = options.app
     this.engine = options.engine
     this.recipe = options.recipe
+    this.folders = options.folders ?? browserFolders
+    this.runner = options.runner ?? windowRunnerLink()
+    this.unsubscribeRunner = this.runner.onReady(() => {
+      this.runnerReady = true
+      this.sendToRunner()
+    })
     this.camera = new EditorCamera(this.engine)
     for (const { kind, cls } of this.recipe.kinds) if (!this.engine.registry.has(kind) && typeof cls === "function") this.engine.register({ [kind]: cls as NodeClass })
     const input = this.engine.find(Input)
@@ -231,14 +235,12 @@ export class EditorSession {
     const resume = () => this.engine.resume()
     window.addEventListener("blur", pause)
     window.addEventListener("focus", resume)
-    window.addEventListener("message", this.onMessage)
     window.addEventListener("keydown", this.onKeyDown)
     window.addEventListener("keyup", this.onKeyUp)
     this.applySnap()
     this.unsubscribeBlur = () => {
       window.removeEventListener("blur", pause)
       window.removeEventListener("focus", resume)
-      window.removeEventListener("message", this.onMessage)
       window.removeEventListener("keydown", this.onKeyDown)
       window.removeEventListener("keyup", this.onKeyUp)
     }
@@ -261,8 +263,8 @@ export class EditorSession {
   /** Put a project in the viewport: the folder's, or a fresh one when there is no folder. */
   async open(folder: ProjectFolder | null): Promise<void> {
     this.close()
-    if (!folder && ProjectFolder.hasBrowserStorage) {
-      folder = await ProjectFolder.inBrowser("untitled")
+    if (!folder && this.folders.hasBrowserStorage) {
+      folder = await this.folders.inBrowser("untitled")
       await folder.clear()
     }
     this.folder = folder
@@ -297,6 +299,7 @@ export class EditorSession {
     this.close()
     this.unsubscribeCommands()
     this.unsubscribeBlur()
+    this.unsubscribeRunner()
     this.input?.deactivate()
     this.camera.dispose()
   }
@@ -349,7 +352,7 @@ export class EditorSession {
 
   private publishProject(status?: string): void {
     const dirty = this.history.isDirty
-    this.set("editor:project", { name: this.folder?.name ?? null, recipe: this.recipe.name, storage: this.folder?.storage ?? null, status: status ?? (dirty ? "unsaved changes" : ""), supported: ProjectFolder.isSupported, dirty })
+    this.set("editor:project", { name: this.folder?.name ?? null, recipe: this.recipe.name, storage: this.folder?.storage ?? null, status: status ?? (dirty ? "unsaved changes" : ""), supported: this.folders.isSupported, browserStorage: this.folders.hasBrowserStorage, dirty })
   }
 
   private publishSettings(): void {
@@ -490,14 +493,14 @@ export class EditorSession {
         await this.open(null)
         break
       case "openFolder": {
-        const folder = await ProjectFolder.pick()
+        const folder = await this.folders.pick()
         if (!folder) return
         await folder.remember()
         if (await folder.ensurePermission()) await this.open(folder)
         break
       }
       case "reopenLast": {
-        const folder = await ProjectFolder.last()
+        const folder = await this.folders.last()
         if (!folder) return this.publishProject("no folder remembered")
         if (await folder.ensurePermission()) await this.open(folder)
         break
@@ -629,7 +632,7 @@ export class EditorSession {
    */
   async run(): Promise<void> {
     if (!this._root) return
-    if (this.runner && !this.runner.closed && this.runnerReady) {
+    if (this.runner.isOpen && this.runnerReady) {
       this.sendToRunner()
       this.runner.focus()
       return
@@ -637,14 +640,13 @@ export class EditorSession {
     this.runnerReady = false
     const url = new URL("play.html", location.href)
     url.searchParams.set("recipe", this.recipe.name)
-    this.runner = window.open(url.href, "catalyst-run")
-    if (!this.runner) this.publishProject("the browser blocked the runner window")
+    if (!this.runner.open(url.href)) this.publishProject("the runner window could not be opened")
   }
 
   private sendToRunner(): void {
-    if (!this.runner || this.runner.closed || !this._root) return
+    if (!this.runner.isOpen || !this._root) return
     const scene = this.recipe.serialise?.(this._root, this.engine) ?? this.engine.serialise(this._root)
-    this.runner.postMessage({ type: "catalyst:run", recipe: this.recipe.name, scene, folder: this.folder?.handle ?? null }, location.origin)
+    this.runner.send({ type: "catalyst:run", recipe: this.recipe.name, scene, folder: this.folder?.transfer() ?? null })
     this.publishProject("running")
   }
 
@@ -656,12 +658,12 @@ export class EditorSession {
   }
 
   private async saveAs(): Promise<void> {
-    if (!ProjectFolder.isSupported) {
+    if (!this.folders.isSupported) {
       const file = this._root && this.recipe.download?.(this._root, this.engine)
       if (file) download(file.name, file.text)
       return
     }
-    const folder = await ProjectFolder.pick()
+    const folder = await this.folders.pick()
     if (!folder) return
     await folder.remember()
     if (!(await folder.ensurePermission())) return

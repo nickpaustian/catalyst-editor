@@ -10,6 +10,8 @@
   "scripts": {
     "dev": "cd apps/player && vite --host",
     "dev:editor": "cd apps/editor && vite --host",
+    "dev:desktop": "cd apps/desktop && tauri dev",
+    "build:desktop": "cd apps/desktop && tauri build",
     "build": "cd apps/player && tsc && vite build",
     "build:editor": "cd apps/editor && tsc && vite build",
     "preview": "cd apps/player && vite preview",

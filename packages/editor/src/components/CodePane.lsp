@@ -27,7 +27,7 @@ import { sendCommand } from '../commands.ts'
 interface Code { path: string | null; text: string; status: string }
 
 const code = shared('editor:code', { path: null, text: '', status: '' })
-shared('editor:scripts', [])
+shared('editor:scripts')
 const refs = defineRefs<{ host: HTMLElement }>()
 
 const state = reactive({ path: '', dirty: false, status: '', error: false })

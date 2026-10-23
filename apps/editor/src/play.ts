@@ -1,11 +1,13 @@
 import { Runner, createEngine, sceneRecipe, type Recipe } from "@nickpaustian/catalyst-editor"
+import { desktop } from "./desktop"
 
 const recipes: Recipe[] = [sceneRecipe]
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   const recipe = recipes.find((r) => r.name === new URLSearchParams(location.search).get("recipe")) ?? recipes[0]
   const engine = createEngine(recipe, { container: "#app", grid: false })
   engine.start()
-  const runner = new Runner(engine, recipe)
+  const shell = await desktop()
+  const runner = new Runner(engine, recipe, { folders: shell?.folders, link: shell?.runnerPageLink })
   Object.assign(window, { engine, runner })
 })
