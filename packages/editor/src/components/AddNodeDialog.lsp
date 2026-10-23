@@ -114,6 +114,8 @@ function refresh() {
 function pick(id: string | null) {
   state.picked = id
   state.pickedNode = byId(id)
+  // The list re-renders a frame later; then the picked row is brought into view.
+  requestAnimationFrame(() => document.querySelector('.dialog .rows .row.picked')?.scrollIntoView({ block: 'nearest' }))
   const chain: string[] = []
   let parent = id ? parents.get(id) : undefined
   while (parent) {
