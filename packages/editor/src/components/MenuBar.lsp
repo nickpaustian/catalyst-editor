@@ -1,7 +1,5 @@
 <view>
 <header class="bar" data-tauri-drag-region>
-  <span class="brand" $html="state.lockup"></span>
-
   <nav class="menus" data-tauri-drag-region>
     <div class="menu" $class="{ open: state.open === 'file' }">
       <button class="menu-title" type="button" aria-haspopup="menu" @click="toggle('file')" @pointerenter="hover('file')">File</button>
@@ -103,7 +101,6 @@ import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { preferences } from '../preferences.ts'
 import { HISTORY_DEFAULT, PROJECT_DEFAULT, VIEW_DEFAULT } from '../cells.ts'
-import { LOCKUP_SMALL } from '../assets/logo.ts'
 
 shared('editor:project', PROJECT_DEFAULT)
 shared('editor:view', VIEW_DEFAULT)
@@ -111,7 +108,7 @@ shared('editor:history', HISTORY_DEFAULT)
 shared('editor:selection', null)
 shared('editor:running', false)
 
-const state = reactive({ lockup: LOCKUP_SMALL, open: null as string | null, moveSteps: [0.05, 0.1, 0.25, 0.5, 1], rotateSteps: [5, 15, 45, 90] })
+const state = reactive({ open: null as string | null, moveSteps: [0.05, 0.1, 0.25, 0.5, 1], rotateSteps: [5, 15, 45, 90] })
 
 // A press anywhere outside the bar closes the open menu
 document.addEventListener('pointerdown', (event) => {
@@ -171,16 +168,6 @@ function resetLayout() {
   font: var(--cat-text-sm) / 1 var(--cat-font-ui);
   z-index: 1100;
   user-select: none;
-}
-
-.brand {
-  display: flex;
-  height: 18px;
-}
-
-.brand :global(svg) {
-  width: auto;
-  height: 100%;
 }
 
 .menus {
