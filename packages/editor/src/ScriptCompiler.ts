@@ -132,6 +132,7 @@ export class ScriptCompiler {
       throw new Error(`${from} imports ${specifier}, which is not in the project`)
     }
     if (specifier in this.modules) return this.shim(specifier)
+    if (specifier === "three" || specifier.startsWith("three/")) throw new Error(`${from} imports ${specifier}, which the engine no longer uses: import Vector3, Quaternion and Mat4 from "@nickpaustian/catalyst" instead`)
     throw new Error(`${from} imports ${specifier}; a script may import ${Object.keys(this.modules).join(", ")} or the project's own files`)
   }
 
