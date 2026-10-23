@@ -1,4 +1,4 @@
-import { Camera, Model, Node3D, type Catalyst, type NodeJSON } from "@nickpaustian/catalyst"
+import { Camera, Colour, Light, Model, Node3D, type Catalyst, type NodeJSON } from "@nickpaustian/catalyst"
 import { pickFile } from "../ProjectFolder"
 import { Interactable } from "@nickpaustian/catalyst/interaction"
 import { BoxCollider, CapsuleCollider, SphereCollider } from "@nickpaustian/catalyst/physics"
@@ -15,22 +15,33 @@ export interface SceneEnvironment {
   floor: number | null
   gravity: number
   drag: number
+  /** Light from everywhere, as a hex colour and a strength. */
+  ambient: number
+  ambientIntensity: number
+  /** A white light from the camera; 0 for none. */
+  headlight: number
 }
 
-const DEFAULT_ENVIRONMENT: SceneEnvironment = { floor: 0, gravity: 9.8, drag: 0.1 }
+const DEFAULT_ENVIRONMENT: SceneEnvironment = { floor: 0, gravity: 9.8, drag: 0.1, ambient: 0xffffff, ambientIntensity: 0.35, headlight: 0.4 }
+
+const hexOf = (c: Colour): number => (Math.round(c.x) << 16) | (Math.round(c.y) << 8) | Math.round(c.z)
+const colourOf = (hex: number): Colour => new Colour((hex >> 16) & 255, (hex >> 8) & 255, hex & 255)
 
 const readEnvironment = (engine: Catalyst): SceneEnvironment => {
   const world = engine.find(Physics)?.world
-  return world ? { floor: world.floor, gravity: world.gravity, drag: world.drag } : { ...DEFAULT_ENVIRONMENT }
+  const lighting = engine.lighting
+  const physics = world ? { floor: world.floor, gravity: world.gravity, drag: world.drag } : DEFAULT_ENVIRONMENT
+  return { floor: physics.floor, gravity: physics.gravity, drag: physics.drag, ambient: hexOf(lighting.ambient), ambientIntensity: lighting.ambientIntensity, headlight: lighting.headlight }
 }
-
 const applyEnvironment = (engine: Catalyst, environment: Partial<SceneEnvironment> | undefined): void => {
-  const world = engine.find(Physics)?.world
-  if (!world) return
   const next = { ...DEFAULT_ENVIRONMENT, ...environment }
-  world.floor = next.floor
-  world.gravity = next.gravity
-  world.drag = next.drag
+  const world = engine.find(Physics)?.world
+  if (world) {
+    world.floor = next.floor
+    world.gravity = next.gravity
+    world.drag = next.drag
+  }
+  engine.lighting = { ...engine.lighting, ambient: colourOf(next.ambient), ambientIntensity: next.ambientIntensity, headlight: next.headlight }
 }
 
 /** The scene file with the environment beside the nodes. */
@@ -58,6 +69,7 @@ export const sceneRecipe: Recipe = {
       make: (o) => new Model({ ...o, url: String(o.url ?? "") }),
     },
     { kind: "Camera", label: "Camera", cls: Camera, description: "A perspective camera with a real lens: a focal length over a sensor.", make: (o) => new Camera(o) },
+    { kind: "Light", label: "Light", cls: Light, description: "A directional light shining along the node's -z, like the sun: only its rotation matters. With none in the scene the engine's default sun is used.", make: (o) => new Light(o) },
     { kind: "BoxCollider", label: "Box collider", cls: BoxCollider, description: "An invisible box the physics world collides with, or a trigger volume.", make: (o) => new BoxCollider({ ...o, width: 1, height: 1, depth: 1 }) },
     { kind: "SphereCollider", label: "Sphere collider", cls: SphereCollider, description: "An invisible sphere the physics world collides with, or a trigger volume.", make: (o) => new SphereCollider({ ...o, radius: 0.5 }) },
     { kind: "CapsuleCollider", label: "Capsule collider", cls: CapsuleCollider, description: "An invisible capsule the physics world collides with, standing on y.", make: (o) => new CapsuleCollider({ ...o, radius: 0.3, height: 1.8 }) },
@@ -73,10 +85,13 @@ export const sceneRecipe: Recipe = {
       { key: "floor", label: "Floor height", type: "number", step: 0.1 },
       { key: "gravity", type: "number", min: 0, step: 0.1 },
       { key: "drag", type: "number", min: 0, max: 1, step: 0.01 },
+      { key: "ambient", label: "Ambient", type: "colour" },
+      { key: "ambientIntensity", label: "Ambient strength", type: "number", min: 0, step: 0.05 },
+      { key: "headlight", label: "Headlight", type: "number", min: 0, step: 0.05 },
     ],
     read: (engine) => {
       const environment = readEnvironment(engine)
-      return { floored: environment.floor !== null, floor: environment.floor ?? 0, gravity: environment.gravity, drag: environment.drag }
+      return { floored: environment.floor !== null, floor: environment.floor ?? 0, gravity: environment.gravity, drag: environment.drag, ambient: environment.ambient, ambientIntensity: environment.ambientIntensity, headlight: environment.headlight }
     },
     write: (engine, _root, key, value) => {
       const current = readEnvironment(engine)
