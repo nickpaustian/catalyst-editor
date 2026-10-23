@@ -213,9 +213,11 @@ export class EditorCamera implements ViewPose {
     this.focusPoint(node.transform.getWorldPosition(), distance)
   }
 
+  /** The wheel zooms; with shift held (or a trackpad's two-finger scroll with shift) it pans. A pinch arrives as a wheel with ctrl and zooms. */
   private readonly onWheel = (event: WheelEvent): void => {
     event.preventDefault()
-    this.distance = Math.min(MAX_DISTANCE, Math.max(MIN_DISTANCE, this.distance * Math.exp(event.deltaY * 0.0015)))
+    if (event.shiftKey && !event.ctrlKey) return this.panBy(-event.deltaX, -event.deltaY)
+    this.distance = Math.min(MAX_DISTANCE, Math.max(MIN_DISTANCE, this.distance * Math.exp(event.deltaY * (event.ctrlKey ? 0.01 : 0.0015))))
     this.updatePose()
   }
 
@@ -269,7 +271,8 @@ export class EditorCamera implements ViewPose {
       this.marquee = { x: event.clientX, y: event.clientY, add: event.metaKey || event.ctrlKey, box: null }
       return
     }
-    this.orbiting = { kind: event.button === 0 ? "orbit" : "pan", x: event.clientX, y: event.clientY }
+    // The left button orbits, or pans with option (alt) held; the right and middle buttons pan.
+    this.orbiting = { kind: event.button === 0 && !event.altKey ? "orbit" : "pan", x: event.clientX, y: event.clientY }
   }
 
   private readonly onPointerMove = (event: PointerEvent): void => {
