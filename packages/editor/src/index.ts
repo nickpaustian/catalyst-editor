@@ -7,6 +7,7 @@ export { windowRunnerLink, windowRunnerPageLink, type RunnerLink, type RunnerPag
 export { PROJECT_EXTENSION, LEGACY_PROJECT_FILE, projectFileOf, projectFolderOfFile, readProjectSettings, writeProjectSettings, createProject, slug as projectSlug, type ProjectSettings, type NewProject } from "./project"
 export { PROJECT_DIALOG_DEFAULT } from "./cells"
 export { openContextMenu, closeContextMenu, CONTEXT_MENU_CELL, type MenuItem, type ContextMenuState } from "./contextMenu"
+export { openConfirm, closeConfirm, CONFIRM_CELL, type ConfirmAction, type ConfirmState } from "./confirm"
 export type { Recipe, NodeKind, RunContext, RecipeSettings } from "./recipe"
 export { sceneRecipe, SCENE_FILE, type SceneEnvironment } from "./recipes/scene"
 export { PlayerStart } from "./recipes/playerStart"

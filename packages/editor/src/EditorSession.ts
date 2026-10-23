@@ -11,6 +11,7 @@ import { browserFolders, folderLoader, type FolderSource, type ProjectFolder, ty
 import { windowRunnerLink, type RunnerLink } from "./RunnerLink"
 import { SCRIPTS_DIR, ScriptCompiler, scriptTemplate } from "./ScriptCompiler"
 import { LEGACY_PROJECT_FILE, PROJECT_EXTENSION, createProject, readProjectSettings, writeProjectSettings, type NewProject, type ProjectSettings } from "./project"
+import { openConfirm } from "./confirm"
 import { PROJECT_DIALOG_DEFAULT } from "./cells"
 import type { NodeKind, Recipe } from "./recipe"
 
@@ -815,8 +816,8 @@ export class EditorSession {
       this.publishProject("reloaded from disk: the scene changed outside")
       return
     }
+    if (scene) this.askAboutSceneOnDisk()
     const notes: string[] = []
-    if (scene) notes.push("the scene (your unsaved changes are kept; File → Reload from disk takes the disk's)")
     if (scripts.length) {
       await this.reloadScripts()
       const code = this.app.shared("editor:code").value as EditorCells["editor:code"] | undefined
@@ -839,6 +840,14 @@ export class EditorSession {
     }
     if (notes.length) this.publishProject(`changed on disk: ${notes.join(", ")}`)
     this.publishSelection()
+  }
+
+  /** The scene file changed outside while this session holds unsaved changes: the user picks which to keep. */
+  private askAboutSceneOnDisk(): void {
+    openConfirm("The scene changed on disk", "Another program saved the scene while you have unsaved changes here.\nKeep yours and the next save overwrites the disk, or reload and lose them.", [
+      { label: "Keep my changes", run: () => this.publishProject("unsaved changes kept; File → Reload from disk takes the disk's") },
+      { label: "Reload from disk", primary: true, run: () => void this.reloadProject() },
+    ])
   }
 
   //=========================
