@@ -1,10 +1,10 @@
 <view>
 <header class="bar" data-tauri-drag-region>
-  <span class="brand">Catalyst</span>
+  <span class="brand" $html="state.lockup"></span>
 
   <nav class="menus" data-tauri-drag-region>
     <div class="menu" $class="{ open: state.open === 'file' }">
-      <button class="menu-title" @click="toggle('file')" @pointerenter="hover('file')">File</button>
+      <button class="menu-title" type="button" aria-haspopup="menu" @click="toggle('file')" @pointerenter="hover('file')">File</button>
       <div class="menu-items menu-panel" role="menu" $if="state.open === 'file'">
         <button class="menu-item" role="menuitem" @click="run('newProject')">New project <span class="dim" $if="shared['editor:project'].browserStorage">in the browser</span></button>
         <button class="menu-item" role="menuitem" @click="run('openFolder')" $disabled="!shared['editor:project'].supported">Open folder…</button>
@@ -24,7 +24,7 @@
     </div>
 
     <div class="menu" $class="{ open: state.open === 'edit' }">
-      <button class="menu-title" @click="toggle('edit')" @pointerenter="hover('edit')">Edit</button>
+      <button class="menu-title" type="button" aria-haspopup="menu" @click="toggle('edit')" @pointerenter="hover('edit')">Edit</button>
       <div class="menu-items menu-panel" role="menu" $if="state.open === 'edit'">
         <button class="menu-item" role="menuitem" $disabled="!shared['editor:history'].canUndo" @click="run('undo')">Undo{{ shared['editor:history'].undoLabel ? ' ' + shared['editor:history'].undoLabel : '' }} <kbd>⌘Z</kbd></button>
         <button class="menu-item" role="menuitem" $disabled="!shared['editor:history'].canRedo" @click="run('redo')">Redo{{ shared['editor:history'].redoLabel ? ' ' + shared['editor:history'].redoLabel : '' }} <kbd>⌘⇧Z</kbd></button>
@@ -39,7 +39,7 @@
     </div>
 
     <div class="menu" $class="{ open: state.open === 'view' }">
-      <button class="menu-title" @click="toggle('view')" @pointerenter="hover('view')">View</button>
+      <button class="menu-title" type="button" aria-haspopup="menu" @click="toggle('view')" @pointerenter="hover('view')">View</button>
       <div class="menu-items menu-panel" role="menu" $if="state.open === 'view'">
         <button class="menu-item" role="menuitemcheckbox" $class="{ on: shared['editor:view'].visualised }" $aria-checked="shared['editor:view'].visualised" @click="run('toggleVisualisers')">Visualisers</button>
         <button class="menu-item" role="menuitemcheckbox" $class="{ on: shared['editor:view'].physics }" $aria-checked="shared['editor:view'].physics" @click="run('togglePhysics')">Physics running</button>
@@ -67,7 +67,7 @@
     </div>
 
     <div class="menu" $class="{ open: state.open === 'help' }">
-      <button class="menu-title" @click="toggle('help')" @pointerenter="hover('help')">Help</button>
+      <button class="menu-title" type="button" aria-haspopup="menu" @click="toggle('help')" @pointerenter="hover('help')">Help</button>
       <div class="menu-items menu-panel help" $if="state.open === 'help'">
         <p><b>Orbit:</b> drag to orbit, right-drag to pan, wheel to zoom. <kbd>F</kbd> focuses the selected node, <kbd>Delete</kbd> removes it. Drag the gizmo to move it.</p>
         <p><b>Viewport:</b> shift-drag a rectangle to select what it covers; hold <kbd>⌘</kbd> or <kbd>Ctrl</kbd> as well to add to the selection.</p>
@@ -77,17 +77,23 @@
     </div>
   </nav>
 
-  <button class="button small run" title="Run (⌘R / Ctrl+R)" @click="run('run')">
-    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.5v9l7-4.5z" fill="currentColor"/></svg>
-    Run
-  </button>
+  <div class="transport" data-tauri-drag-region>
+    <button class="button transport-button stop" type="button" title="Stop the running game" $if="shared['editor:running']" @click="run('stop')">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1" fill="currentColor"/></svg>
+      Stop
+    </button>
+    <button class="button transport-button run" type="button" title="Run (⌘R)" $else @click="run('run')">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.5v9l7-4.5z" fill="currentColor"/></svg>
+      Run
+    </button>
+  </div>
 
-  <span class="status">
-    <span>{{ shared['editor:project'].open ? (shared['editor:project'].name ?? 'untitled') : '' }}</span>
-    <span class="dim">{{ shared['editor:project'].storage === 'browser' ? 'in browser' : shared['editor:project'].storage === 'disk' ? 'on disk' : '' }}</span>
-    <span class="dim">{{ shared['editor:project'].recipe }}</span>
-    <span class="dim" $if="shared['editor:project'].status">{{ shared['editor:project'].status }}</span>
-    <span class="dim" $if="shared['editor:project'].dirty && !shared['editor:project'].status">unsaved changes</span>
+  <span class="where" $if="shared['editor:project'].open">
+    <span class="status" $if="shared['editor:project'].status && !['unsaved changes', 'running'].includes(shared['editor:project'].status)">{{ shared['editor:project'].status }}</span>
+    <span class="project" $title="shared['editor:project'].storage === 'browser' ? 'Kept in this browser' : ''">{{ shared['editor:project'].name ?? 'untitled' }}</span>
+    <span class="unsaved" title="Unsaved changes" $if="shared['editor:project'].dirty"></span>
+    <span class="slash">/</span>
+    <span class="scene">{{ shared['editor:project'].recipe }}</span>
   </span>
 </header>
 </view>
@@ -97,13 +103,15 @@ import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { preferences } from '../preferences.ts'
 import { HISTORY_DEFAULT, PROJECT_DEFAULT, VIEW_DEFAULT } from '../cells.ts'
+import { LOCKUP_SMALL } from '../assets/logo.ts'
 
 shared('editor:project', PROJECT_DEFAULT)
 shared('editor:view', VIEW_DEFAULT)
 shared('editor:history', HISTORY_DEFAULT)
 shared('editor:selection', null)
+shared('editor:running', false)
 
-const state = reactive({ open: null as string | null, moveSteps: [0.05, 0.1, 0.25, 0.5, 1], rotateSteps: [5, 15, 45, 90] })
+const state = reactive({ lockup: LOCKUP_SMALL, open: null as string | null, moveSteps: [0.05, 0.1, 0.25, 0.5, 1], rotateSteps: [5, 15, 45, 90] })
 
 // A press anywhere outside the bar closes the open menu
 document.addEventListener('pointerdown', (event) => {
@@ -154,11 +162,11 @@ function resetLayout() {
   height: var(--menu-bar-height);
   display: flex;
   align-items: center;
-  gap: var(--cat-space-2);
-  padding: 0 var(--cat-space-2);
+  gap: var(--cat-space-4);
+  padding: 0 var(--cat-space-2) 0 var(--cat-space-4);
   box-sizing: border-box;
   background: var(--cat-bg-app);
-  border-bottom: 1px solid var(--cat-border);
+  border-bottom: 1px solid var(--cat-border-subtle);
   color: var(--cat-text-primary);
   font: var(--cat-text-sm) / 1 var(--cat-font-ui);
   z-index: 1100;
@@ -166,51 +174,82 @@ function resetLayout() {
 }
 
 .brand {
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  display: flex;
+  height: 18px;
 }
 
-.run svg {
-  width: var(--cat-icon-xs);
-  height: var(--cat-icon-xs);
-  color: var(--cat-success);
+.brand :global(svg) {
+  width: auto;
+  height: 100%;
 }
 
 .menus {
   display: flex;
-  align-items: stretch;
-  align-self: stretch;
+  gap: var(--cat-space-0-5);
 }
 
 .menu {
   position: relative;
   display: flex;
-  height: 100%;
 }
 
 .menu-title {
   display: flex;
   align-items: center;
-  height: 100%;
-  font: inherit;
-  color: inherit;
+  height: var(--cat-h-sm);
+  padding: 0 var(--cat-space-2);
   background: none;
   border: 0;
-  padding: 0 var(--cat-space-2);
+  border-radius: var(--cat-radius-sm);
+  color: var(--cat-text-secondary);
   cursor: default;
 }
 
 .menu-title:hover,
 .menu.open .menu-title {
   background: var(--cat-bg-hover);
+  color: var(--cat-text-primary);
+}
+
+.transport {
+  flex: 1 1 auto;
+  display: flex;
+  justify-content: center;
+  align-self: stretch;
+  align-items: center;
+}
+
+.transport-button {
+  height: var(--cat-menu-item);
+  padding: 0 var(--cat-space-3) 0 10px;
+}
+
+.transport-button svg {
+  width: var(--cat-icon-xs);
+  height: var(--cat-icon-xs);
+}
+
+.run svg {
+  color: var(--cat-success);
+}
+
+.stop,
+.stop:hover:not(:disabled),
+.stop:active:not(:disabled) {
+  background: var(--cat-warning-surface);
+  border-color: var(--cat-warning-border);
+  color: var(--cat-warning);
+}
+
+.stop:hover:not(:disabled) {
+  filter: brightness(1.15);
 }
 
 .menu-items {
   position: absolute;
-  top: 100%;
+  top: calc(100% + var(--cat-space-1-5));
   left: 0;
   min-width: 190px;
-  border-radius: 0 0 var(--cat-radius-md) var(--cat-radius-md);
 }
 
 .menu-items > button::before {
@@ -257,14 +296,34 @@ function resetLayout() {
   margin: var(--cat-space-1) 0;
 }
 
-.status {
-  margin-left: auto;
+.where {
   display: flex;
-  gap: var(--cat-space-2);
-  color: var(--cat-text-secondary);
+  align-items: center;
+  gap: var(--cat-space-1-5);
+  min-width: 0;
+  color: var(--cat-text-tertiary);
+  white-space: nowrap;
 }
 
-.status .dim {
-  color: var(--cat-text-tertiary);
+.status {
+  overflow: hidden;
+  margin-right: var(--cat-space-2);
+  text-overflow: ellipsis;
+}
+
+.unsaved {
+  flex: 0 0 auto;
+  width: var(--cat-space-1-5);
+  height: var(--cat-space-1-5);
+  border-radius: 50%;
+  background: var(--cat-text-secondary);
+}
+
+.slash {
+  color: var(--cat-border-strong);
+}
+
+.scene {
+  color: var(--cat-text-secondary);
 }
 </style>

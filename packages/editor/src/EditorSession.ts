@@ -63,6 +63,7 @@ export type ViewMode = "orbit"
 /** What the panel shows. Each key is a Lightspeed shared cell. */
 export interface EditorCells {
   /** `open` is false until a project is in the viewport; the start screen shows meanwhile. */
+  "editor:running": boolean
   "editor:project": { open: boolean; name: string | null; recipe: string; storage: ProjectStorage | null; status: string; supported: boolean; browserStorage: boolean; dirty: boolean }
   /** Projects opened before, for the start screen. */
   "editor:recent": RecentProject[]
@@ -123,6 +124,7 @@ export type EditorCommand =
   | { type: "saveAs" }
   | { type: "download" }
   | { type: "run" }
+  | { type: "stop" }
   | { type: "undo" }
   | { type: "redo" }
   | { type: "setView"; view: ViewMode }
@@ -256,14 +258,23 @@ export class EditorSession {
     this.recipe = options.recipe
     this.folders = options.folders ?? browserFolders
     this.runner = options.runner ?? windowRunnerLink()
-    this.unsubscribeRunner = this.runner.onReady(() => {
+    const unsubscribeReady = this.runner.onReady(() => {
       this.runnerReady = true
       this.sendToRunner()
     })
+    const unsubscribeClosed = this.runner.onClosed(() => {
+      this.runnerReady = false
+      this.set("editor:running", false)
+      if (this.app.shared("editor:project").value?.status === "running") this.publishProject()
+    })
+    this.unsubscribeRunner = () => {
+      unsubscribeReady()
+      unsubscribeClosed()
+    }
     this.camera = new EditorCamera(this.engine)
     for (const { kind, cls } of this.recipe.kinds) if (!this.engine.registry.has(kind) && typeof cls === "function") this.engine.register({ [kind]: cls as NodeClass })
     const input = this.engine.find(Input)
-    this.input = input ? new EditorInput(input, { focusSelected: () => this.focusSelected(), deleteSelected: () => this.deleteSelected() }) : null
+    this.input = input ? new EditorInput(input, { focusSelected: () => this.focusSelected(), deleteSelected: () => this.deleteSelected(), moveTool: () => this.setGizmo("translate"), rotateTool: () => this.setGizmo("rotate") }) : null
     const physics = this.engine.find(Physics)
     if (physics) physics.paused = true
     this.engine.scripts.setRunning(false, this.engine.root, this.engine)
@@ -661,6 +672,9 @@ export class EditorSession {
       case "run":
         await this.run()
         break
+      case "stop":
+        this.runner.close()
+        break
       case "undo":
         this.undo()
         break
@@ -684,9 +698,7 @@ export class EditorSession {
         this.publishView()
         break
       case "setGizmo":
-        this.gizmo = command.mode
-        this.camera.mode = command.mode
-        this.publishView()
+        this.setGizmo(command.mode)
         break
       case "setSnap":
         this.snap = { ...this.snap, ...command.snap }
@@ -887,7 +899,8 @@ export class EditorSession {
     this.runnerReady = false
     const url = new URL("play.html", location.href)
     url.searchParams.set("recipe", this.recipe.name)
-    if (!this.runner.open(url.href)) this.publishProject("the runner window could not be opened")
+    if (!this.runner.open(url.href)) return this.publishProject("the runner window could not be opened")
+    this.set("editor:running", true)
   }
 
   private sendToRunner(): void {
@@ -1167,6 +1180,12 @@ export class EditorSession {
   //=========================
   // View
   //=========================
+
+  private setGizmo(mode: GizmoMode): void {
+    this.gizmo = mode
+    this.camera.mode = mode
+    this.publishView()
+  }
 
   private setView(view: ViewMode): void {
     this.view = view

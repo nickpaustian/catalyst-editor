@@ -3,6 +3,8 @@ import type { Input } from "@nickpaustian/catalyst/input"
 export interface EditorInputHandlers {
   focusSelected: () => void
   deleteSelected: () => void
+  moveTool: () => void
+  rotateTool: () => void
 }
 
 /** The editor's own key bindings on the engine's Helm, on while orbiting. */
@@ -10,6 +12,8 @@ export class EditorInput {
   private static readonly BINDINGS: Record<keyof EditorInputHandlers, string[]> = {
     focusSelected: ["f"],
     deleteSelected: ["delete", "backspace"],
+    moveTool: ["w"],
+    rotateTool: ["e"],
   }
 
   private active = false

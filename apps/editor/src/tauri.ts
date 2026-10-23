@@ -45,6 +45,11 @@ const fs: NativeFs = {
 /** The runner as a second Tauri window, spoken to with Tauri events rather than `postMessage`. */
 const runnerLink = (): RunnerLink => {
   let runner: WebviewWindow | null = null
+  const closed = new Set<() => void>()
+  const gone = () => {
+    runner = null
+    closed.forEach((listener) => listener())
+  }
   return {
     get isOpen() {
       return runner !== null
@@ -52,12 +57,15 @@ const runnerLink = (): RunnerLink => {
     open(url) {
       const target = new URL(url)
       runner = new WebviewWindow(RUNNER_LABEL, { url: `${target.pathname}${target.search}`, title: "Catalyst · running", width: 1280, height: 800 })
-      void runner.once("tauri://destroyed", () => (runner = null))
-      void runner.once("tauri://error", () => (runner = null))
+      void runner.once("tauri://destroyed", gone)
+      void runner.once("tauri://error", gone)
       return true
     },
     focus() {
       void runner?.setFocus()
+    },
+    close() {
+      void runner?.destroy()
     },
     send(message) {
       void emitTo(RUNNER_LABEL, "catalyst:run", message)
@@ -65,6 +73,10 @@ const runnerLink = (): RunnerLink => {
     onReady(listener) {
       const pending = listen("catalyst:ready", () => listener())
       return () => void pending.then((unlisten) => unlisten())
+    },
+    onClosed(listener) {
+      closed.add(listener)
+      return () => closed.delete(listener)
     },
   }
 }
