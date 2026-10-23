@@ -1,4 +1,4 @@
-import { LineSet, Mat4, Quaternion, Ray, Vector3, Visual, Node3D as Node3DClass, type Catalyst, type Node3D, type ViewPose, type Geometry } from "@nickpaustian/catalyst"
+import { Mat4, Material, Quaternion, Ray, Vector3, Visual, Node3D as Node3DClass, cylinderGeometry, mergeGeometry, torusGeometry, type Catalyst, type Node3D, type ViewPose, type Geometry } from "@nickpaustian/catalyst"
 import { pickMesh } from "@nickpaustian/obelisk"
 
 const CLICK_DISTANCE = 4
@@ -62,45 +62,22 @@ export const groupTarget = (nodes: Node3D[], pivot: Node3D): GizmoTarget => ({
 })
 
 const AXES: Record<Axis, Vector3> = { x: new Vector3(1, 0, 0), y: new Vector3(0, 1, 0), z: new Vector3(0, 0, 1) }
-const AXIS_COLOURS: Record<Axis, [number, number, number, number]> = { x: [1, 0.3, 0.3, 1], y: [0.35, 0.85, 0.45, 1], z: [0.4, 0.6, 1, 1] }
-const HOVER_COLOUR: [number, number, number, number] = [1, 0.95, 0.4, 1]
+const AXIS_COLOURS: Record<Axis, number> = { x: 0xff4d4d, y: 0x5ce06a, z: 0x4d8dff }
+const HOVER_COLOUR = 0xffe14d
+const UP = new Vector3(0, 1, 0)
+const UNIT = new Vector3(1, 1, 1)
 
-/** The gizmo's lines: three arrows for moving, three rings for turning, each tagged with its axis so the hovered one can be coloured. */
-const buildGizmo = (mode: GizmoMode, hovered: Axis | null): LineSet => {
-  const positions: number[] = []
-  const colours: number[] = []
-  const segment = (a: number[], b: number[], c: [number, number, number, number]) => {
-    positions.push(...a, ...b)
-    colours.push(...c, ...c)
-  }
-  for (const axis of ["x", "y", "z"] as Axis[]) {
-    const colour = axis === hovered ? HOVER_COLOUR : AXIS_COLOURS[axis]
-    const a = AXES[axis]
-    if (mode === "translate") {
-      const tip = [a.x, a.y, a.z]
-      segment([0, 0, 0], tip, colour)
-      // A small head: two short lines back from the tip, in the plane of the other two axes.
-      const other = axis === "x" ? AXES.y : AXES.x
-      const third = axis === "z" ? AXES.y : AXES.z
-      for (const side of [other, third]) {
-        for (const sign of [1, -1]) {
-          segment(tip, [a.x * 0.85 + side.x * 0.05 * sign, a.y * 0.85 + side.y * 0.05 * sign, a.z * 0.85 + side.z * 0.05 * sign], colour)
-        }
-      }
-    } else {
-      const u = axis === "x" ? AXES.y : AXES.x
-      const v = axis === "z" ? AXES.y : AXES.z
-      for (let i = 0; i < RING_SEGMENTS; i++) {
-        const t0 = (i / RING_SEGMENTS) * Math.PI * 2, t1 = ((i + 1) / RING_SEGMENTS) * Math.PI * 2
-        segment([Math.cos(t0) * u.x + Math.sin(t0) * v.x, Math.cos(t0) * u.y + Math.sin(t0) * v.y, Math.cos(t0) * u.z + Math.sin(t0) * v.z], [Math.cos(t1) * u.x + Math.sin(t1) * v.x, Math.cos(t1) * u.y + Math.sin(t1) * v.y, Math.cos(t1) * u.z + Math.sin(t1) * v.z], colour)
-      }
-    }
-  }
-  const lines = new LineSet()
-  lines.positions = new Float32Array(positions)
-  lines.colours = new Float32Array(colours)
-  lines.overlay = true
-  return lines
+/** The handle for one axis: a shaft with a cone head for moving, a tube ring for turning, built standing on y and turned onto its axis. */
+const buildHandle = (mode: GizmoMode, axis: Axis): Geometry => {
+  const onAxis = new Mat4().composeTRS(new Vector3(), new Quaternion().setFromUnitVectors(UP, AXES[axis]), UNIT)
+  if (mode === "rotate") return mergeGeometry([{ mesh: torusGeometry(1, 0.022, 10, 64), matrix: onAxis }])
+  const shaft = cylinderGeometry(0.016, 0.016, 0.8, 12)
+  const head = cylinderGeometry(0, 0.07, 0.24, 20)
+  const along = (y: number) => new Mat4().multiply(onAxis, new Mat4().composeTRS(new Vector3(0, y, 0), new Quaternion(), UNIT))
+  return mergeGeometry([
+    { mesh: shaft, matrix: along(0.4) },
+    { mesh: head, matrix: along(0.88) },
+  ])
 }
 
 const distanceToSegment = (px: number, py: number, ax: number, ay: number, bx: number, by: number): number => {
@@ -134,7 +111,8 @@ export class EditorCamera implements ViewPose {
   private readonly engine: Catalyst
   private readonly canvas: HTMLCanvasElement
   private gizmoMode: GizmoMode = "translate"
-  private gizmo: Visual | null = null
+  private gizmo: Record<Axis, Visual> | null = null
+  private readonly handleMaterials: Record<Axis, Material> = { x: new Material({ colour: AXIS_COLOURS.x, name: "gizmo x" }), y: new Material({ colour: AXIS_COLOURS.y, name: "gizmo y" }), z: new Material({ colour: AXIS_COLOURS.z, name: "gizmo z" }) }
   private hovered: Axis | null = null
   private snapMove: number | null = null
   private snapRotate: number | null = null
@@ -190,7 +168,7 @@ export class EditorCamera implements ViewPose {
       canvas.removeEventListener("contextmenu", this.onContextMenu)
     }
     this.active = true
-    if (this.gizmo) engine.scene.add(this.gizmo)
+    if (this.gizmo) for (const visual of Object.values(this.gizmo)) engine.scene.add(visual)
   }
 
   /** Hand rendering back to whatever camera was active before. */
@@ -346,7 +324,7 @@ export class EditorCamera implements ViewPose {
     const axis = this.handleAt(event.clientX, event.clientY)
     if (axis !== this.hovered) {
       this.hovered = axis
-      this.rebuildGizmo()
+      this.colourGizmo()
     }
     this.canvas.style.cursor = axis ? "grab" : ""
   }
@@ -407,15 +385,33 @@ export class EditorCamera implements ViewPose {
     this.onChanged = onChanged ?? null
     this.syncFromTarget()
     if (!this.gizmo) {
-      this.gizmo = new Visual(buildGizmo(this.gizmoMode, this.hovered))
-      if (this.active) this.engine.scene.add(this.gizmo)
+      this.gizmo = this.buildGizmo()
+      if (this.active) for (const visual of Object.values(this.gizmo)) this.engine.scene.add(visual)
     }
     this.placeGizmo()
   }
 
+  private buildGizmo(): Record<Axis, Visual> {
+    const make = (axis: Axis) => {
+      const visual = new Visual(buildHandle(this.gizmoMode, axis), this.handleMaterials[axis])
+      visual.overlay = true
+      return visual
+    }
+    this.colourGizmo()
+    return { x: make("x"), y: make("y"), z: make("z") }
+  }
+
+  /** The hovered handle in the highlight colour, the rest in their axis colours. */
+  private colourGizmo(): void {
+    for (const axis of ["x", "y", "z"] as Axis[]) this.handleMaterials[axis].setColour(axis === this.hovered ? HOVER_COLOUR : AXIS_COLOURS[axis])
+  }
+
   detach(): void {
     if (this.gizmo) {
-      this.engine.scene.remove(this.gizmo)
+      for (const visual of Object.values(this.gizmo)) {
+        this.engine.scene.remove(visual)
+        this.engine.renderer?.release(visual.geometry)
+      }
       this.gizmo = null
     }
     this.target = null
@@ -447,9 +443,11 @@ export class EditorCamera implements ViewPose {
 
   private rebuildGizmo(): void {
     if (!this.gizmo) return
-    const lines = buildGizmo(this.gizmoMode, this.hovered)
-    this.engine.renderer?.release(this.gizmo.geometry)
-    this.gizmo.geometry = lines
+    for (const axis of ["x", "y", "z"] as Axis[]) {
+      const visual = this.gizmo[axis]
+      this.engine.renderer?.release(visual.geometry)
+      visual.geometry = buildHandle(this.gizmoMode, axis)
+    }
     this.placeGizmo()
   }
 
@@ -457,7 +455,7 @@ export class EditorCamera implements ViewPose {
   private placeGizmo(): void {
     if (!this.gizmo) return
     const scale = this.gizmoScale()
-    this.gizmo.matrix.composeTRS(this.pivotPosition, IDENTITY, new Vector3(scale, scale, scale))
+    for (const visual of Object.values(this.gizmo)) visual.matrix.composeTRS(this.pivotPosition, IDENTITY, new Vector3(scale, scale, scale))
   }
 
   private gizmoScale(): number {
