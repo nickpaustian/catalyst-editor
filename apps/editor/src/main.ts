@@ -6,6 +6,7 @@ import { EditorSession, PaneLayout, browserFolders, createEngine, preferences, p
 import { desktop } from "./desktop"
 
 const recipes: Recipe[] = [sceneRecipe]
+const PLUS_ICON = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"/></svg>`
 
 /** Dev builds reload often, so the page comes back to the project it had; a folder whose permission needs a click is left to the start screen. */
 const reopenLast = async (session: EditorSession, folders: FolderSource) => {
@@ -24,7 +25,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   const panes = new PaneLayout({
     root: document.getElementById("layout")!,
     kinds: {
-      scene: { title: "Scene", element: document.getElementById("scene-panel")! },
+      scene: {
+        title: "Scene",
+        element: document.getElementById("scene-panel")!,
+        actions: [{ label: "Add node (⌘⇧A)", icon: PLUS_ICON, run: () => app.shared("editor:addDialog").set(true) }],
+      },
       viewport: { title: "Viewport", element: document.getElementById("app")! },
       inspector: { title: "Inspector", element: document.getElementById("editor-panel")! },
       code: { title: "Code", element: document.getElementById("code-panel")! },

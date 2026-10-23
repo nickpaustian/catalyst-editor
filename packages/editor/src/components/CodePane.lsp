@@ -10,7 +10,10 @@
     <button class="button small primary" $disabled="!state.path || !state.dirty" @click="save()">Save script</button>
   </div>
   <div class="host" $ref="host"></div>
-  <p class="hint" $if="!state.path">Open a script from the inspector's Scripts section, or choose one above. Saving writes the file and rebuilds every script in the scene.</p>
+  <div class="empty-state" $if="!state.path">
+    <span class="what">No script open</span>
+    <span class="how">Pick one above or from a node's Scripts section. Saving rebuilds every script in the scene.</span>
+  </div>
 </div>
 </view>
 
@@ -100,6 +103,7 @@ onUnmounted(() => {
 
 <style>
 .code-pane {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -114,7 +118,7 @@ onUnmounted(() => {
   align-items: center;
   gap: var(--cat-space-2);
   padding: var(--cat-space-1) var(--cat-space-2);
-  border-bottom: 1px solid var(--cat-border);
+  border-bottom: 1px solid var(--cat-border-subtle);
 }
 
 .file {
@@ -122,8 +126,19 @@ onUnmounted(() => {
 }
 
 .dirty {
-  color: var(--cat-warning);
+  display: flex;
+  align-items: center;
+  gap: var(--cat-space-1-5);
+  color: var(--cat-text-tertiary);
   font-size: var(--cat-text-xs);
+}
+
+.dirty::before {
+  content: "";
+  width: var(--cat-space-1-5);
+  height: var(--cat-space-1-5);
+  border-radius: 50%;
+  background: var(--cat-text-secondary);
 }
 
 .status {
@@ -140,12 +155,6 @@ onUnmounted(() => {
   color: var(--cat-danger);
 }
 
-kbd {
-  font: var(--cat-text-xs) var(--cat-font-mono);
-  color: var(--cat-text-tertiary);
-  margin-left: var(--cat-space-1);
-}
-
 .host {
   flex: 1 1 0;
   min-height: 0;
@@ -160,10 +169,9 @@ kbd {
   font-family: var(--cat-font-mono);
 }
 
-.hint {
+.empty-state {
   position: absolute;
-  margin: 40px var(--cat-space-4);
-  color: var(--cat-text-tertiary);
+  inset: var(--cat-panel-header) 0 0 0;
   pointer-events: none;
 }
 </style>

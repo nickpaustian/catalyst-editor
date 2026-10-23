@@ -1,6 +1,7 @@
 // The controls every panel shares (design/DESIGN.md §4–5); a component's own parts stay in its .lsp
 
 $check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 8.5 3.5 3.5L13 4.5'/%3E%3C/svg%3E");
+$chevron-right: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 4 4 4-4 4'/%3E%3C/svg%3E");
 $chevron-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
 
 :root {
@@ -207,6 +208,18 @@ textarea {
   :where(svg) {
     width: var(--cat-icon);
     height: var(--cat-icon);
+  }
+
+  // In-field buttons: open, clear, pick
+  &.small {
+    width: var(--cat-h-xs);
+    height: var(--cat-h-xs);
+    border-radius: var(--cat-radius-xs);
+
+    :where(svg) {
+      width: var(--cat-icon-xs);
+      height: var(--cat-icon-xs);
+    }
   }
 }
 
@@ -579,6 +592,88 @@ input[type="number"] {
   font-size: var(--cat-text-xs);
 }
 
+// ---- panel content ----
+
+// What's missing, then how to fill it; no more than two lines
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cat-space-1-5);
+  padding: var(--cat-space-6) var(--cat-space-4);
+  text-align: center;
+
+  .what {
+    color: var(--cat-text-secondary);
+    font-weight: 500;
+  }
+
+  .how {
+    max-width: 360px;
+    color: var(--cat-text-tertiary);
+  }
+}
+
+// A collapsible inspector section: a disclosure header over its property rows
+.section {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--cat-border-subtle);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--cat-space-1-5);
+  width: 100%;
+  height: var(--cat-section-header);
+  padding: 0 var(--cat-space-2);
+  background: transparent;
+  border: 0;
+  color: var(--cat-text-secondary);
+  text-align: left;
+  cursor: pointer;
+
+  &::before {
+    @include glyph($chevron-right, var(--cat-icon-xs), var(--cat-text-tertiary));
+    flex: 0 0 auto;
+    transition: transform var(--cat-dur-fast) var(--cat-ease);
+  }
+
+  &[aria-expanded="true"]::before {
+    transform: rotate(90deg);
+  }
+
+  &:hover {
+    color: var(--cat-text-primary);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--cat-accent-ring);
+  }
+
+  > .title {
+    flex: 1 1 auto;
+    font: 600 var(--cat-text-xs) / var(--cat-leading-tight) var(--cat-font-ui);
+    letter-spacing: var(--cat-tracking-section);
+    text-transform: uppercase;
+  }
+
+  > .count {
+    color: var(--cat-text-tertiary);
+    font: var(--cat-text-xs) / var(--cat-leading-tight) var(--cat-font-mono);
+  }
+}
+
+.section-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cat-space-2);
+  padding: 0 var(--cat-space-3) var(--cat-space-3);
+}
+
 // ---- property rows ----
 
 // label | control, the inspector's atom; numeric labels scrub their value
@@ -595,6 +690,11 @@ input[type="number"] {
     color: var(--cat-text-secondary);
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  > label::first-letter,
+  > .label::first-letter {
+    text-transform: uppercase;
   }
 
   > .control {

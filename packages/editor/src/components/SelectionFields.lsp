@@ -1,111 +1,128 @@
 <view>
 <div class="selection">
-  <p class="hint" $if="!shared['editor:selection']">Nothing selected</p>
+  <div class="empty-state" $if="!shared['editor:selection']">
+    <span class="what">Nothing selected</span>
+    <span class="how">Pick a node in the scene tree or the viewport.</span>
+  </div>
   <template $else>
-    <p class="type"><span class="icon" $html="shared['editor:selection'].icon"></span>{{ shared['editor:selection'].type }}<span $if="shared['editor:selection'].count > 1"> · {{ shared['editor:selection'].count }} selected</span></p>
-    <input class="well name" type="text" aria-label="Name" $model="state.name" @change="rename" />
-    <div class="buttons">
-      <button class="button small" @click="send('focus')">Focus</button>
-      <button class="button small danger" @click="send('delete')">Delete</button>
+    <div class="node-header">
+      <span class="icon" $html="shared['editor:selection'].icon"></span>
+      <input class="node-name" type="text" aria-label="Node name" $model="state.name" @change="rename" />
+      <span class="type">{{ shared['editor:selection'].type }}<span $if="shared['editor:selection'].count > 1"> · {{ shared['editor:selection'].count }} selected</span></span>
     </div>
-    <div class="properties">
-      <span class="label">Position</span>
-      <div class="vector">
-        <div class="well"><span class="axis x" @pointerdown="scrubTransform($event, 'px', 0.01)">X</span><input type="number" step="0.01" aria-label="Position X" $model="state.px" @change="apply" /></div>
-        <div class="well"><span class="axis y" @pointerdown="scrubTransform($event, 'py', 0.01)">Y</span><input type="number" step="0.01" aria-label="Position Y" $model="state.py" @change="apply" /></div>
-        <div class="well"><span class="axis z" @pointerdown="scrubTransform($event, 'pz', 0.01)">Z</span><input type="number" step="0.01" aria-label="Position Z" $model="state.pz" @change="apply" /></div>
-      </div>
-      <span class="label">Rotation</span>
-      <div class="vector">
-        <div class="well"><span class="axis x" @pointerdown="scrubTransform($event, 'rx', 1)">X</span><input type="number" step="1" aria-label="Rotation X" $model="state.rx" @change="apply" /><span class="unit">°</span></div>
-        <div class="well"><span class="axis y" @pointerdown="scrubTransform($event, 'ry', 1)">Y</span><input type="number" step="1" aria-label="Rotation Y" $model="state.ry" @change="apply" /><span class="unit">°</span></div>
-        <div class="well"><span class="axis z" @pointerdown="scrubTransform($event, 'rz', 1)">Z</span><input type="number" step="1" aria-label="Rotation Z" $model="state.rz" @change="apply" /><span class="unit">°</span></div>
-      </div>
-      <template $for="field in state.fields" $key="field.key">
-        <label class="label" $class="{ scrub: field.type === 'number' }" $title="field.label" @pointerdown="scrubField($event, field)">{{ field.label }}</label>
-        <div class="control">
-          <div class="well" $if="field.type === 'number'">
-            <span class="fill" $if="field.ranged" $style="'width: ' + Math.min(100, Math.max(0, (field.value - field.min) / (field.max - field.min) * 100)) + '%'"></span>
-            <input type="number" $aria-label="field.label" $step="field.step" $min="field.min" $max="field.max" $model="field.value" @change="applyField(field)" />
-          </div>
-          <input $else-if="field.type === 'boolean'" class="checkbox" type="checkbox" $aria-label="field.label" $model="field.value" @change="applyField(field)" />
-          <div class="well tags" $else-if="field.type === 'tags'">
-            <span class="chip" $for="tag in field.value" $key="tag">
-              {{ tag }}<button class="remove" type="button" aria-label="Remove tag" @click="removeTag(field, tag)">×</button>
-            </span>
-            <input
-              type="text"
-              placeholder="add tag"
-              $aria-label="field.label"
-              @keydown="tagKey($event, field)"
-              @blur="addTagFrom($event.target, field)"
-            />
-          </div>
-          <div class="layers" $else-if="field.type === 'layers'">
-            <button
-              class="layer"
-              type="button"
-              $for="n in state.layerNumbers"
-              $key="n"
-              $aria-pressed="field.value.includes(n)"
-              @click="toggleLayer(field, n)"
-            >{{ n }}</button>
-          </div>
-          <label class="well colour" $else-if="field.type === 'colour'">
-            <input class="swatch" type="color" $aria-label="field.label" $value="field.hex" @input="applyColour($event, field)" />
-            <span class="mono">{{ field.hex }}</span>
-          </label>
-          <input $else class="well" type="text" $aria-label="field.label" $model="field.value" $disabled="field.readonly" @change="applyField(field)" />
-        </div>
-      </template>
-    </div>
-    <div class="scripts">
-      <h3 class="section-label">Scripts</h3>
-      <div class="script" $for="script in state.scripts" $key="script.index">
-        <div class="script-head">
-          <span class="script-name mono" $title="script.url">{{ script.name }}</span>
-          <span class="hint" $if="!script.built">not built</span>
-          <button class="icon-button" type="button" title="Open in the code pane" aria-label="Open in the code pane" @click="editScript(script)">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2.5h4.5V7M13.5 2.5 7 9M11 9.5v4H2.5V5h4"/></svg>
-          </button>
-          <button class="icon-button" type="button" title="Detach script" aria-label="Detach script" @click="detachScript(script)">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>
-          </button>
-        </div>
+    <section class="section">
+      <button class="section-header" type="button" $aria-expanded="state.transformOpen" @click="state.transformOpen = !state.transformOpen"><span class="title">Transform</span></button>
+      <div class="section-body" $if="state.transformOpen">
         <div class="properties">
-          <template $for="field in script.fields" $key="field.key">
-            <label class="label" $class="{ scrub: field.type === 'number' }" $title="field.label" @pointerdown="scrubScriptField($event, script, field)">{{ field.label }}</label>
+          <span class="label">Position</span>
+          <div class="vector">
+            <div class="well"><span class="axis x" @pointerdown="scrubTransform($event, 'px', 0.01)">X</span><input type="number" step="0.01" aria-label="Position X" $model="state.px" @change="apply" /></div>
+            <div class="well"><span class="axis y" @pointerdown="scrubTransform($event, 'py', 0.01)">Y</span><input type="number" step="0.01" aria-label="Position Y" $model="state.py" @change="apply" /></div>
+            <div class="well"><span class="axis z" @pointerdown="scrubTransform($event, 'pz', 0.01)">Z</span><input type="number" step="0.01" aria-label="Position Z" $model="state.pz" @change="apply" /></div>
+          </div>
+          <span class="label">Rotation</span>
+          <div class="vector">
+            <div class="well"><span class="axis x" @pointerdown="scrubTransform($event, 'rx', 1)">X</span><input type="number" step="1" aria-label="Rotation X" $model="state.rx" @change="apply" /><span class="unit">°</span></div>
+            <div class="well"><span class="axis y" @pointerdown="scrubTransform($event, 'ry', 1)">Y</span><input type="number" step="1" aria-label="Rotation Y" $model="state.ry" @change="apply" /><span class="unit">°</span></div>
+            <div class="well"><span class="axis z" @pointerdown="scrubTransform($event, 'rz', 1)">Z</span><input type="number" step="1" aria-label="Rotation Z" $model="state.rz" @change="apply" /><span class="unit">°</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="section" $if="state.fields.length">
+      <button class="section-header" type="button" $aria-expanded="state.propertiesOpen" @click="state.propertiesOpen = !state.propertiesOpen"><span class="title">{{ shared['editor:selection'].type }}</span></button>
+      <div class="section-body" $if="state.propertiesOpen">
+        <div class="properties">
+          <template $for="field in state.fields" $key="field.key">
+            <label class="label" $class="{ scrub: field.type === 'number' }" $title="field.label" @pointerdown="scrubField($event, field)">{{ field.label }}</label>
             <div class="control">
               <div class="well" $if="field.type === 'number'">
                 <span class="fill" $if="field.ranged" $style="'width: ' + Math.min(100, Math.max(0, (field.value - field.min) / (field.max - field.min) * 100)) + '%'"></span>
-                <input type="number" $aria-label="field.label" $step="field.step" $min="field.min" $max="field.max" $model="field.value" @change="applyScriptField(script, field)" />
+                <input type="number" $aria-label="field.label" $step="field.step" $min="field.min" $max="field.max" $model="field.value" @change="applyField(field)" />
               </div>
-              <input $else-if="field.type === 'boolean'" class="checkbox" type="checkbox" $aria-label="field.label" $model="field.value" @change="applyScriptField(script, field)" />
+              <input $else-if="field.type === 'boolean'" class="checkbox" type="checkbox" $aria-label="field.label" $model="field.value" @change="applyField(field)" />
+              <div class="well tags" $else-if="field.type === 'tags'">
+                <span class="chip" $for="tag in field.value" $key="tag">
+                  {{ tag }}<button class="remove" type="button" aria-label="Remove tag" @click="removeTag(field, tag)">×</button>
+                </span>
+                <input
+                  type="text"
+                  placeholder="add tag"
+                  $aria-label="field.label"
+                  @keydown="tagKey($event, field)"
+                  @blur="addTagFrom($event.target, field)"
+                />
+              </div>
+              <div class="layers" $else-if="field.type === 'layers'">
+                <button
+                  class="layer"
+                  type="button"
+                  $for="n in state.layerNumbers"
+                  $key="n"
+                  $aria-pressed="field.value.includes(n)"
+                  @click="toggleLayer(field, n)"
+                >{{ n }}</button>
+              </div>
               <label class="well colour" $else-if="field.type === 'colour'">
-                <input class="swatch" type="color" $aria-label="field.label" $value="field.hex" @input="applyScriptColour($event, script, field)" />
+                <input class="swatch" type="color" $aria-label="field.label" $value="field.hex" @input="applyColour($event, field)" />
                 <span class="mono">{{ field.hex }}</span>
               </label>
-              <input $else class="well" type="text" $aria-label="field.label" $model="field.value" $disabled="field.readonly" @change="applyScriptField(script, field)" />
+              <input $else class="well" type="text" $aria-label="field.label" $model="field.value" $disabled="field.readonly" @change="applyField(field)" />
             </div>
           </template>
         </div>
       </div>
-      <div class="attach" $if="shared['editor:scripts'].length">
-        <span class="well select">
-          <select aria-label="Script to attach" $model="state.attachPath">
-            <option $for="file in shared['editor:scripts']" $key="file.path" $value="file.path">{{ file.name }}</option>
-          </select>
-        </span>
-        <button class="button small" @click="attachScript()">Attach</button>
+    </section>
+    <section class="section">
+      <button class="section-header" type="button" $aria-expanded="state.scriptsOpen" @click="state.scriptsOpen = !state.scriptsOpen"><span class="title">Scripts</span><span class="count">{{ state.scripts.length }}</span></button>
+      <div class="section-body" $if="state.scriptsOpen">
+        <div class="script" $for="script in state.scripts" $key="script.index">
+          <div class="well slot">
+            <svg class="slot-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M3.5 1.5h6l3 3v10h-9z"/><path d="m7 8-1.5 1.5L7 11M9 8l1.5 1.5L9 11"/></svg>
+            <span class="script-name mono" $title="script.url">{{ script.name }}</span>
+            <span class="hint" $if="!script.built">not built</span>
+            <button class="icon-button small" type="button" title="Open in the code pane" aria-label="Open in the code pane" @click="editScript(script)">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2.5h4.5V7M13.5 2.5 7 9M11 9.5v4H2.5V5h4"/></svg>
+            </button>
+            <button class="icon-button small" type="button" title="Detach script" aria-label="Detach script" @click="detachScript(script)">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>
+            </button>
+          </div>
+          <div class="properties">
+            <template $for="field in script.fields" $key="field.key">
+              <label class="label" $class="{ scrub: field.type === 'number' }" $title="field.label" @pointerdown="scrubScriptField($event, script, field)">{{ field.label }}</label>
+              <div class="control">
+                <div class="well" $if="field.type === 'number'">
+                  <span class="fill" $if="field.ranged" $style="'width: ' + Math.min(100, Math.max(0, (field.value - field.min) / (field.max - field.min) * 100)) + '%'"></span>
+                  <input type="number" $aria-label="field.label" $step="field.step" $min="field.min" $max="field.max" $model="field.value" @change="applyScriptField(script, field)" />
+                </div>
+                <input $else-if="field.type === 'boolean'" class="checkbox" type="checkbox" $aria-label="field.label" $model="field.value" @change="applyScriptField(script, field)" />
+                <label class="well colour" $else-if="field.type === 'colour'">
+                  <input class="swatch" type="color" $aria-label="field.label" $value="field.hex" @input="applyScriptColour($event, script, field)" />
+                  <span class="mono">{{ field.hex }}</span>
+                </label>
+                <input $else class="well" type="text" $aria-label="field.label" $model="field.value" $disabled="field.readonly" @change="applyScriptField(script, field)" />
+              </div>
+            </template>
+          </div>
+        </div>
+        <div class="attach" $if="shared['editor:scripts'].length">
+          <span class="well select">
+            <select aria-label="Script to attach" $model="state.attachPath">
+              <option $for="file in shared['editor:scripts']" $key="file.path" $value="file.path">{{ file.name }}</option>
+            </select>
+          </span>
+          <button class="button small" @click="attachScript()">Attach</button>
+        </div>
+        <div class="attach">
+          <input class="well" type="text" placeholder="New script class name" aria-label="New script class name" $model="state.newScriptName" @keydown="newScriptKey($event)" />
+          <button class="button small" @click="newScript()">New</button>
+        </div>
+        <div class="buttons" $if="state.scripts.length">
+          <button class="button small" @click="send('reloadScripts')">Reload scripts</button>
+        </div>
       </div>
-      <div class="attach">
-        <input class="well" type="text" placeholder="New script class name" aria-label="New script class name" $model="state.newScriptName" @keydown="newScriptKey($event)" />
-        <button class="button small" @click="newScript()">New</button>
-      </div>
-      <div class="buttons" $if="state.scripts.length">
-        <button class="button small" @click="send('reloadScripts')">Reload scripts</button>
-      </div>
-    </div>
+    </section>
   </template>
 </div>
 </view>
@@ -131,6 +148,9 @@ const state = reactive({
   scripts: [] as ScriptEntry[],
   attachPath: '',
   newScriptName: '',
+  transformOpen: true,
+  propertiesOpen: true,
+  scriptsOpen: true,
   layerNumbers: Array.from({ length: 32 }, (_, n) => n),
 })
 
@@ -296,50 +316,63 @@ function apply() {
 </logic>
 
 <style>
-.selection {
-  display: flex;
-  flex-direction: column;
-  gap: var(--cat-space-2);
+.hint {
+  color: var(--cat-text-tertiary);
 }
 
-.hint {
-  margin: 0;
-  color: var(--cat-text-tertiary);
+.node-header {
+  display: flex;
+  align-items: center;
+  gap: var(--cat-space-2);
+  padding: calc(var(--cat-space-2) + var(--cat-space-0-5)) var(--cat-space-3);
+  border-bottom: 1px solid var(--cat-border-subtle);
+}
+
+.node-header .icon {
+  flex: 0 0 var(--cat-icon);
+  width: var(--cat-icon);
+  height: var(--cat-icon);
+  color: var(--cat-accent);
+}
+
+.node-header .icon :global(svg) {
+  display: block;
+  width: var(--cat-icon);
+  height: var(--cat-icon);
+}
+
+.node-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--cat-h-sm);
+  padding: 0 var(--cat-space-1-5);
+  box-sizing: border-box;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--cat-radius-sm);
+  font: 500 var(--cat-text-md) / var(--cat-leading-body) var(--cat-font-ui);
+  outline: none;
+}
+
+.node-name:hover {
+  border-color: var(--cat-border-strong);
+}
+
+.node-name:focus {
+  background: var(--cat-bg-app);
+  border-color: var(--cat-accent);
 }
 
 .type {
-  display: flex;
-  align-items: center;
-  gap: var(--cat-space-1-5);
-  margin: 0;
+  flex: 0 0 auto;
   color: var(--cat-text-tertiary);
   font: var(--cat-text-xs) / var(--cat-leading-tight) var(--cat-font-mono);
-}
-
-.icon {
-  width: var(--cat-icon-sm);
-  height: var(--cat-icon-sm);
-  color: var(--cat-text-secondary);
-}
-
-.icon :global(svg) {
-  display: block;
-  width: var(--cat-icon-sm);
-  height: var(--cat-icon-sm);
-}
-
-.name {
-  font: 500 var(--cat-text-md) / var(--cat-leading-body) var(--cat-font-ui);
 }
 
 .buttons {
   display: flex;
   flex-wrap: wrap;
   gap: var(--cat-space-1);
-}
-
-.properties .label {
-  text-transform: capitalize;
 }
 
 .control > .well:not(.colour) {
@@ -440,23 +473,21 @@ function apply() {
   color: var(--cat-text-on-accent);
 }
 
-.scripts {
-  display: flex;
-  flex-direction: column;
-  gap: var(--cat-space-2);
-  margin-top: var(--cat-space-2);
-}
-
 .script {
   display: flex;
   flex-direction: column;
-  gap: var(--cat-space-1);
+  gap: var(--cat-space-2);
 }
 
-.script-head {
-  display: flex;
-  align-items: center;
-  gap: var(--cat-space-1);
+.slot {
+  padding-right: var(--cat-space-0-5);
+}
+
+.slot-icon {
+  flex: 0 0 var(--cat-icon-sm);
+  width: var(--cat-icon-sm);
+  height: var(--cat-icon-sm);
+  color: var(--cat-text-secondary);
 }
 
 .script-name {

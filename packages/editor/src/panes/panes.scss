@@ -3,8 +3,8 @@
   inset: var(--menu-bar-height) 0 0 0;
   display: flex;
   background: var(--cat-bg-app);
-  --pane-gutter: var(--cat-space-1);
-  --pane-header: var(--cat-h-sm);
+  --pane-gutter: 1px;
+  --pane-header: var(--cat-panel-header);
 }
 
 .pane-root > * {
@@ -34,11 +34,18 @@
   min-height: 0;
 }
 
+// A 1px seam, with a wider band either side to grab
 .pane-gutter {
   flex: 0 0 var(--pane-gutter);
-  background: var(--cat-bg-app);
+  background: var(--cat-border);
   position: relative;
   z-index: 2;
+}
+
+.pane-gutter::after {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--cat-space-0-5));
 }
 
 .pane-split.row > .pane-gutter {
@@ -84,13 +91,14 @@ body.pane-dragging {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 var(--cat-space-1-5) 0 var(--cat-space-2);
+  gap: var(--cat-space-2);
+  padding: 0 var(--cat-space-1) 0 var(--cat-space-3);
+  box-sizing: border-box;
   background: var(--cat-bg-raised);
   border-bottom: 1px solid var(--cat-border);
-  color: var(--cat-text-secondary);
-  font: 600 var(--cat-text-xs) / 1 var(--cat-font-ui);
-  text-transform: uppercase;
-  letter-spacing: var(--cat-tracking-section);
+  color: var(--cat-text-primary);
+  font: 500 var(--cat-text-sm) / var(--cat-leading-tight) var(--cat-font-ui);
+  letter-spacing: var(--cat-tracking-panel);
   cursor: grab;
   user-select: none;
 }
@@ -105,26 +113,8 @@ body.pane-dragging .pane-header {
   gap: var(--cat-space-0-5);
 }
 
-.pane-actions > button {
-  font: var(--cat-text-md) / 1 var(--cat-font-ui);
+.pane-options {
   color: var(--cat-text-tertiary);
-  background: none;
-  border: 0;
-  border-radius: var(--cat-radius-xs);
-  width: var(--cat-h-xs);
-  height: var(--cat-h-xs);
-  cursor: pointer;
-  padding: 0;
-}
-
-.pane-actions > button:hover:not(:disabled) {
-  color: var(--cat-text-primary);
-  background: var(--cat-bg-hover);
-}
-
-.pane-actions > button:disabled {
-  color: var(--cat-text-disabled);
-  cursor: default;
 }
 
 .pane-menu {
@@ -132,14 +122,8 @@ body.pane-dragging .pane-header {
   top: 100%;
   right: 0;
   z-index: 20;
-  min-width: 140px;
-  text-transform: none;
+  min-width: 160px;
   letter-spacing: 0;
-}
-
-.pane-menu-note {
-  padding: var(--cat-space-1) var(--cat-space-2);
-  color: var(--cat-text-tertiary);
 }
 
 .pane-body {
@@ -180,9 +164,7 @@ body.pane-dragging .pane-body {
   border-radius: var(--cat-radius-sm);
   box-shadow: var(--cat-shadow-e1);
   color: var(--cat-text-primary);
-  font: 600 var(--cat-text-xs) / 1 var(--cat-font-ui);
-  text-transform: uppercase;
-  letter-spacing: var(--cat-tracking-section);
+  font: 500 var(--cat-text-sm) / 1 var(--cat-font-ui);
   pointer-events: none;
 }
 

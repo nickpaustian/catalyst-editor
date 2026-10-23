@@ -1,46 +1,37 @@
 <view>
-<section class="tree">
-  <h2 class="section-label heading">Scene</h2>
-  <div class="adders">
-    <button class="button small" @click="openAdd()">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"/></svg>
-      Add node <kbd>⌘⇧A</kbd>
-    </button>
+<div class="rows" role="tree" aria-label="Scene nodes" aria-multiselectable="true" tabindex="0" @contextmenu="contextEmpty($event)">
+  <div
+    class="row"
+    role="treeitem"
+    $for="row in shared['editor:tree']"
+    $key="row.id"
+    $class="{ selected: row.selected, active: row.active, root: row.isRoot }"
+    $style="'--depth: ' + row.depth"
+    $aria-selected="row.selected"
+    $aria-expanded="row.hasChildren ? row.expanded : null"
+    @pointerdown="press($event, row)"
+    @click="select($event, row)"
+    @contextmenu="context($event, row)"
+  >
+    <span class="twisty" $class="{ hidden: !row.hasChildren, open: row.expanded }" @click="toggle($event, row)">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>
+    </span>
+    <span class="icon" $html="row.icon"></span>
+    <input
+      $if="state.renaming === row.id"
+      class="rename"
+      type="text"
+      aria-label="Name"
+      $value="row.name"
+      @keydown="renameKey($event, row)"
+      @blur="finishRename($event.target, row)"
+      @pointerdown="$event.stopPropagation()"
+      @click="$event.stopPropagation()"
+    />
+    <span $else class="name" @dblclick="startRename($event, row)">{{ row.name }}</span>
+    <span class="type">{{ row.type }}</span>
   </div>
-  <p class="hint">
-    New nodes go under the selected node. Shift-click selects a range, ctrl- or cmd-click adds
-    or removes one; in the viewport, shift-drag a rectangle to select what it covers (with cmd
-    or ctrl held, to add). Drag a row onto another: its top edge puts it before, its bottom edge
-    after, the middle makes it a child. World position is kept.
-  </p>
-  <div class="rows" @contextmenu="contextEmpty($event)">
-    <div
-      class="row"
-      $for="row in shared['editor:tree']"
-      $key="row.id"
-      $class="{ selected: row.selected, active: row.active, root: row.isRoot }"
-      @pointerdown="press($event, row)"
-      @click="select($event, row)"
-      @contextmenu="context($event, row)"
-    >
-      <span class="indent" $for="n in row.depth" $key="n"></span>
-      <span class="twisty" $class="{ hidden: !row.hasChildren, open: row.expanded }" @click="toggle($event, row)">▸</span>
-      <span class="icon" $html="row.icon"></span>
-      <input
-        $if="state.renaming === row.id"
-        class="rename"
-        type="text"
-        $value="row.name"
-        @keydown="renameKey($event, row)"
-        @blur="finishRename($event.target, row)"
-        @pointerdown="$event.stopPropagation()"
-        @click="$event.stopPropagation()"
-      />
-      <span $else class="name" @dblclick="startRename($event, row)">{{ row.name }}</span>
-      <span class="type">{{ row.type }}</span>
-    </div>
-  </div>
-</section>
+</div>
 </view>
 
 <logic lang="ts">
@@ -154,10 +145,6 @@ function hideGhost() {
 let dropTarget: { id: number; place: Place; element: HTMLElement } | null = null
 let justDragged = false
 
-function openAdd() {
-  addDialog.set(true)
-}
-
 function select(event: MouseEvent, row: Row) {
   if (justDragged) {
     justDragged = false
@@ -191,8 +178,8 @@ function rowAt(list: HTMLElement, x: number, y: number): { row: Row; element: HT
 function placeFor(element: HTMLElement, y: number): Place {
   const rect = element.getBoundingClientRect()
   const fraction = (y - rect.top) / rect.height
-  if (fraction < 0.25) return 'before'
-  if (fraction > 0.75) return 'after'
+  if (fraction < 1 / 3) return 'before'
+  if (fraction > 2 / 3) return 'after'
   return 'inside'
 }
 
@@ -246,41 +233,26 @@ function release() {
 </logic>
 
 <style>
-.heading {
-  margin-bottom: var(--cat-space-2);
-}
-
-.adders svg {
-  width: var(--cat-icon-sm);
-  height: var(--cat-icon-sm);
-}
-
-.adders kbd {
-  margin-left: var(--cat-space-1);
-  margin-right: calc(-1 * var(--cat-space-1));
-}
-
-.hint {
-  color: var(--cat-text-tertiary);
-  font-size: var(--cat-text-xs);
-  margin: var(--cat-space-1) 0;
-}
-
 .rows {
-  overflow-y: auto;
-  border: 1px solid var(--cat-border);
-  margin-bottom: var(--cat-space-1-5);
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: var(--cat-space-1);
+  box-sizing: border-box;
+  outline: none;
   user-select: none;
 }
 
 .row {
+  position: relative;
   display: flex;
   align-items: center;
-  padding: var(--cat-space-0-5) var(--cat-space-1-5) var(--cat-space-0-5) var(--cat-space-1);
-  cursor: pointer;
+  gap: var(--cat-space-1-5);
+  flex: 0 0 var(--cat-row);
+  padding: 0 var(--cat-space-2) 0 calc(var(--cat-space-1) + var(--depth, 0) * var(--cat-tree-indent));
+  border-radius: var(--cat-radius-sm);
   white-space: nowrap;
-  border-top: 1px solid transparent;
-  border-bottom: 1px solid transparent;
+  cursor: pointer;
 }
 
 .row:hover {
@@ -288,42 +260,39 @@ function release() {
 }
 
 .row.selected {
+  background: var(--cat-bg-active);
+}
+
+.rows:focus-within .row.selected {
   background: var(--cat-accent-soft);
 }
 
-.row.active {
-  box-shadow: inset 2px 0 var(--cat-accent);
+.row.selected .type {
+  color: var(--cat-text-secondary);
+}
+
+.row.active .name {
+  font-weight: 500;
+}
+
+.rows:focus-within .row.active .icon {
+  color: var(--cat-accent);
 }
 
 .row.root {
-  color: var(--cat-text-secondary);
   cursor: default;
 }
 
-.indent {
-  flex: 0 0 12px;
-}
-
-.icon {
-  flex: 0 0 14px;
-  width: 14px;
-  height: 14px;
-  margin-right: var(--cat-space-1);
-  color: var(--cat-text-secondary);
-}
-
-.icon :global(svg) {
-  display: block;
-  width: 14px;
-  height: 14px;
-}
-
 .twisty {
-  flex: 0 0 14px;
+  display: flex;
+  flex: 0 0 var(--cat-icon-xs);
   color: var(--cat-text-tertiary);
-  font-size: var(--cat-text-xs);
-  text-align: center;
-  transition: transform 0.1s;
+  transition: transform var(--cat-dur-fast) var(--cat-ease);
+}
+
+.twisty svg {
+  width: var(--cat-icon-xs);
+  height: var(--cat-icon-xs);
 }
 
 .twisty.open {
@@ -334,37 +303,62 @@ function release() {
   visibility: hidden;
 }
 
+.icon {
+  flex: 0 0 var(--cat-icon-sm);
+  width: var(--cat-icon-sm);
+  height: var(--cat-icon-sm);
+  color: var(--cat-text-secondary);
+}
+
+.icon :global(svg) {
+  display: block;
+  width: var(--cat-icon-sm);
+  height: var(--cat-icon-sm);
+}
+
 .rename {
   flex: 1 1 auto;
   min-width: 0;
-  font: inherit;
-  color: var(--cat-text-primary);
+  height: var(--cat-h-xs);
+  padding: 0 var(--cat-space-1);
+  box-sizing: border-box;
   background: var(--cat-bg-app);
   border: 1px solid var(--cat-accent);
   border-radius: var(--cat-radius-xs);
+  color: var(--cat-text-primary);
   outline: none;
-  padding: 0 var(--cat-space-1);
 }
 
 .name {
   flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .type {
   flex: 0 0 auto;
-  margin-left: var(--cat-space-2);
   color: var(--cat-text-tertiary);
   font: var(--cat-text-xs) / var(--cat-leading-tight) var(--cat-font-mono);
 }
 
-.row.drop-before {
-  border-top-color: var(--cat-accent);
+.row.drop-before::after,
+.row.drop-after::after {
+  content: "";
+  position: absolute;
+  left: calc(var(--cat-space-1) + var(--depth, 0) * var(--cat-tree-indent));
+  right: 0;
+  height: 2px;
+  background: var(--cat-accent);
+  pointer-events: none;
 }
 
-.row.drop-after {
-  border-bottom-color: var(--cat-accent);
+.row.drop-before::after {
+  top: -1px;
+}
+
+.row.drop-after::after {
+  bottom: -1px;
 }
 
 .row.drop-inside {

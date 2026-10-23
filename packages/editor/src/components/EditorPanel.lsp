@@ -1,6 +1,5 @@
 <view>
 <aside class="panel">
-  <h2 class="section-label">Selected</h2>
   <SelectionFields />
 
   <SceneSettings />
@@ -22,13 +21,8 @@ export {}
   height: 100%;
   overflow-y: auto;
   box-sizing: border-box;
-  padding: var(--cat-space-3);
   background: var(--cat-bg-panel);
   color: var(--cat-text-primary);
   font: var(--cat-text-sm) / var(--cat-leading-body) var(--cat-font-ui);
-}
-
-h2 {
-  margin-bottom: var(--cat-space-2);
 }
 </style>

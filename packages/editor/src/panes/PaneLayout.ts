@@ -17,6 +17,16 @@ export interface PaneContent {
   title: string
   /** The element shown in the pane. One per kind: a kind can be open in one pane at a time. */
   element: HTMLElement
+  /** Icon buttons in the pane's header, before its options menu. */
+  actions?: PaneAction[]
+}
+
+export interface PaneAction {
+  /** Names the button for screen readers and its tooltip; put the shortcut here too. */
+  label: string
+  /** Inline SVG markup, drawn at 16px in currentColor. */
+  icon: string
+  run: () => void
 }
 
 export interface PaneLayoutOptions {
@@ -25,6 +35,8 @@ export interface PaneLayoutOptions {
   layout: LayoutNode
   onChange: (layout: LayoutNode) => void
 }
+
+const MORE_ICON = `<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="3.5" cy="8" r="1.25"/><circle cx="8" cy="8" r="1.25"/><circle cx="12.5" cy="8" r="1.25"/></svg>`
 
 const DRAG_THRESHOLD = 4
 const EDGE_FRACTION = 0.3
@@ -127,18 +139,11 @@ export class PaneLayout {
 
     const actions = document.createElement("span")
     actions.className = "pane-actions"
-    const add = document.createElement("button")
-    add.type = "button"
-    add.textContent = "+"
-    add.title = "Add a pane beside this one"
-    add.addEventListener("click", (event) => this.toggleMenu(event.currentTarget as HTMLElement, id))
-    const close = document.createElement("button")
-    close.type = "button"
-    close.textContent = "×"
-    close.title = "Close this pane"
-    close.disabled = leaves(this._layout).length <= 1
-    close.addEventListener("click", () => this.closePane(id))
-    actions.append(add, close)
+    for (const action of content.actions ?? []) actions.appendChild(this.iconButton(action.label, action.icon, action.run))
+    const options = this.iconButton("Pane options", MORE_ICON, () => this.toggleMenu(options, id))
+    options.classList.add("pane-options")
+    options.setAttribute("aria-haspopup", "menu")
+    actions.appendChild(options)
 
     header.append(title, actions)
 
@@ -149,6 +154,17 @@ export class PaneLayout {
 
     element.append(header, body)
     return element
+  }
+
+  private iconButton(label: string, icon: string, run: () => void): HTMLButtonElement {
+    const button = document.createElement("button")
+    button.type = "button"
+    button.className = "icon-button"
+    button.title = label
+    button.setAttribute("aria-label", label)
+    button.innerHTML = icon
+    button.addEventListener("click", run)
+    return button
   }
 
   private buildGutter(split: PaneSplit, index: number): HTMLElement {
@@ -329,26 +345,29 @@ export class PaneLayout {
     const open = new Set(leaves(this._layout).map((leaf) => leaf.kind))
     const menu = document.createElement("div")
     menu.className = "pane-menu menu-panel"
+    menu.setAttribute("role", "menu")
+    const item = (label: string, run: () => void, disabled = false) => {
+      const button = document.createElement("button")
+      button.type = "button"
+      button.className = "menu-item"
+      button.setAttribute("role", "menuitem")
+      button.textContent = label
+      button.disabled = disabled
+      button.addEventListener("click", run)
+      menu.appendChild(button)
+    }
     for (const [kind, content] of Object.entries(this.kinds)) {
-      if (open.has(kind)) continue
-      const item = document.createElement("button")
-      item.type = "button"
-      item.className = "menu-item"
-      item.textContent = content.title
-      item.addEventListener("click", () => this.addBeside(id, kind))
-      menu.appendChild(item)
+      if (!open.has(kind)) item(`Add ${content.title} beside`, () => this.addBeside(id, kind))
     }
-    if (!menu.childElementCount) {
-      const note = document.createElement("span")
-      note.className = "pane-menu-note"
-      note.textContent = "Every pane is open"
-      menu.appendChild(note)
-    }
+    if (menu.childElementCount) menu.appendChild(document.createElement("hr"))
+    item("Close pane", () => this.closePane(id), leaves(this._layout).length <= 1)
+    anchor.setAttribute("aria-expanded", "true")
     anchor.parentElement!.appendChild(menu)
     this.openMenu = menu
   }
 
   private closeMenu(): void {
+    this.openMenu?.parentElement?.querySelector("[aria-expanded]")?.removeAttribute("aria-expanded")
     this.openMenu?.remove()
     this.openMenu = null
   }

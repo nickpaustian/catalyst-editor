@@ -70,8 +70,9 @@
       <button class="menu-title" @click="toggle('help')" @pointerenter="hover('help')">Help</button>
       <div class="menu-items menu-panel help" $if="state.open === 'help'">
         <p><b>Orbit:</b> drag to orbit, right-drag to pan, wheel to zoom. <kbd>F</kbd> focuses the selected node, <kbd>Delete</kbd> removes it. Drag the gizmo to move it.</p>
-        <p><b>Tree:</b> shift-click selects a range, ctrl- or cmd-click adds or removes one. Drag a row onto another to reparent it.</p>
-        <p><b>Panes:</b> drag a gutter to resize, a pane title to move it; <b>+</b> adds a pane, <b>×</b> closes one.</p>
+        <p><b>Viewport:</b> shift-drag a rectangle to select what it covers; hold <kbd>⌘</kbd> or <kbd>Ctrl</kbd> as well to add to the selection.</p>
+        <p><b>Tree:</b> new nodes go under the selected node. Shift-click selects a range, ctrl- or cmd-click adds or removes one. Drag a row onto another: its top third puts it before, its bottom third after, the middle makes it a child. World position is kept.</p>
+        <p><b>Panes:</b> drag a gutter to resize, a pane title to move it; its <b>…</b> menu adds a pane beside it or closes it.</p>
       </div>
     </div>
   </nav>
