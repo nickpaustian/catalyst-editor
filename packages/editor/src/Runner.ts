@@ -1,5 +1,5 @@
 import type { Catalyst, Node3D } from "@nickpaustian/catalyst"
-import { Node3D as Node3DClass } from "@nickpaustian/catalyst"
+import { DebugOverlay, Node3D as Node3DClass } from "@nickpaustian/catalyst"
 import { browserFolders, folderLoader, type FolderSource } from "./ProjectFolder"
 import type { Recipe } from "./recipe"
 import { windowRunnerPageLink, type RunMessage, type RunnerPageLink } from "./RunnerLink"
@@ -19,11 +19,17 @@ export class Runner {
   private readonly recipe: Recipe
   private readonly folders: FolderSource
   private readonly unsubscribe: () => void
+  /** The stats block over the canvas; the backquote key shows and hides it. */
+  readonly debug: DebugOverlay
 
-  constructor(engine: Catalyst, recipe: Recipe, options: { folders?: FolderSource; link?: RunnerPageLink } = {}) {
+  constructor(engine: Catalyst, recipe: Recipe, options: { folders?: FolderSource; link?: RunnerPageLink; debug?: boolean } = {}) {
     this.engine = engine
     this.recipe = recipe
     this.folders = options.folders ?? browserFolders
+    this.debug = new DebugOverlay(engine, { visible: options.debug ?? false })
+    window.addEventListener("keydown", (event) => {
+      if (event.code === "Backquote" && !isTyping(event)) this.debug.toggle()
+    })
     const link = options.link ?? windowRunnerPageLink()
     for (const { kind, cls } of recipe.kinds) if (!engine.registry.has(kind) && typeof cls === "function") engine.register({ [kind]: cls as any })
     this.unsubscribe = link.onRun((message) => void this.play(message))
@@ -47,7 +53,7 @@ export class Runner {
     this.teardown = await this.recipe.run({ engine: this.engine, root, scene: message.scene, folder })
     document.title = `${folder?.name ?? "untitled"} · running`
     const hint = document.getElementById("hint")
-    if (hint && this.recipe.hint) hint.textContent = this.recipe.hint(root)
+    if (hint && this.recipe.hint) hint.textContent = `${this.recipe.hint(root)} · \` stats`
   }
 
   stop(): void {
@@ -61,4 +67,9 @@ export class Runner {
     this.stop()
     this.unsubscribe()
   }
+}
+
+const isTyping = (event: KeyboardEvent): boolean => {
+  const target = event.target as HTMLElement | null
+  return !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
 }

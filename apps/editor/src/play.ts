@@ -8,6 +8,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   const engine = createEngine(recipe, { container: "#app", grid: false })
   engine.start()
   const shell = await desktop()
-  const runner = new Runner(engine, recipe, { folders: shell?.folders, link: shell?.runnerPageLink })
+  const runner = new Runner(engine, recipe, { folders: shell?.folders, link: shell?.runnerPageLink, debug: new URLSearchParams(location.search).has("debug") })
   Object.assign(window, { engine, runner })
 })
