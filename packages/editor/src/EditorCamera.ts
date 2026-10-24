@@ -1,5 +1,5 @@
 import { DebugShapes, Mat4, Material, Node3D as Node3DClass, Quaternion, Ray, Vector3, Visual, boxGeometry, cylinderGeometry, mergeGeometry, torusGeometry, type Catalyst, type Geometry, type Node3D, type ViewPose } from "@nickpaustian/catalyst"
-import { LineSet, Mesh as ObeliskMesh, computeBounds, pickMesh } from "@nickpaustian/obelisk"
+import { Mesh as ObeliskMesh, computeBounds, pickMesh } from "@nickpaustian/obelisk"
 import { EditMesh } from "@nickpaustian/catalyst/prefabs"
 
 const CLICK_DISTANCE = 4
@@ -131,6 +131,8 @@ const buildVertex = (): Geometry => boxGeometry(0.1, 0.1, 0.1)
 const VERTEX_PIXELS = 8
 const EDGE_PIXELS = 6
 const EDGE_COLOUR = 0x2f3540
+/** A dormant edge tube's radius, as a fraction of the gizmo's length on screen. */
+const EDGE_RADIUS = 0.012
 /** A picked edge, as a unit tube standing on y, scaled to the edge. */
 const buildTube = (): Geometry => cylinderGeometry(1, 1, 1, 10)
 
@@ -212,9 +214,9 @@ export class EditorCamera implements ViewPose {
   private highlight: Visual | null = null
   private hoveredElement: number | null = null
   private edgeList: [number, number][] = []
-  private pickedEdgeList: [number, number][] = []
-  private edgeLines: Visual | null = null
   private edgeTubes: Visual[] = []
+  private edgeTubeRadius: number[] = []
+  private readonly edgeMaterial = new Material({ colour: EDGE_COLOUR })
   private faceFills: Visual[] = []
   private shapeKey = ""
   private placedKey = ""
@@ -288,7 +290,6 @@ export class EditorCamera implements ViewPose {
     if (this.gizmo) for (const visual of Object.values(this.gizmo)) engine.scene.add(visual)
     if (this.centre3) engine.scene.add(this.centre3)
     for (const visual of this.vertexHandles) engine.scene.add(visual)
-    if (this.edgeLines) engine.scene.add(this.edgeLines)
     for (const visual of this.edgeTubes) engine.scene.add(visual)
     for (const visual of this.faceFills) engine.scene.add(visual)
     if (this.highlight) engine.scene.add(this.highlight)
@@ -722,10 +723,9 @@ export class EditorCamera implements ViewPose {
     }
     for (const visual of this.vertexHandles) drop(visual)
     this.vertexHandles = []
-    drop(this.edgeLines)
-    this.edgeLines = null
     for (const visual of this.edgeTubes) drop(visual)
     this.edgeTubes = []
+    this.edgeTubeRadius = []
     for (const visual of this.faceFills) drop(visual)
     this.faceFills = []
     drop(this.highlight)
@@ -756,16 +756,17 @@ export class EditorCamera implements ViewPose {
       else this.buildFaceVisuals()
     }
     if (this._editMode === "edge") {
-      // A tube per picked edge, sized on screen like the gizmo.
+      // A tube per edge, sized on screen like the gizmo: thin and dark at rest, thicker when hovered or picked.
       this.edgeTubes.forEach((visual, n) => {
-        const edge = this.pickedEdgeList[n]
+        const edge = this.edgeList[n]
         if (!edge) return
         world.transformPoint(mesh.vertexAt(edge[0], p), p)
         world.transformPoint(mesh.vertexAt(edge[1], q), q)
         const length = p.distanceTo(q)
         const direction = q.clone().subVector(p).normalize()
         const middle = p.clone().addVector(q).scale(0.5)
-        visual.matrix.composeTRS(middle, new Quaternion().setFromUnitVectors(UP, direction), new Vector3(scale * 0.03, length, scale * 0.03))
+        const radius = scale * (this.edgeTubeRadius[n] ?? EDGE_RADIUS)
+        visual.matrix.composeTRS(middle, new Quaternion().setFromUnitVectors(UP, direction), new Vector3(radius, length, radius))
       })
     } else {
       for (const visual of this.faceFills) visual.matrix.copy(world)
@@ -773,7 +774,7 @@ export class EditorCamera implements ViewPose {
     }
   }
 
-  /** Every edge as a line in the mesh's space, grey, the hovered one white, the picked ones yellow; and a tube for each picked edge. */
+  /** Every edge as a tube: dark and thin at rest, white when hovered, yellow and thicker when picked; the tubes are placed each frame. */
   private buildEdgeVisuals(): void {
     const mesh = this.editMesh
     if (!mesh) return
@@ -782,36 +783,18 @@ export class EditorCamera implements ViewPose {
       this.engine.scene.remove(visual)
       this.engine.renderer?.release(visual.geometry)
     }
-    drop(this.edgeLines)
     for (const visual of this.edgeTubes) drop(visual)
     this.edgeTubes = []
-    const lines = new LineSet()
-    const positions = new Float32Array(this.edgeList.length * 6)
-    const colours = new Float32Array(this.edgeList.length * 8)
-    const world = mesh.transform.worldMatrix
-    const a = new Vector3(), b = new Vector3()
-    this.pickedEdgeList = []
+    this.edgeTubeRadius = []
     this.edgeList.forEach((edge, i) => {
-      world.transformPoint(mesh.vertexAt(edge[0], a), a)
-      world.transformPoint(mesh.vertexAt(edge[1], b), b)
-      positions.set([a.x, a.y, a.z, b.x, b.y, b.z], i * 6)
       const picked = this.edgeSelection.has(edgeKey(edge[0], edge[1]))
-      const colour = picked ? rgba(HOVER_COLOUR) : this.hoveredElement === i ? rgba(0xffffff) : rgba(EDGE_COLOUR)
-      colours.set(colour, i * 8)
-      colours.set(colour, i * 8 + 4)
-      if (picked) this.pickedEdgeList.push(edge)
-    })
-    lines.positions = positions
-    lines.colours = colours
-    this.edgeLines = new Visual(lines)
-    this.edgeLines.overlay = true
-    if (this.active) this.engine.scene.add(this.edgeLines)
-    for (const _ of this.pickedEdgeList) {
-      const tube = new Visual(buildTube(), this.vertexSelectedMaterial)
+      const hovered = this.hoveredElement === i
+      const tube = new Visual(buildTube(), picked ? this.vertexSelectedMaterial : hovered ? this.vertexHoverMaterial : this.edgeMaterial)
       tube.overlay = true
       if (this.active) this.engine.scene.add(tube)
       this.edgeTubes.push(tube)
-    }
+      this.edgeTubeRadius.push(picked ? EDGE_RADIUS * 2.4 : hovered ? EDGE_RADIUS * 1.6 : EDGE_RADIUS)
+    })
   }
 
   /** A translucent fill over the hovered face and each picked face, on the surface so only what shows is tinted, and the picked faces' outlines. */
@@ -1386,5 +1369,3 @@ export class EditorCamera implements ViewPose {
 }
 
 const IDENTITY = new Quaternion()
-
-const rgba = (colour: number): [number, number, number, number] => [((colour >> 16) & 255) / 255, ((colour >> 8) & 255) / 255, (colour & 255) / 255, 1]
