@@ -1,4 +1,4 @@
-import { Mat4, Model, Node3D, Prefab, Quaternion, Vector3, editorIcon, exposedProperties, readExposed, writeExposed, type Catalyst, type ExposedProperty, type NodeClass, type NodeJSON, type Script } from "@nickpaustian/catalyst"
+import { Mat4, Model, Node3D, Prefab, Quaternion, Vector3, DebugShapes, Visual, editorIcon, exposedProperties, readExposed, writeExposed, type Catalyst, type ExposedProperty, type NodeClass, type NodeJSON, type Script } from "@nickpaustian/catalyst"
 import { Input } from "@nickpaustian/catalyst/input"
 import { BoxCollider, MeshCollider, Physics } from "@nickpaustian/catalyst/physics"
 import { EditMesh, Primitive } from "@nickpaustian/catalyst/prefabs"
@@ -242,6 +242,9 @@ export class EditorSession {
   private readonly history = new History()
   private dragStart: { node: Node3D; before: Mat4; size: Vector3 | null }[] | null = null
   private vertexDragStart: { mesh: EditMesh; before: number[] } | null = null
+  /** The outlines drawn for editable meshes that are hidden but still collide, so they stay findable while editing. */
+  private readonly ghosts = new Map<EditMesh, { visual: Visual; version: number; world: Mat4 }>()
+  private unsubscribeGhosts: (() => void) | null = null
   private selected: Node3D | null = null
   private selection = new Set<Node3D>()
   private anchor: Node3D | null = null
@@ -327,6 +330,7 @@ export class EditorSession {
       this.publishProject()
     }
     this.camera.onDrag = (dragging) => (dragging ? this.beginDrag() : this.endDrag())
+    this.unsubscribeGhosts = this.engine.signals.onRender.subscribe(() => this.placeGhosts(), 40)
     this.camera.onDrawBox = (box) => void this.addDrawnBox(box)
     this.camera.onClick = (x, y, mode) => {
       if (!this._root) return
@@ -444,6 +448,12 @@ export class EditorSession {
   }
 
   dispose(): void {
+    this.unsubscribeGhosts?.()
+    for (const ghost of this.ghosts.values()) {
+      this.engine.scene.remove(ghost.visual)
+      this.engine.renderer?.release(ghost.visual.geometry)
+    }
+    this.ghosts.clear()
     this.close()
     this.unsubscribeCommands()
     this.unsubscribeBlur()
@@ -1757,6 +1767,44 @@ export class EditorSession {
     this.record(`convert ${node.name} to mesh`, () => swap(mesh, node), () => swap(node, mesh))
   }
 
+  /**
+   * A hidden editable mesh that still collides is drawn as its edges in the
+   * collider colour, so the shape can be found and picked while editing; a
+   * visible one, or one that does not collide, has no ghost.
+   */
+  private placeGhosts(): void {
+    const root = this._root
+    const wanted = new Set<EditMesh>()
+    root?.walk((node) => {
+      if (node instanceof EditMesh && !node.visible && node.collide && (!(node.parent instanceof Node3D) || node.parent.isVisible)) wanted.add(node)
+    })
+    for (const [mesh, ghost] of this.ghosts) {
+      if (wanted.has(mesh)) continue
+      this.engine.scene.remove(ghost.visual)
+      this.engine.renderer?.release(ghost.visual.geometry)
+      this.ghosts.delete(mesh)
+    }
+    for (const mesh of wanted) {
+      const world = mesh.transform.worldMatrix
+      const ghost = this.ghosts.get(mesh)
+      if (ghost && ghost.version === mesh.version && ghost.world.equals(world)) continue
+      if (ghost) {
+        this.engine.scene.remove(ghost.visual)
+        this.engine.renderer?.release(ghost.visual.geometry)
+      }
+      const segments: number[] = []
+      const a = new Vector3(), b = new Vector3()
+      for (const [i, j] of mesh.edges()) {
+        world.transformPoint(mesh.vertexAt(i, a), a)
+        world.transformPoint(mesh.vertexAt(j, b), b)
+        segments.push(a.x, a.y, a.z, b.x, b.y, b.z)
+      }
+      const visual = DebugShapes.segments(new Float32Array(segments), GHOST_COLOUR)
+      this.engine.scene.add(visual)
+      this.ghosts.set(mesh, { visual, version: mesh.version, world: world.clone() })
+    }
+  }
+
   /** What the inspector can do with a node of this kind, as buttons. */
   private nodeActions(node: Node3D): { id: string; label: string; title: string }[] {
     if (node instanceof EditMesh) return [{ id: "collisionMesh", label: "Make collision mesh", title: "A separate mesh collider child with this shape's triangles, for its own layers or to keep when the shape changes; the mesh's own collider is turned off" }]
@@ -1983,3 +2031,6 @@ const sizeOf = (node: Node3D): Vector3 | null => (isSized(node) ? new Vector3(no
 
 /** The blocking-in prefabs: a mesh child with a colour and an opacity, which an editable mesh can take over. */
 const isPrimitive = (node: Node3D): node is Primitive => node instanceof Primitive
+
+/** The collider colour, for a hidden mesh's ghost outline. */
+const GHOST_COLOUR = 0xff00ff
