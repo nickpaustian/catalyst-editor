@@ -101,6 +101,8 @@ export interface EditorCells {
     parent: string | null
     /** The file a prefab instance follows, or null for any other node. */
     prefab: string | null
+    /** Buttons the inspector offers for this kind of node. */
+    actions: { id: string; label: string; title: string }[]
     position: { x: number; y: number; z: number }
     rotation: { x: number; y: number; z: number }
     properties: SelectionProperty[]
@@ -139,6 +141,7 @@ export type EditorCommand =
   | { type: "setTool"; tool: DrawTool | null }
   | { type: "addBoundsCollider" }
   | { type: "addMeshCollider" }
+  | { type: "nodeAction"; id: string }
   | { type: "convertToMesh" }
   | { type: "setVertexEdit"; on: boolean }
   | { type: "setEditMode"; mode: EditMode }
@@ -643,6 +646,7 @@ export class EditorSession {
       parent: node.parent instanceof Node3D && node.parent !== this._root ? node.parent.name : null,
       prefab: node instanceof Prefab ? node.url : null,
       scripts: this.selectionScripts(node),
+      actions: this.nodeActions(node),
       position: { x: round(p.x), y: round(p.y), z: round(p.z) },
       rotation: { x: round(degrees(e.x), 2), y: round(degrees(e.y), 2), z: round(degrees(e.z), 2) },
       properties: exposedProperties(node)
@@ -773,6 +777,9 @@ export class EditorSession {
         break
       case "addMeshCollider":
         this.addMeshCollider()
+        break
+      case "nodeAction":
+        this.runNodeAction(command.id)
         break
       case "convertToMesh":
         this.convertToMesh()
@@ -1748,6 +1755,48 @@ export class EditorSession {
     }
     swap(node, mesh)
     this.record(`convert ${node.name} to mesh`, () => swap(mesh, node), () => swap(node, mesh))
+  }
+
+  /** What the inspector can do with a node of this kind, as buttons. */
+  private nodeActions(node: Node3D): { id: string; label: string; title: string }[] {
+    if (node instanceof EditMesh) return [{ id: "collisionMesh", label: "Make collision mesh", title: "A separate mesh collider child with this shape's triangles, for its own layers or to keep when the shape changes; the mesh's own collider is turned off" }]
+    if (node instanceof Model) return [
+      { id: "boundsCollider", label: "Collider from bounds", title: "A box collider child fitted to the model" },
+      { id: "meshCollider", label: "Mesh collider", title: "A mesh collider child reading the model's file" },
+    ]
+    return []
+  }
+
+  private runNodeAction(id: string): void {
+    if (id === "collisionMesh") this.addCollisionMesh()
+    else if (id === "boundsCollider") this.addBoundsCollider()
+    else if (id === "meshCollider") this.addMeshCollider()
+  }
+
+  /** A mesh collider child holding a copy of the editable mesh's triangles, saved with the scene; the mesh's own collider steps aside. */
+  private addCollisionMesh(): void {
+    const node = this.selected
+    if (!(node instanceof EditMesh)) return
+    const held = node.collider.held
+    const collider = new MeshCollider({ name: "collision", triangles: { positions: Float32Array.from(held.positions), indices: held.indices ? Uint32Array.from(held.indices) : undefined }, visualise: this.visualised })
+    const hadCollide = node.collide
+    node.collide = false
+    node.addNode(collider)
+    if (this.visualised) collider.visualised = true
+    this.collapsed.delete(node)
+    const index = node.indexOf(collider)
+    this.record(
+      "make collision mesh",
+      () => {
+        collider.remove()
+        node.collide = hadCollide
+      },
+      () => {
+        node.insertNode(collider, index, collider.name)
+        node.collide = false
+      },
+    )
+    this.select(collider)
   }
 
   /** A mesh collider child reading the selected model's own file, so the physics world collides with its triangles. */

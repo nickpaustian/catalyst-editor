@@ -10,6 +10,9 @@
       <input class="node-name" type="text" aria-label="Node name" $model="state.name" @change="rename" />
       <span class="type">{{ shared['editor:selection'].type }}<span $if="shared['editor:selection'].count > 1"> · {{ shared['editor:selection'].count }} selected</span></span>
     </div>
+    <div class="actions" $if="shared['editor:selection'].actions && shared['editor:selection'].actions.length && shared['editor:selection'].count === 1">
+      <button class="button small" type="button" $for="action in shared['editor:selection'].actions" $key="action.id" $title="action.title" @click="runAction(action.id)">{{ action.label }}</button>
+    </div>
     <section class="section">
       <button class="section-header" type="button" $aria-expanded="state.transformOpen" @click="state.transformOpen = !state.transformOpen"><span class="title">Transform</span></button>
       <div class="section-body" $if="state.transformOpen">
@@ -248,6 +251,10 @@ function send(type: string) {
 // so a rename has to be a deliberate change
 function rename() {
   sendCommand({ type: 'rename', name: state.name })
+}
+
+function runAction(id: string) {
+  sendCommand({ type: 'nodeAction', id })
 }
 
 function applySelect(event: Event, field: Field) {
@@ -544,5 +551,11 @@ function apply() {
 .section.drop {
   box-shadow: inset 0 0 0 1px var(--cat-accent);
   border-radius: var(--cat-radius-sm);
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cat-space-1-5);
+  padding: 0 var(--cat-space-3) var(--cat-space-2);
 }
 </style>
