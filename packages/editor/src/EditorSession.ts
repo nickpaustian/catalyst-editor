@@ -87,7 +87,7 @@ export interface EditorCells {
   /** The project folder's files as a tree, for the files pane; empty with no project. */
   "editor:files": FileTree[]
   /** The file the files pane has selected: its size, when it changed, and a preview of an image. */
-  "editor:fileInfo": { path: string; size: number; modified: number; preview: string | null } | null
+  "editor:fileInfo": { path: string; size: number; modified: number; preview: string | null; facts: string } | null
   /** The script file open in the code pane: its text as last read or saved, and what happened on the last save. */
   "editor:code": { path: string | null; text: string; status: string }
   /** Bumped when everything should save: the code pane answers with its unsaved file. */
@@ -314,9 +314,11 @@ export class EditorSession {
       this.set("editor:running", false)
       if (this.app.shared("editor:project").value?.status === "running") this.publishProject()
     })
+    const unsubscribeFailed = this.runner.onFailed?.((reason) => this.publishProject(`the run window could not be opened: ${reason}`)) ?? (() => undefined)
     this.unsubscribeRunner = () => {
       unsubscribeReady()
       unsubscribeClosed()
+      unsubscribeFailed()
     }
     this.camera = new EditorCamera(this.engine)
     for (const { kind, cls } of this.recipe.kinds) if (!this.engine.registry.has(kind) && typeof cls === "function") this.engine.register({ [kind]: cls as NodeClass })
@@ -1258,7 +1260,7 @@ export class EditorSession {
           reader.readAsDataURL(file)
         })
       }
-      this.set("editor:fileInfo", { path, size: info.size, modified: info.modified, preview })
+      this.set("editor:fileInfo", { path, size: info.size, modified: info.modified, preview, facts: fileFacts(info.size, info.modified) })
     } catch {
       this.set("editor:fileInfo", null)
     }
@@ -2034,3 +2036,9 @@ const isPrimitive = (node: Node3D): node is Primitive => node instanceof Primiti
 
 /** The collider colour, for a hidden mesh's ghost outline. */
 const GHOST_COLOUR = 0xff00ff
+
+/** A file's size and date as the files pane shows them. */
+const fileFacts = (bytes: number, modified: number): string => {
+  const size = bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return modified ? `${size} · ${new Date(modified).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}` : size
+}

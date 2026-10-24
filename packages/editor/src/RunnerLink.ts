@@ -20,6 +20,8 @@ export interface RunnerLink {
   onReady(listener: () => void): () => void
   /** Hear that the runner window has gone, closed from either side. */
   onClosed(listener: () => void): () => void
+  /** Hear that the host could not make the runner window, with its reason. */
+  onFailed?(listener: (reason: string) => void): () => void
 }
 
 /** The runner's side: say it is ready, hear scenes. */

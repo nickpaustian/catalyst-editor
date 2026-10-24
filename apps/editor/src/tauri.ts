@@ -52,6 +52,7 @@ const fs: NativeFs = {
 const runnerLink = (): RunnerLink => {
   let runner: WebviewWindow | null = null
   const closed = new Set<() => void>()
+  const failed = new Set<(reason: string) => void>()
   const gone = () => {
     runner = null
     closed.forEach((listener) => listener())
@@ -62,9 +63,29 @@ const runnerLink = (): RunnerLink => {
     },
     open(url) {
       const target = new URL(url)
-      runner = new WebviewWindow(RUNNER_LABEL, { url: `${target.pathname}${target.search}`, title: "Catalyst · running", width: 1280, height: 800 })
-      void runner.once("tauri://destroyed", gone)
-      void runner.once("tauri://error", gone)
+      const make = () => {
+        const window = new WebviewWindow(RUNNER_LABEL, { url: `${target.pathname}${target.search}`, title: "Catalyst · running", width: 1280, height: 800 })
+        runner = window
+        void window.once("tauri://destroyed", () => {
+          if (runner === window) gone()
+        })
+        void window.once("tauri://error", (event) => {
+          const reason = typeof event.payload === "string" ? event.payload : JSON.stringify(event.payload)
+          console.error("[catalyst-editor] the run window could not be made:", reason)
+          failed.forEach((listener) => listener(reason))
+          if (runner === window) gone()
+        })
+      }
+      // A run window left from before this page reloaded still holds the label, and a second one with it is refused: close it first.
+      void WebviewWindow.getByLabel(RUNNER_LABEL)
+        .then(async (existing) => {
+          if (existing) {
+            runner = null
+            await existing.destroy().catch(() => undefined)
+          }
+          make()
+        })
+        .catch(make)
       return true
     },
     focus() {
@@ -83,6 +104,10 @@ const runnerLink = (): RunnerLink => {
     onClosed(listener) {
       closed.add(listener)
       return () => closed.delete(listener)
+    },
+    onFailed(listener) {
+      failed.add(listener)
+      return () => failed.delete(listener)
     },
   }
 }

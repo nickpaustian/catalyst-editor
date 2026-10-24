@@ -65,7 +65,7 @@
     <img class="preview" $if="shared['editor:fileInfo'].preview" $src="shared['editor:fileInfo'].preview" alt="" />
     <div class="facts">
       <span class="path mono">{{ shared['editor:fileInfo'].path }}</span>
-      <span class="dim">{{ size(shared['editor:fileInfo'].size) }}<template $if="shared['editor:fileInfo'].modified"> · {{ when(shared['editor:fileInfo'].modified) }}</template></span>
+      <span class="dim">{{ shared['editor:fileInfo'].facts }}</span>
     </div>
   </div>
 </aside>
@@ -190,16 +190,6 @@ function toggle(event: Event, row: Row) {
 function activate(row: Row) {
   if (row.kind === 'directory') return toggle(new Event('click'), row)
   if (SCRIPT.test(row.name)) sendCommand({ type: 'openFile', path: row.path })
-}
-
-function size(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function when(ms: number): string {
-  return new Date(ms).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
 }
 
 // ---- rename ----
