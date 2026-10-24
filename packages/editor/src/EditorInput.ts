@@ -9,6 +9,10 @@ export interface EditorInputHandlers {
   boxTool: () => void
   colliderTool: () => void
   vertexTool: () => void
+  vertexMode: () => void
+  edgeMode: () => void
+  faceMode: () => void
+  extrude: () => void
 }
 
 /** The editor's own key bindings on the engine's Helm, on while orbiting. */
@@ -22,6 +26,10 @@ export class EditorInput {
     boxTool: ["b"],
     colliderTool: ["v"],
     vertexTool: ["Tab"],
+    vertexMode: ["1"],
+    edgeMode: ["2"],
+    faceMode: ["3"],
+    extrude: ["x"],
   }
 
   private active = false

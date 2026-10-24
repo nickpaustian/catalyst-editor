@@ -12,6 +12,14 @@
   <button class="icon-button tool" type="button" title="Vertices (Tab): move the vertices of an editable mesh" aria-label="Vertices (Tab)" $aria-pressed="shared['editor:view'].vertexEdit" @click="setVertexEdit(!shared['editor:view'].vertexEdit)">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12 6 4l4 4 3-3-1.5 7z"/><circle cx="6" cy="4" r="1.4" fill="currentColor"/><circle cx="10" cy="8" r="1.4" fill="currentColor"/><circle cx="3" cy="12" r="1.4" fill="currentColor"/></svg>
   </button>
+  <template $if="shared['editor:view'].vertexEdit">
+    <span class="divider"></span>
+    <div class="segmented modes" role="radiogroup" aria-label="What the vertex tool picks">
+      <button type="button" role="radio" title="Vertices (1)" $aria-checked="shared['editor:view'].editMode === 'vertex'" @click="setEditMode('vertex')">vert</button>
+      <button type="button" role="radio" title="Edges (2)" $aria-checked="shared['editor:view'].editMode === 'edge'" @click="setEditMode('edge')">edge</button>
+      <button type="button" role="radio" title="Faces (3): X extrudes, ⌦ deletes" $aria-checked="shared['editor:view'].editMode === 'face'" @click="setEditMode('face')">face</button>
+    </div>
+  </template>
   <span class="divider"></span>
   <button class="icon-button tool" type="button" title="Draw box (B): drag a footprint on the ground, then set the height" aria-label="Draw box (B)" $aria-pressed="shared['editor:view'].tool === 'box'" @click="setTool('box')">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8 14 4.9v6.2L8 14.2 2 11.1V4.9z"/><path d="M2 4.9 8 8l6-3.1M8 8v6.2"/><path d="M11 13.5l1.5 1.5 2-2.5"/></svg>
@@ -42,6 +50,10 @@ function setTool(tool: string) {
 function setVertexEdit(on: boolean) {
   sendCommand({ type: 'setVertexEdit', on })
 }
+
+function setEditMode(mode: string) {
+  sendCommand({ type: 'setEditMode', mode })
+}
 </logic>
 
 <style>
@@ -62,6 +74,11 @@ function setVertexEdit(on: boolean) {
 .tool {
   width: 26px;
   height: 26px;
+}
+
+.modes {
+  align-self: center;
+  font-size: var(--cat-text-xs);
 }
 
 .divider {

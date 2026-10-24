@@ -3,7 +3,7 @@ import { Input } from "@nickpaustian/catalyst/input"
 import { BoxCollider, MeshCollider, Physics } from "@nickpaustian/catalyst/physics"
 import { EditMesh, Primitive } from "@nickpaustian/catalyst/prefabs"
 import type { LightspeedRuntime } from "@lightspeed-js/core"
-import { EditorCamera, groupTarget, type GizmoMode, isSized, type DrawTool, type DrawnBox } from "./EditorCamera"
+import { EditorCamera, groupTarget, type GizmoMode, isSized, type DrawTool, type DrawnBox, type EditMode } from "./EditorCamera"
 import { EditorInput } from "./EditorInput"
 import { History } from "./History"
 import { preferences, type SnapSettings, streamingQualityOf, type StreamingPreset } from "./preferences"
@@ -76,7 +76,7 @@ export interface EditorCells {
   "editor:history": { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
   /** The recipe's project-wide settings, or null when it has none. */
   "editor:settings": { title: string; fields: SelectionProperty[] } | null
-  "editor:view": { view: ViewMode; visualised: boolean; gizmo: GizmoMode; tool: DrawTool | null; vertexEdit: boolean; physics: boolean; scripts: boolean; snap: SnapSettings; streaming: StreamingPreset }
+  "editor:view": { view: ViewMode; visualised: boolean; gizmo: GizmoMode; tool: DrawTool | null; vertexEdit: boolean; editMode: EditMode; physics: boolean; scripts: boolean; snap: SnapSettings; streaming: StreamingPreset }
   "editor:tree": TreeRow[]
   /** The kinds the tree can add, as the class hierarchy they sit in: bases that are not kinds are shown but cannot be added. */
   "editor:kinds": KindNode[]
@@ -141,6 +141,8 @@ export type EditorCommand =
   | { type: "addMeshCollider" }
   | { type: "convertToMesh" }
   | { type: "setVertexEdit"; on: boolean }
+  | { type: "setEditMode"; mode: EditMode }
+  | { type: "extrude" }
   | { type: "setSnap"; snap: Partial<SnapSettings> }
   | { type: "setStreaming"; preset: StreamingPreset }
   | { type: "select"; id: number; mode?: SelectMode }
@@ -313,7 +315,7 @@ export class EditorSession {
     this.camera = new EditorCamera(this.engine)
     for (const { kind, cls } of this.recipe.kinds) if (!this.engine.registry.has(kind) && typeof cls === "function") this.engine.register({ [kind]: cls as NodeClass })
     const input = this.engine.find(Input)
-    this.input = input ? new EditorInput(input, { focusSelected: () => this.focusSelected(), deleteSelected: () => this.deleteSelected(), moveTool: () => this.setGizmo("translate"), rotateTool: () => this.setGizmo("rotate"), scaleTool: () => this.setGizmo("scale"), boxTool: () => this.setTool("box"), colliderTool: () => this.setTool("collider"), vertexTool: () => this.setVertexEdit(!this.camera.vertexEdit) }) : null
+    this.input = input ? new EditorInput(input, { focusSelected: () => this.focusSelected(), deleteSelected: () => this.deleteSelected(), moveTool: () => this.setGizmo("translate"), rotateTool: () => this.setGizmo("rotate"), scaleTool: () => this.setGizmo("scale"), boxTool: () => this.setTool("box"), colliderTool: () => this.setTool("collider"), vertexTool: () => this.setVertexEdit(!this.camera.vertexEdit), vertexMode: () => this.setEditMode("vertex"), edgeMode: () => this.setEditMode("edge"), faceMode: () => this.setEditMode("face"), extrude: () => this.extrude() }) : null
     const physics = this.engine.find(Physics)
     if (physics) physics.paused = true
     this.engine.scripts.setRunning(false, this.engine.root, this.engine)
@@ -333,7 +335,10 @@ export class EditorSession {
       if (this._root) this.selectMany(this.camera.nodesIn(rect, this._root), add)
     }
     this.unsubscribeCommands = this.app.shared("editor:command").subscribe((command) => {
-      if (command) void this.handle(command as EditorCommand)
+      if (command) void this.handle(command as EditorCommand).catch((error: unknown) => {
+        console.error(`[catalyst-editor] ${(command as EditorCommand).type} failed`, error)
+        this.publishProject(`${(command as EditorCommand).type} failed: ${error instanceof Error ? error.message : error}`)
+      })
     })
     const pause = () => this.engine.pause()
     const resume = () => this.engine.resume()
@@ -516,7 +521,7 @@ export class EditorSession {
   }
 
   private publishView(): void {
-    this.set("editor:view", { view: this.view, visualised: this.visualised, gizmo: this.gizmo, tool: this.camera.tool, vertexEdit: this.camera.vertexEdit, physics: !(this.engine.find(Physics)?.paused ?? true), scripts: this.engine.scripts.running, snap: this.snap, streaming: this.streaming })
+    this.set("editor:view", { view: this.view, visualised: this.visualised, gizmo: this.gizmo, tool: this.camera.tool, vertexEdit: this.camera.vertexEdit, editMode: this.camera.editMode, physics: !(this.engine.find(Physics)?.paused ?? true), scripts: this.engine.scripts.running, snap: this.snap, streaming: this.streaming })
   }
 
   //=========================
@@ -774,6 +779,12 @@ export class EditorSession {
         break
       case "setVertexEdit":
         this.setVertexEdit(command.on)
+        break
+      case "setEditMode":
+        this.setEditMode(command.mode)
+        break
+      case "extrude":
+        this.extrude()
         break
       case "setGizmo":
         this.setGizmo(command.mode)
@@ -1685,6 +1696,38 @@ export class EditorSession {
     this.publishView()
   }
 
+  /** What the vertex tool picks: vertices, edges or faces. The keys 1, 2 and 3 while the tool is on. */
+  private setEditMode(mode: EditMode): void {
+    if (!this.camera.vertexEdit) return
+    this.camera.editMode = mode
+    this.publishView()
+  }
+
+  /** A change to an editable mesh's vertices and faces together, as one undo step. */
+  private editMesh(label: string, change: (mesh: EditMesh) => void): void {
+    const mesh = this.selected
+    if (!(mesh instanceof EditMesh) || !this.camera.vertexEdit) return
+    const before = { vertices: mesh.vertices, faces: mesh.faces }
+    change(mesh)
+    const after = { vertices: mesh.vertices, faces: mesh.faces }
+    const put = (state: typeof before) => () => {
+      mesh.vertices = state.vertices
+      mesh.faces = state.faces
+      this.camera.clearElementSelection()
+    }
+    this.record(label, put(before), put(after))
+    this.publishSelection()
+  }
+
+  /** Extrude the picked faces (X): the new faces are picked afterwards, ready to be moved. */
+  private extrude(): void {
+    if (this.camera.editMode !== "face" || this.camera.selectedFaces.size === 0) return
+    this.editMesh("extrude", (mesh) => {
+      const made = mesh.extrudeFaces(this.camera.selectedFaces)
+      this.camera.selectFaces(made)
+    })
+  }
+
   /** The selected primitive becomes an editable mesh with the same shape, colour and place, in its place in the tree. */
   private convertToMesh(): void {
     const node = this.selected
@@ -1747,6 +1790,17 @@ export class EditorSession {
   }
 
   private deleteSelected(): void {
+    // In the vertex tool, Delete is for the picked elements; with none picked it does nothing rather than take the node.
+    if (this.camera.vertexEdit && this.selected instanceof EditMesh && !this.camera.hasElementSelection) return
+    if (this.camera.vertexEdit && this.selected instanceof EditMesh && this.camera.hasElementSelection) {
+      const mode = this.camera.editMode
+      this.editMesh(`delete ${mode === "vertex" ? "vertices" : mode === "edge" ? "edges" : "faces"}`, (mesh) => {
+        if (mode === "vertex") mesh.deleteVertices(this.camera.selectedVertices)
+        else if (mode === "edge") mesh.deleteEdges(this.camera.selectedEdges)
+        else mesh.deleteFaces(this.camera.selectedFaces)
+      })
+      return
+    }
     const nodes = this.selectionRoots()
     if (nodes.length === 0) return
     this.camera.detach()
