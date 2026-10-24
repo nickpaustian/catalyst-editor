@@ -21,6 +21,7 @@
         "resizable": true,
         "maximized": true,
         "visible": false,
+        "dragDropEnabled": false,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "trafficLightPosition": { "x": 16, "y": 23 }
@@ -33,6 +34,7 @@
         "height": 520,
         "resizable": false,
         "center": true,
+        "dragDropEnabled": false,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true
       }

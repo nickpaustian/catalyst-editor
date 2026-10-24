@@ -319,7 +319,7 @@ function dragStart(event: DragEvent, row: Row) {
   if (row.kind === 'creating' || !event.dataTransfer) return
   event.dataTransfer.setData('text/catalyst-file', row.path)
   event.dataTransfer.setData('text/plain', row.path)
-  event.dataTransfer.effectAllowed = 'copyMove'
+  event.dataTransfer.effectAllowed = 'all'
   if (row.kind === 'file') shared(DRAGGING_FILE_CELL).set(row.path)
 }
 

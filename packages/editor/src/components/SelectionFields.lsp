@@ -290,7 +290,7 @@ function fileOver(event: DragEvent, field: Field) {
 
 function droppedFile(event: DragEvent, field: Field): string | null {
   field.over = false
-  const path = event.dataTransfer?.getData('text/catalyst-file')
+  const path = dragging.value || event.dataTransfer?.getData('text/catalyst-file')
   if (!field.droppable || !path) return null
   event.preventDefault()
   event.stopPropagation()
