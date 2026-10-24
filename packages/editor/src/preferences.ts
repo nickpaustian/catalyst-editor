@@ -75,13 +75,21 @@ export class Preference<T> {
 }
 
 import { defaultStreamingQuality, type StreamingQuality } from "@nickpaustian/catalyst"
-import { isValidLayout, pane, split, type LayoutNode, type PaneKind } from "./panes/layout"
+import { addTabs, isSingleKindLayout, isValidLayout, leafOf, pane, split, upgradeLayout, type LayoutNode, type PaneKind } from "./panes/layout"
 
-export const PANE_KINDS: PaneKind[] = ["scene", "viewport", "inspector", "code", "files"]
+export const PANE_KINDS: PaneKind[] = ["scene", "viewport", "inspector", "environment", "code", "files"]
 
 /** Scene on the left, inspector on the right, the viewport between, as Godot lays it out. */
 export const defaultLayout = (): LayoutNode =>
-  split("row", [split("column", [pane("scene"), pane("files")], [0.6, 0.4]), pane("viewport"), pane("inspector")], [0.18, 0.6, 0.22])
+  split("row", [split("column", [pane("scene"), pane("files")], [0.6, 0.4]), pane("viewport"), pane("inspector", "environment")], [0.18, 0.6, 0.22])
+
+/** A tree saved before tabs had the environment inside the inspector, so it joins the inspector as a tab. */
+const storedLayout = (value: unknown): unknown => {
+  if (!isSingleKindLayout(value)) return value
+  const upgraded = upgradeLayout(value) as LayoutNode
+  const inspector = isValidLayout(upgraded, PANE_KINDS) ? leafOf(upgraded, "inspector") : null
+  return inspector ? addTabs(upgraded, inspector.id, ["environment"], inspector.active) : upgraded
+}
 
 const layout = new Preference<LayoutNode>({
   key: "layout-v2",
@@ -130,7 +138,8 @@ export const preferences = {
 
   /** The pane tree; a stored tree that no longer fits the known kinds falls back to the default. */
   get layout(): LayoutNode {
-    return isValidLayout(layout.value, PANE_KINDS) ? layout.value : defaultLayout()
+    const stored = storedLayout(layout.value)
+    return isValidLayout(stored, PANE_KINDS) ? stored : defaultLayout()
   },
   setLayout: layout.set,
   resetLayout: layout.reset,

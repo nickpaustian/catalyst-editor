@@ -2,16 +2,14 @@
 <aside class="panel">
   <SelectionFields />
 
-  <SceneSettings />
-
   <div id="recipe-sections"></div>
 </aside>
 </view>
 
 <logic lang="ts">
-// The inspector: what is selected, the project's settings, and a recipe's own
-// sections, mounted into #recipe-sections by the app. The scene tree is its
-// own pane (ScenePane).
+// The inspector: what is selected, and a recipe's own sections, mounted into
+// #recipe-sections by the app. The scene tree (ScenePane) and the project's
+// settings (EnvironmentPane) are panes of their own.
 export {}
 </logic>
 

@@ -31,6 +31,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       },
       viewport: { title: "Viewport", element: document.getElementById("app")! },
       inspector: { title: "Inspector", element: document.getElementById("editor-panel")! },
+      environment: { title: "Environment", element: document.getElementById("environment-panel")! },
       code: { title: "Code", element: document.getElementById("code-panel")! },
       files: {
         title: "Files",
@@ -45,6 +46,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   if (!(await app.mount("scenepane", "#scene-panel"))) throw new Error("ScenePane did not mount")
   if (!(await app.mount("editorpanel", "#editor-panel"))) throw new Error("EditorPanel did not mount")
+  if (!(await app.mount("environmentpane", "#environment-panel"))) throw new Error("EnvironmentPane did not mount")
   if (!(await app.mount("menubar", "#menu-bar"))) throw new Error("MenuBar did not mount")
   if (!(await app.mount("codepane", "#code-panel"))) throw new Error("CodePane did not mount")
   if (!(await app.mount("filespane", "#files-panel"))) throw new Error("FilesPane did not mount")

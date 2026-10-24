@@ -1,7 +1,10 @@
 <view>
-<section class="section" $if="shared['editor:settings']">
-  <button class="section-header" type="button" $aria-expanded="state.open" @click="state.open = !state.open"><span class="title">{{ shared['editor:settings'].title }}</span></button>
-  <div class="section-body" $if="state.open">
+<aside class="panel">
+  <div class="empty-state" $if="!shared['editor:settings']">
+    <span class="what">No project open</span>
+    <span class="how">The scene's lighting and sky are set here.</span>
+  </div>
+  <div class="settings" $else>
     <div class="properties">
       <template $for="field in state.fields" $key="field.key">
         <label class="label" $class="{ scrub: field.type === 'number' }" $title="field.label" @pointerdown="scrubField($event, field)">{{ field.label }}</label>
@@ -29,7 +32,7 @@
       </template>
     </div>
   </div>
-</section>
+</aside>
 </view>
 
 <logic lang="ts">
@@ -42,7 +45,7 @@ interface Field { key: string; label: string; type: string; value: unknown; min?
 
 const settings = shared('editor:settings', null)
 const dragging = shared(DRAGGING_FILE_CELL, null)
-const state = reactive({ fields: [] as Field[], open: true })
+const state = reactive({ fields: [] as Field[] })
 
 settings.subscribe((next: any) => {
   state.fields = (next?.fields ?? []).map((field: Field) => ({ ...field, ranged: field.type === 'number' && field.min !== undefined && field.max !== undefined, hex: field.type === 'colour' ? toHex(field.value) : undefined, ...fileDisplay(field) }))
@@ -139,6 +142,20 @@ function scrubField(event: PointerEvent, field: Field) {
 </logic>
 
 <style>
+.panel {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  background: var(--cat-bg-panel);
+  color: var(--cat-text-primary);
+  font: var(--cat-text-sm) / var(--cat-leading-body) var(--cat-font-ui);
+}
+
+.settings {
+  padding: var(--cat-space-3);
+}
+
 .control > .well:not(.colour) {
   flex: 1 1 auto;
 }

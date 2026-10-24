@@ -101,6 +101,7 @@ body.pane-dragging {
 }
 
 .pane-header {
+  position: relative;
   flex: 0 0 var(--pane-header);
   display: flex;
   align-items: center;
@@ -119,6 +120,66 @@ body.pane-dragging {
 
 body.pane-dragging .pane-header {
   cursor: grabbing;
+}
+
+// Stacked panes trade the title for tabs on the app background; the shown
+// tab takes the panel's colour so it joins the body, with an accent top line
+.pane-header.tabbed {
+  align-items: stretch;
+  padding-left: 0;
+  background: var(--cat-bg-app);
+}
+
+.pane-header.tabbed .pane-actions {
+  align-items: center;
+}
+
+.pane-tabs {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.pane-tab {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--cat-space-3);
+  margin-bottom: -1px;
+  border-right: 1px solid var(--cat-border-subtle);
+  color: var(--cat-text-tertiary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pane-tab:hover {
+  color: var(--cat-text-secondary);
+}
+
+.pane-tab[aria-selected="true"] {
+  border-right-color: var(--cat-border);
+  background: var(--cat-bg-panel);
+  box-shadow: inset 0 1px 0 var(--cat-accent);
+  color: var(--cat-text-primary);
+}
+
+.pane-tab:focus-visible {
+  outline: 1px solid var(--cat-accent);
+  outline-offset: -1px;
+}
+
+body.pane-dragging .pane-tab {
+  cursor: grabbing;
+}
+
+.pane-tab-marker {
+  position: absolute;
+  top: var(--cat-space-1);
+  bottom: var(--cat-space-1);
+  width: 2px;
+  margin-left: -1px;
+  background: var(--cat-accent);
+  pointer-events: none;
+  z-index: 10;
 }
 
 .pane-actions {

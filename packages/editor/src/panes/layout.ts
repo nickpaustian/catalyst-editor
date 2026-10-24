@@ -3,7 +3,10 @@ export type PaneKind = string
 export interface PaneLeaf {
   type: "pane"
   id: string
-  kind: PaneKind
+  /** The kinds stacked in the pane as tabs, in order. */
+  kinds: PaneKind[]
+  /** The tab shown. */
+  active: PaneKind
 }
 
 export interface PaneSplit {
@@ -25,7 +28,7 @@ let counter = 0
 export const newId = (prefix: string): string =>
   `${prefix}-${Date.now().toString(36)}-${(counter++).toString(36)}`
 
-export const pane = (kind: PaneKind): PaneLeaf => ({ type: "pane", id: newId("pane"), kind })
+export const pane = (...kinds: PaneKind[]): PaneLeaf => ({ type: "pane", id: newId("pane"), kinds, active: kinds[0] })
 
 export const split = (
   direction: PaneSplit["direction"],
@@ -44,6 +47,38 @@ export const leaves = (node: LayoutNode): PaneLeaf[] =>
 
 export const findLeaf = (node: LayoutNode, id: string): PaneLeaf | null =>
   leaves(node).find((leaf) => leaf.id === id) ?? null
+
+export const leafOf = (node: LayoutNode, kind: PaneKind): PaneLeaf | null =>
+  leaves(node).find((leaf) => leaf.kinds.includes(kind)) ?? null
+
+const updateLeaf = (node: LayoutNode, id: string, change: Partial<PaneLeaf>): LayoutNode => {
+  if (node.type === "pane") return node.id === id ? { ...node, ...change } : node
+  return { ...node, children: node.children.map((child) => updateLeaf(child, id, change)) }
+}
+
+export const activate = (node: LayoutNode, kind: PaneKind): LayoutNode => {
+  const leaf = leafOf(node, kind)
+  return leaf && leaf.active !== kind ? updateLeaf(node, leaf.id, { active: kind }) : node
+}
+
+/** Take a kind out of the pane holding it, showing its neighbour; a pane left with no tabs is removed. */
+export const detachKind = (node: LayoutNode, kind: PaneKind): LayoutNode | null => {
+  const leaf = leafOf(node, kind)
+  if (!leaf) return node
+  if (leaf.kinds.length === 1) return removePane(node, leaf.id)
+  const kinds = leaf.kinds.filter((k) => k !== kind)
+  const active = leaf.active === kind ? kinds[Math.min(leaf.kinds.indexOf(kind), kinds.length - 1)] : leaf.active
+  return updateLeaf(node, leaf.id, { kinds, active })
+}
+
+/** Stack kinds into the pane `targetId` as tabs at `index` (the end without one), showing `active`. */
+export const addTabs = (node: LayoutNode, targetId: string, kinds: PaneKind[], active: PaneKind, index?: number): LayoutNode => {
+  const target = findLeaf(node, targetId)
+  if (!target) return node
+  const rest = target.kinds.filter((kind) => !kinds.includes(kind))
+  const at = Math.max(0, Math.min(index ?? rest.length, rest.length))
+  return updateLeaf(node, targetId, { kinds: [...rest.slice(0, at), ...kinds, ...rest.slice(at)], active })
+}
 
 export const normalise = (sizes: number[]): number[] => {
   const total = sizes.reduce((sum, size) => sum + size, 0) || 1
@@ -142,36 +177,29 @@ export const insertBeside = (
   }
 }
 
-export const swapPanes = (node: LayoutNode, a: string, b: string): LayoutNode => {
-  const leafA = findLeaf(node, a)
-  const leafB = findLeaf(node, b)
-  if (!leafA || !leafB) return node
-  const replace = (current: LayoutNode): LayoutNode => {
-    if (current.type === "pane") {
-      if (current.id === a) return { ...current, kind: leafB.kind }
-      if (current.id === b) return { ...current, kind: leafA.kind }
-      return current
-    }
-    return { ...current, children: current.children.map(replace) }
-  }
-  return replace(node)
-}
-
+/**
+ * Move the pane `draggedId`, or only its tab `kind`, to the pane `targetId`:
+ * beside it on an edge zone, or stacked into it as tabs on the centre, at
+ * `index` among its tabs when one is given.
+ */
 export const movePane = (
   node: LayoutNode,
   draggedId: string,
   targetId: string,
   zone: DropZone,
+  kind?: PaneKind,
+  index?: number,
 ): LayoutNode => {
-  if (draggedId === targetId) return node
-  if (zone === "centre") return swapPanes(node, draggedId, targetId)
   const dragged = findLeaf(node, draggedId)
   if (!dragged) return node
-  const direction = zone === "left" || zone === "right" ? "row" : "column"
-  const extent = inSplitOf(node, draggedId, direction) ? extentOf(node, draggedId, direction) : null
-  const without = removePane(node, draggedId)
+  const whole = !kind || dragged.kinds.length === 1
+  if (draggedId === targetId && (whole || (zone === "centre" && index === undefined))) return node
+  const without = whole ? removePane(node, draggedId) : detachKind(node, kind!)
   if (!without) return node
-  return insertBeside(without, targetId, zone, dragged, extent)
+  if (zone === "centre") return addTabs(without, targetId, whole ? dragged.kinds : [kind!], whole ? dragged.active : kind!, index)
+  const direction = zone === "left" || zone === "right" ? "row" : "column"
+  const extent = whole && inSplitOf(node, draggedId, direction) ? extentOf(node, draggedId, direction) : null
+  return insertBeside(without, targetId, zone, whole ? dragged : pane(kind!), extent)
 }
 
 export const resize = (node: LayoutNode, splitId: string, sizes: number[]): LayoutNode => {
@@ -180,15 +208,18 @@ export const resize = (node: LayoutNode, splitId: string, sizes: number[]): Layo
   return { ...node, children: node.children.map((child) => resize(child, splitId, sizes)) }
 }
 
-/** True when every leaf names a known kind and no kind appears twice. */
+/** True when every pane holds known kinds, shows one of them, and no kind appears twice. */
 export const isValidLayout = (node: unknown, kinds: Iterable<PaneKind>): node is LayoutNode => {
   const known = new Set(kinds)
   const seen = new Set<PaneKind>()
   const check = (value: any): boolean => {
     if (!value || typeof value !== "object" || typeof value.id !== "string") return false
     if (value.type === "pane") {
-      if (!known.has(value.kind) || seen.has(value.kind)) return false
-      seen.add(value.kind)
+      if (!Array.isArray(value.kinds) || value.kinds.length === 0 || !value.kinds.includes(value.active)) return false
+      for (const kind of value.kinds) {
+        if (!known.has(kind) || seen.has(kind)) return false
+        seen.add(kind)
+      }
       return true
     }
     if (value.type !== "split") return false
@@ -198,4 +229,20 @@ export const isValidLayout = (node: unknown, kinds: Iterable<PaneKind>): node is
     return value.children.every(check)
   }
   return check(node)
+}
+
+/** Whether a stored tree is from before panes held tabs, when each named one `kind`. */
+export const isSingleKindLayout = (node: any): boolean =>
+  Boolean(node && typeof node === "object") &&
+  (node.type === "pane" ? typeof node.kind === "string" : Array.isArray(node.children) && node.children.some(isSingleKindLayout))
+
+/** A tree from before tabs, with each pane holding its one kind as a tab. */
+export const upgradeLayout = (node: any): unknown => {
+  if (!node || typeof node !== "object") return node
+  if (node.type === "pane" && typeof node.kind === "string") {
+    const { kind, ...rest } = node
+    return { ...rest, kinds: [kind], active: kind }
+  }
+  if (node.type === "split" && Array.isArray(node.children)) return { ...node, children: node.children.map(upgradeLayout) }
+  return node
 }
