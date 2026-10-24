@@ -5,6 +5,9 @@ export interface EditorInputHandlers {
   deleteSelected: () => void
   moveTool: () => void
   rotateTool: () => void
+  scaleTool: () => void
+  boxTool: () => void
+  colliderTool: () => void
 }
 
 /** The editor's own key bindings on the engine's Helm, on while orbiting. */
@@ -14,6 +17,9 @@ export class EditorInput {
     deleteSelected: ["delete", "backspace"],
     moveTool: ["w"],
     rotateTool: ["e"],
+    scaleTool: ["r"],
+    boxTool: ["b"],
+    colliderTool: ["v"],
   }
 
   private active = false

@@ -45,6 +45,7 @@
         <hr />
         <button class="menu-item" role="menuitemcheckbox" $class="{ on: shared['editor:view'].gizmo === 'translate' }" $aria-checked="shared['editor:view'].gizmo === 'translate'" @click="setGizmo('translate')">Gizmo: translate</button>
         <button class="menu-item" role="menuitemcheckbox" $class="{ on: shared['editor:view'].gizmo === 'rotate' }" $aria-checked="shared['editor:view'].gizmo === 'rotate'" @click="setGizmo('rotate')">Gizmo: rotate</button>
+        <button class="menu-item" role="menuitemcheckbox" $class="{ on: shared['editor:view'].gizmo === 'scale' }" $aria-checked="shared['editor:view'].gizmo === 'scale'" @click="setGizmo('scale')">Gizmo: scale</button>
         <hr />
         <button class="menu-item" role="menuitemcheckbox" $class="{ on: shared['editor:view'].snap.enabled }" $aria-checked="shared['editor:view'].snap.enabled" @click="setSnap({ enabled: !shared['editor:view'].snap.enabled })">Snap <span class="dim">hold ⇧ for the opposite</span></button>
         <div class="choices">

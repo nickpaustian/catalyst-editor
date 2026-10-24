@@ -1,4 +1,4 @@
-import { Mat4, Material, Quaternion, Ray, Vector3, Visual, Node3D as Node3DClass, cylinderGeometry, mergeGeometry, torusGeometry, type Catalyst, type Node3D, type ViewPose, type Geometry } from "@nickpaustian/catalyst"
+import { DebugShapes, Mat4, Material, Node3D as Node3DClass, Quaternion, Ray, Vector3, Visual, boxGeometry, cylinderGeometry, mergeGeometry, torusGeometry, type Catalyst, type Geometry, type Node3D, type ViewPose } from "@nickpaustian/catalyst"
 import { pickMesh } from "@nickpaustian/obelisk"
 
 const CLICK_DISTANCE = 4
@@ -27,14 +27,41 @@ const screenRect = (from: { x: number; y: number }, to: { clientX: number; clien
   bottom: Math.max(from.y, to.clientY),
 })
 
-export type GizmoMode = "translate" | "rotate"
+export type GizmoMode = "translate" | "rotate" | "scale"
 type Axis = "x" | "y" | "z"
+/** A gizmo handle: an axis, or the centre cube that scales every axis at once. */
+type Handle = Axis | "all"
+/** What the viewport's pointer does besides selecting: nothing, or drawing a box or a collider volume on the ground. */
+export type DrawTool = "box" | "collider"
+
+/** A box the draw tool finished: its kind, centre and size in world units. */
+export interface DrawnBox {
+  kind: DrawTool
+  centre: Vector3
+  size: Vector3
+}
 
 /** Anything the gizmo can drive: a node, a control point, a marker. */
 export interface GizmoTarget {
   position: () => Vector3
   rotation?: () => Quaternion
   apply: (position: Vector3, rotation: Quaternion) => void
+  /** The per-axis size the scale gizmo multiplies: a box's dimensions, or a transform's scale. Without it the scale gizmo does nothing. */
+  size?: () => Vector3
+  resize?: (size: Vector3) => void
+}
+
+/** A node with dimensions of its own: a box or a box collider; the scale gizmo sizes those rather than the transform. */
+export interface Sized {
+  width: number
+  height: number
+  depth: number
+  resize: (width: number, height: number, depth: number) => unknown
+}
+
+export const isSized = (node: object): node is Sized => {
+  const n = node as Partial<Sized>
+  return typeof n.width === "number" && typeof n.height === "number" && typeof n.depth === "number" && typeof n.resize === "function"
 }
 
 export const nodeTarget = (node: Node3D): GizmoTarget => ({
@@ -43,6 +70,11 @@ export const nodeTarget = (node: Node3D): GizmoTarget => ({
   apply: (position, rotation) => {
     node.transform.setWorldPosition(position)
     node.transform.setWorldRotation(rotation)
+  },
+  size: () => (isSized(node) ? new Vector3(node.width, node.height, node.depth) : node.transform.scale.clone()),
+  resize: (size) => {
+    if (isSized(node)) node.resize(size.x, size.y, size.z)
+    else node.transform.scale.copy(size)
   },
 })
 
@@ -67,18 +99,28 @@ const HOVER_COLOUR = 0xffe14d
 const UP = new Vector3(0, 1, 0)
 const UNIT = new Vector3(1, 1, 1)
 
-/** The handle for one axis: a shaft with a cone head for moving, a tube ring for turning, built standing on y and turned onto its axis. */
+/** The handle for one axis: a shaft with a cone head for moving, a tube ring for turning, a shaft with a cube for sizing, built standing on y and turned onto its axis. */
 const buildHandle = (mode: GizmoMode, axis: Axis): Geometry => {
   const onAxis = new Mat4().composeTRS(new Vector3(), new Quaternion().setFromUnitVectors(UP, AXES[axis]), UNIT)
   if (mode === "rotate") return mergeGeometry([{ mesh: torusGeometry(1, 0.022, 10, 64), matrix: onAxis }])
   const shaft = cylinderGeometry(0.016, 0.016, 0.8, 12)
-  const head = cylinderGeometry(0, 0.07, 0.24, 20)
+  const head = mode === "scale" ? boxGeometry(0.13, 0.13, 0.13) : cylinderGeometry(0, 0.07, 0.24, 20)
   const along = (y: number) => new Mat4().multiply(onAxis, new Mat4().composeTRS(new Vector3(0, y, 0), new Quaternion(), UNIT))
   return mergeGeometry([
     { mesh: shaft, matrix: along(0.4) },
-    { mesh: head, matrix: along(0.88) },
+    { mesh: head, matrix: along(mode === "scale" ? 0.86 : 0.88) },
   ])
 }
+
+/** The cube at the pivot that scales all three axes together. */
+const buildCentre = (): Geometry => boxGeometry(0.12, 0.12, 0.12)
+const CENTRE_COLOUR = 0xd8dde6
+/** The centre handle's reach on screen. */
+const CENTRE_PIXELS = 9
+/** Pixels of pointer travel that double a uniform scale. */
+const SCALE_PIXELS = 120
+/** The smallest size a drag leaves a box. */
+const MIN_SIZE = 0.01
 
 const distanceToSegment = (px: number, py: number, ax: number, ay: number, bx: number, by: number): number => {
   const dx = bx - ax, dy = by - ay
@@ -111,9 +153,15 @@ export class EditorCamera implements ViewPose {
   private readonly engine: Catalyst
   private readonly canvas: HTMLCanvasElement
   private gizmoMode: GizmoMode = "translate"
+  private centre3: Visual | null = null
+  private readonly centreMaterial = new Material({ colour: CENTRE_COLOUR })
+  private drawTool: DrawTool | null = null
+  private drawing: { phase: "footprint" | "height"; a: Vector3; b: Vector3; height: number; preview: Visual } | null = null
+  /** Called with the box a draw finished. */
+  onDrawBox: ((box: DrawnBox) => void) | null = null
   private gizmo: Record<Axis, Visual> | null = null
   private readonly handleMaterials: Record<Axis, Material> = { x: new Material({ colour: AXIS_COLOURS.x, name: "gizmo x" }), y: new Material({ colour: AXIS_COLOURS.y, name: "gizmo y" }), z: new Material({ colour: AXIS_COLOURS.z, name: "gizmo z" }) }
-  private hovered: Axis | null = null
+  private hovered: Handle | null = null
   private snapMove: number | null = null
   private snapRotate: number | null = null
   private readonly pivotPosition = new Vector3()
@@ -127,7 +175,8 @@ export class EditorCamera implements ViewPose {
   private press: { x: number; y: number; at: number; button: number } | null = null
   private marquee: { x: number; y: number; add: boolean; box: HTMLDivElement | null } | null = null
   private orbiting: { kind: "orbit" | "pan"; x: number; y: number } | null = null
-  private drag: { axis: Axis; startValue: number; position: Vector3; rotation: Quaternion } | null = null
+  private drag: { axis: Handle; startValue: number; position: Vector3; rotation: Quaternion; size: Vector3 | null } | null = null
+  private sizedFlag = false
   private readonly ray = new Ray()
 
   constructor(engine: Catalyst) {
@@ -168,6 +217,7 @@ export class EditorCamera implements ViewPose {
     }
     this.active = true
     if (this.gizmo) for (const visual of Object.values(this.gizmo)) engine.scene.add(visual)
+    if (this.centre3) engine.scene.add(this.centre3)
   }
 
   /** Hand rendering back to whatever camera was active before. */
@@ -273,6 +323,7 @@ export class EditorCamera implements ViewPose {
   }
 
   private readonly onPressLost = (): void => {
+    if (this.drawing) return this.cancelDraw()
     const dragging = this.drag !== null
     this.press = null
     this.marquee?.box?.remove()
@@ -283,6 +334,12 @@ export class EditorCamera implements ViewPose {
   }
 
   private readonly onPointerDown = (event: PointerEvent): void => {
+    if (this.drawTool && event.button === 0) {
+      event.stopImmediatePropagation()
+      if (this.drawing) return this.stepDraw()
+      if (this.beginDraw(event.clientX, event.clientY)) this.listenPress()
+      return
+    }
     const handle = event.button === 0 ? this.handleAt(event.clientX, event.clientY) : null
     if (handle) {
       event.stopImmediatePropagation()
@@ -304,6 +361,7 @@ export class EditorCamera implements ViewPose {
   }
 
   private readonly onPointerMove = (event: PointerEvent): void => {
+    if (this.drawing) return this.moveDraw(event.clientX, event.clientY)
     if (this.drag) return this.moveDrag(event.clientX, event.clientY)
     const marquee = this.marquee
     if (marquee) {
@@ -328,6 +386,11 @@ export class EditorCamera implements ViewPose {
   }
 
   private readonly onPointerUp = (event: PointerEvent): void => {
+    // The footprint ends with the release; the height phase keeps hearing moves until the next click.
+    if (this.drawing) {
+      if (this.drawing.phase === "footprint") this.stepDraw()
+      return
+    }
     const press = this.press
     const marquee = this.marquee
     const dragging = this.drag !== null
@@ -351,6 +414,7 @@ export class EditorCamera implements ViewPose {
   }
 
   private readonly onHover = (event: PointerEvent): void => {
+    if (this.drawTool) return
     if (this.drag || this.orbiting || this.marquee) return
     const axis = this.handleAt(event.clientX, event.clientY)
     if (axis !== this.hovered) {
@@ -423,10 +487,13 @@ export class EditorCamera implements ViewPose {
 
   /** Put the gizmo on a node. */
   attach(node: Node3D, onChanged?: () => void): void {
+    this.sizedFlag = isSized(node)
     this.attachTarget(nodeTarget(node), onChanged)
+    this.sizedFlag = isSized(node)
   }
 
   attachTarget(target: GizmoTarget, onChanged?: () => void): void {
+    this.sizedFlag = false
     this.target = target
     this.onChanged = onChanged ?? null
     this.syncFromTarget()
@@ -444,12 +511,27 @@ export class EditorCamera implements ViewPose {
       return visual
     }
     this.colourGizmo()
+    this.buildCentre()
     return { x: make("x"), y: make("y"), z: make("z") }
+  }
+
+  /** The centre cube exists in scale mode only. */
+  private buildCentre(): void {
+    if (this.centre3) {
+      this.engine.scene.remove(this.centre3)
+      this.engine.renderer?.release(this.centre3.geometry)
+      this.centre3 = null
+    }
+    if (this.gizmoMode !== "scale") return
+    this.centre3 = new Visual(buildCentre(), this.centreMaterial)
+    this.centre3.overlay = true
+    if (this.active && this.gizmo) this.engine.scene.add(this.centre3)
   }
 
   /** The hovered handle in the highlight colour, the rest in their axis colours. */
   private colourGizmo(): void {
     for (const axis of ["x", "y", "z"] as Axis[]) this.handleMaterials[axis].setColour(axis === this.hovered ? HOVER_COLOUR : AXIS_COLOURS[axis])
+    this.centreMaterial.setColour(this.hovered === "all" ? HOVER_COLOUR : CENTRE_COLOUR)
   }
 
   detach(): void {
@@ -459,6 +541,11 @@ export class EditorCamera implements ViewPose {
         this.engine.renderer?.release(visual.geometry)
       }
       this.gizmo = null
+    }
+    if (this.centre3) {
+      this.engine.scene.remove(this.centre3)
+      this.engine.renderer?.release(this.centre3.geometry)
+      this.centre3 = null
     }
     this.target = null
     this.onChanged = null
@@ -494,6 +581,7 @@ export class EditorCamera implements ViewPose {
       this.engine.renderer?.release(visual.geometry)
       visual.geometry = buildHandle(this.gizmoMode, axis)
     }
+    this.buildCentre()
     this.placeGizmo()
   }
 
@@ -502,14 +590,126 @@ export class EditorCamera implements ViewPose {
     if (!this.gizmo) return
     const scale = this.gizmoScale()
     for (const visual of Object.values(this.gizmo)) visual.matrix.composeTRS(this.pivotPosition, IDENTITY, new Vector3(scale, scale, scale))
+    this.centre3?.matrix.composeTRS(this.pivotPosition, IDENTITY, new Vector3(scale, scale, scale))
+  }
+
+  //=========================
+  // Drawing boxes
+  //=========================
+
+  /** Which draw tool the pointer uses, or null to select and drag as usual. */
+  get tool(): DrawTool | null {
+    return this.drawTool
+  }
+
+  set tool(tool: DrawTool | null) {
+    if (tool === this.drawTool) return
+    this.cancelDraw()
+    this.drawTool = tool
+    this.canvas.style.cursor = tool ? "crosshair" : ""
+  }
+
+  get isDrawing(): boolean {
+    return this.drawing !== null
+  }
+
+  /** Where the pointer's ray meets the ground plane, snapped to the move grid; null when it looks away from it. */
+  private groundHit(clientX: number, clientY: number): Vector3 | null {
+    const ray = this.rayAt(clientX, clientY)
+    const hit = new Vector3()
+    if (ray.intersectPlane(new Vector3(0, 0, 0), UP, hit) === null) return null
+    return this.snapPoint(hit)
+  }
+
+  private snapPoint(point: Vector3): Vector3 {
+    const snap = this.snapMove
+    if (!snap) return point
+    return point.set(Math.round(point.x / snap) * snap, Math.round(point.y / snap) * snap, Math.round(point.z / snap) * snap)
+  }
+
+  private beginDraw(clientX: number, clientY: number): boolean {
+    const a = this.groundHit(clientX, clientY)
+    if (!a) return false
+    const preview = DebugShapes.box({ width: 1, height: 1, depth: 1, colour: this.drawTool === "collider" ? 0xffa64d : 0xffe14d })
+    this.engine.scene.add(preview)
+    this.drawing = { phase: "footprint", a, b: a.clone(), height: 0, preview }
+    this.placePreview()
+    return true
+  }
+
+  /** Footprint: the far corner follows the pointer on the ground. Height: the pointer's rise on a vertical plane through the corner it released on, facing the camera, so the top follows the pointer. */
+  private moveDraw(clientX: number, clientY: number): void {
+    const drawing = this.drawing
+    if (!drawing) return
+    if (drawing.phase === "footprint") {
+      const b = this.groundHit(clientX, clientY)
+      if (b) drawing.b.copy(b)
+    } else {
+      const ray = this.rayAt(clientX, clientY)
+      const forward = new Vector3(0, 0, -1).applyQuaternion(this.rotation)
+      const normal = new Vector3(forward.x, 0, forward.z)
+      if (normal.length() < 1e-6) return
+      normal.normalize()
+      const hit = new Vector3()
+      if (ray.intersectPlane(drawing.b, normal, hit) === null) return
+      let height = Math.max(0, hit.y)
+      if (this.snapMove) height = Math.round(height / this.snapMove) * this.snapMove
+      drawing.height = height
+    }
+    this.placePreview()
+  }
+
+  /** After the footprint, the height; after the height, the box. */
+  private stepDraw(): void {
+    const drawing = this.drawing
+    if (!drawing) return
+    if (drawing.phase === "footprint") {
+      const size = this.drawSize()
+      // A click without a drag is not a box.
+      if (size.x < MIN_SIZE || size.z < MIN_SIZE) return this.cancelDraw()
+      drawing.phase = "height"
+      drawing.height = this.snapMove ?? 1
+      this.placePreview()
+      return
+    }
+    const size = this.drawSize()
+    const centre = drawing.a.clone().addVector(drawing.b).scale(0.5)
+    centre.y = size.y / 2
+    const kind = this.drawTool ?? "box"
+    this.cancelDraw()
+    this.onDrawBox?.({ kind, centre, size })
+  }
+
+  private drawSize(): Vector3 {
+    const d = this.drawing!
+    return new Vector3(Math.abs(d.b.x - d.a.x), Math.max(d.height, d.phase === "height" ? MIN_SIZE : 0), Math.abs(d.b.z - d.a.z))
+  }
+
+  private placePreview(): void {
+    const drawing = this.drawing
+    if (!drawing) return
+    const size = this.drawSize()
+    const centre = drawing.a.clone().addVector(drawing.b).scale(0.5)
+    centre.y = size.y / 2
+    // The preview is a unit box: scaled to the size, flat while only the footprint is drawn.
+    drawing.preview.matrix.composeTRS(centre, IDENTITY, new Vector3(Math.max(size.x, 1e-4), Math.max(size.y, 1e-4), Math.max(size.z, 1e-4)))
+  }
+
+  cancelDraw(): void {
+    const drawing = this.drawing
+    if (!drawing) return
+    this.engine.scene.remove(drawing.preview)
+    this.engine.renderer?.release(drawing.preview.geometry)
+    this.drawing = null
+    this.unlistenPress()
   }
 
   private gizmoScale(): number {
     return Math.max(0.01, this.position.distanceTo(this.pivotPosition) * GIZMO_SCREEN_SIZE)
   }
 
-  /** The handle under a point on the canvas, by distance on screen to its lines. */
-  private handleAt(clientX: number, clientY: number): Axis | null {
+  /** The handle under a point on the canvas, by distance on screen to its lines; the centre cube first in scale mode. */
+  private handleAt(clientX: number, clientY: number): Handle | null {
     if (!this.gizmo || !this.target) return null
     const rect = this.canvas.getBoundingClientRect()
     const toScreen = (p: Vector3): [number, number] | null => {
@@ -518,11 +718,15 @@ export class EditorCamera implements ViewPose {
       return [rect.left + s.u * rect.width, rect.top + s.v * rect.height]
     }
     const scale = this.gizmoScale()
+    if (this.gizmoMode === "scale") {
+      const centre = toScreen(this.pivotPosition)
+      if (centre && Math.hypot(clientX - centre[0], clientY - centre[1]) <= CENTRE_PIXELS) return "all"
+    }
     let best: { axis: Axis; distance: number } | null = null
     for (const axis of ["x", "y", "z"] as Axis[]) {
       const a = AXES[axis]
       let distance = Infinity
-      if (this.gizmoMode === "translate") {
+      if (this.gizmoMode !== "rotate") {
         const from = toScreen(this.pivotPosition)
         const to = toScreen(this.pivotPosition.clone().addScaled(a, scale))
         if (from && to) distance = distanceToSegment(clientX, clientY, from[0], from[1], to[0], to[1])
@@ -543,19 +747,20 @@ export class EditorCamera implements ViewPose {
     return best?.axis ?? null
   }
 
-  private beginDrag(axis: Axis, clientX: number, clientY: number): void {
+  private beginDrag(axis: Handle, clientX: number, clientY: number): void {
     this.syncFromTarget()
-    this.drag = { axis, startValue: this.dragValue(axis, clientX, clientY) ?? 0, position: this.pivotPosition.clone(), rotation: this.pivotRotation.clone() }
+    this.drag = { axis, startValue: this.dragValue(axis, clientX, clientY) ?? 0, position: this.pivotPosition.clone(), rotation: this.pivotRotation.clone(), size: this.target?.size?.() ?? null }
     this.canvas.style.cursor = "grabbing"
     this.onDrag?.(true)
   }
 
-  /** Where the pointer is along the handle: the parameter along a translate axis, or the angle around a rotate axis. */
-  private dragValue(axis: Axis, clientX: number, clientY: number): number | null {
+  /** Where the pointer is along the handle: the parameter along a translate or scale axis, the angle around a rotate axis, or the pointer's travel for the centre cube. */
+  private dragValue(axis: Handle, clientX: number, clientY: number): number | null {
     const ray = this.rayAt(clientX, clientY)
+    if (axis === "all") return clientX - clientY
     const a = AXES[axis]
     const p = this.drag?.position ?? this.pivotPosition
-    if (this.gizmoMode === "translate") {
+    if (this.gizmoMode !== "rotate") {
       // The closest point of the pointer ray to the axis line, as a distance along the axis (Ericson's closest points of two lines).
       const r = p.clone().subVector(ray.origin)
       const b = a.dot(ray.direction)
@@ -577,6 +782,8 @@ export class EditorCamera implements ViewPose {
     if (!drag || !this.target) return
     const value = this.dragValue(drag.axis, clientX, clientY)
     if (value === null) return
+    if (this.gizmoMode === "scale") return this.scaleDrag(drag.axis, value)
+    if (drag.axis === "all") return
     const a = AXES[drag.axis]
     if (this.gizmoMode === "translate") {
       let delta = value - drag.startValue
@@ -596,6 +803,26 @@ export class EditorCamera implements ViewPose {
     this.target.apply(this.pivotPosition, this.pivotRotation)
     this.placeGizmo()
     this.onChanged?.()
+  }
+
+  /** An axis handle adds one to the factor per gizmo length the pointer travels along it; the centre cube doubles all three per `SCALE_PIXELS` of travel. */
+  private scaleDrag(axis: Handle, value: number): void {
+    const drag = this.drag
+    if (!drag || !drag.size || !this.target?.resize) return
+    const factor = axis === "all" ? Math.pow(2, (value - drag.startValue) / SCALE_PIXELS) : Math.max(0, 1 + (value - drag.startValue) / this.gizmoScale())
+    const factors = axis === "all" ? new Vector3(factor, factor, factor) : new Vector3(1, 1, 1)
+    if (axis !== "all") factors[axis] = factor
+    const size = new Vector3(drag.size.x * factors.x, drag.size.y * factors.y, drag.size.z * factors.z)
+    const snap = this.snapMove
+    const snapped = (n: number) => (snap && this.sizedTarget ? Math.max(snap, Math.round(n / snap) * snap) : Math.max(MIN_SIZE, n))
+    size.set(snapped(size.x), snapped(size.y), snapped(size.z))
+    this.target.resize(size)
+    this.onChanged?.()
+  }
+
+  /** Whether the target sizes a box rather than a transform; sizes snap to the move grid then. */
+  private get sizedTarget(): boolean {
+    return this.sizedFlag
   }
 
   private endDrag(): void {

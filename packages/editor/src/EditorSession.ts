@@ -1,8 +1,8 @@
 import { Mat4, Node3D, Prefab, Quaternion, Vector3, editorIcon, exposedProperties, readExposed, writeExposed, type Catalyst, type ExposedProperty, type NodeClass, type NodeJSON, type Script } from "@nickpaustian/catalyst"
 import { Input } from "@nickpaustian/catalyst/input"
-import { Physics } from "@nickpaustian/catalyst/physics"
+import { BoxCollider, Physics } from "@nickpaustian/catalyst/physics"
 import type { LightspeedRuntime } from "@lightspeed-js/core"
-import { EditorCamera, groupTarget, type GizmoMode } from "./EditorCamera"
+import { EditorCamera, groupTarget, type GizmoMode, isSized, type DrawTool, type DrawnBox } from "./EditorCamera"
 import { EditorInput } from "./EditorInput"
 import { History } from "./History"
 import { preferences, type SnapSettings, streamingQualityOf, type StreamingPreset } from "./preferences"
@@ -75,7 +75,7 @@ export interface EditorCells {
   "editor:history": { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
   /** The recipe's project-wide settings, or null when it has none. */
   "editor:settings": { title: string; fields: SelectionProperty[] } | null
-  "editor:view": { view: ViewMode; visualised: boolean; gizmo: GizmoMode; physics: boolean; scripts: boolean; snap: SnapSettings; streaming: StreamingPreset }
+  "editor:view": { view: ViewMode; visualised: boolean; gizmo: GizmoMode; tool: DrawTool | null; physics: boolean; scripts: boolean; snap: SnapSettings; streaming: StreamingPreset }
   "editor:tree": TreeRow[]
   /** The kinds the tree can add, as the class hierarchy they sit in: bases that are not kinds are shown but cannot be added. */
   "editor:kinds": KindNode[]
@@ -135,6 +135,8 @@ export type EditorCommand =
   | { type: "togglePhysics" }
   | { type: "toggleScripts" }
   | { type: "setGizmo"; mode: GizmoMode }
+  | { type: "setTool"; tool: DrawTool | null }
+  | { type: "addBoundsCollider" }
   | { type: "setSnap"; snap: Partial<SnapSettings> }
   | { type: "setStreaming"; preset: StreamingPreset }
   | { type: "select"; id: number; mode?: SelectMode }
@@ -229,7 +231,7 @@ export class EditorSession {
   private streaming: StreamingPreset = preferences.streaming
   private filesGeneration = 0
   private readonly history = new History()
-  private dragStart: { node: Node3D; before: Mat4 }[] | null = null
+  private dragStart: { node: Node3D; before: Mat4; size: Vector3 | null }[] | null = null
   private selected: Node3D | null = null
   private selection = new Set<Node3D>()
   private anchor: Node3D | null = null
@@ -306,7 +308,7 @@ export class EditorSession {
     this.camera = new EditorCamera(this.engine)
     for (const { kind, cls } of this.recipe.kinds) if (!this.engine.registry.has(kind) && typeof cls === "function") this.engine.register({ [kind]: cls as NodeClass })
     const input = this.engine.find(Input)
-    this.input = input ? new EditorInput(input, { focusSelected: () => this.focusSelected(), deleteSelected: () => this.deleteSelected(), moveTool: () => this.setGizmo("translate"), rotateTool: () => this.setGizmo("rotate") }) : null
+    this.input = input ? new EditorInput(input, { focusSelected: () => this.focusSelected(), deleteSelected: () => this.deleteSelected(), moveTool: () => this.setGizmo("translate"), rotateTool: () => this.setGizmo("rotate"), scaleTool: () => this.setGizmo("scale"), boxTool: () => this.setTool("box"), colliderTool: () => this.setTool("collider") }) : null
     const physics = this.engine.find(Physics)
     if (physics) physics.paused = true
     this.engine.scripts.setRunning(false, this.engine.root, this.engine)
@@ -315,6 +317,7 @@ export class EditorSession {
       this.publishProject()
     }
     this.camera.onDrag = (dragging) => (dragging ? this.beginDrag() : this.endDrag())
+    this.camera.onDrawBox = (box) => void this.addDrawnBox(box)
     this.camera.onClick = (x, y, mode) => {
       if (!this._root) return
       const node = this.camera.pick(x, y, this._root)
@@ -508,7 +511,7 @@ export class EditorSession {
   }
 
   private publishView(): void {
-    this.set("editor:view", { view: this.view, visualised: this.visualised, gizmo: this.gizmo, physics: !(this.engine.find(Physics)?.paused ?? true), scripts: this.engine.scripts.running, snap: this.snap, streaming: this.streaming })
+    this.set("editor:view", { view: this.view, visualised: this.visualised, gizmo: this.gizmo, tool: this.camera.tool, physics: !(this.engine.find(Physics)?.paused ?? true), scripts: this.engine.scripts.running, snap: this.snap, streaming: this.streaming })
   }
 
   //=========================
@@ -540,19 +543,23 @@ export class EditorSession {
 
   private beginDrag(): void {
     const nodes = this.selection.size > 1 ? this.selectionRoots() : this.selected ? [this.selected] : []
-    this.dragStart = nodes.map((node) => ({ node, before: node.transform.worldMatrix.clone() }))
+    this.dragStart = nodes.map((node) => ({ node, before: node.transform.worldMatrix.clone(), size: sizeOf(node) }))
   }
 
   private endDrag(): void {
     const start = this.dragStart
     this.dragStart = null
     if (!start || start.length === 0) return
-    const moves = start.map(({ node, before }) => ({ node, before, after: node.transform.worldMatrix.clone() }))
-    if (moves.every(({ before, after }) => before.equals(after))) return
+    const moves = start.map(({ node, before, size }) => ({ node, before, after: node.transform.worldMatrix.clone(), sizeBefore: size, sizeAfter: sizeOf(node) }))
+    if (moves.every(({ before, after, sizeBefore, sizeAfter }) => before.equals(after) && (!sizeBefore || !sizeAfter || sizeBefore.equals(sizeAfter)))) return
     const place = (which: "before" | "after") => () => {
-      for (const move of moves) move.node.transform.setWorldMatrix(move[which])
+      for (const move of moves) {
+        move.node.transform.setWorldMatrix(move[which])
+        const size = which === "before" ? move.sizeBefore : move.sizeAfter
+        if (size && isSized(move.node)) move.node.resize(size.x, size.y, size.z)
+      }
     }
-    this.record(this.gizmo === "rotate" ? "rotate" : "move", place("before"), place("after"))
+    this.record(this.gizmo === "rotate" ? "rotate" : this.gizmo === "scale" ? "scale" : "move", place("before"), place("after"))
     this.publishSelection()
   }
 
@@ -736,6 +743,12 @@ export class EditorSession {
       case "toggleScripts":
         this.engine.scripts.setRunning(!this.engine.scripts.running, this.engine.root, this.engine)
         this.publishView()
+        break
+      case "setTool":
+        this.setTool(command.tool)
+        break
+      case "addBoundsCollider":
+        this.addBoundsCollider()
         break
       case "setGizmo":
         this.setGizmo(command.mode)
@@ -1380,7 +1393,55 @@ export class EditorSession {
   private setGizmo(mode: GizmoMode): void {
     this.gizmo = mode
     this.camera.mode = mode
+    // A gizmo key leaves the draw tool.
+    this.camera.tool = null
     this.publishView()
+  }
+
+  /** The draw tools stay on between boxes; pressing the same tool's key again, or a gizmo key, leaves them. */
+  private setTool(tool: DrawTool | null): void {
+    this.camera.tool = this.camera.tool === tool ? null : tool
+    this.publishView()
+  }
+
+  /** The box the draw tool finished: a block with a collider, or a collider volume alone, under the selected node or the root. */
+  private async addDrawnBox(box: DrawnBox): Promise<void> {
+    const kind = box.kind === "collider" ? "BoxCollider" : "Box"
+    // Drawn in world space, so it goes at the root rather than under whatever is selected.
+    await this.addNode(kind, { width: round(box.size.x), height: round(box.size.y), depth: round(box.size.z) }, box.centre, this._root ?? undefined)
+  }
+
+  /** A box collider child fitted to the selected node's meshes, for a model that has no collision of its own. */
+  private addBoundsCollider(): void {
+    const node = this.selected
+    if (!node || node === this._root) return
+    const inverse = new Mat4().invert(node.transform.worldMatrix)
+    const min = new Vector3(Infinity, Infinity, Infinity), max = new Vector3(-Infinity, -Infinity, -Infinity)
+    const corner = new Vector3()
+    node.walk((child) => {
+      if (!(child instanceof Node3D)) return
+      for (const visual of child.attachedObjects) {
+        if (visual.isLines) continue
+        const b = (visual.geometry as { bounds?: { min: Vector3; max: Vector3 } }).bounds
+        if (!b) continue
+        for (let i = 0; i < 8; i++) {
+          corner.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z)
+          visual.matrix.transformPoint(corner, corner)
+          inverse.transformPoint(corner, corner)
+          min.set(Math.min(min.x, corner.x), Math.min(min.y, corner.y), Math.min(min.z, corner.z))
+          max.set(Math.max(max.x, corner.x), Math.max(max.y, corner.y), Math.max(max.z, corner.z))
+        }
+      }
+    })
+    if (!Number.isFinite(min.x)) return this.publishProject(`${node.name} has no mesh to fit a collider to`)
+    const collider = new BoxCollider({ name: "collider", width: round(max.x - min.x), height: round(max.y - min.y), depth: round(max.z - min.z), visualise: this.visualised })
+    collider.transform.position.set((min.x + max.x) / 2, (min.y + max.y) / 2, (min.z + max.z) / 2)
+    node.addNode(collider)
+    if (this.visualised) collider.visualised = true
+    this.collapsed.delete(node)
+    const index = node.indexOf(collider)
+    this.record("add collider from bounds", () => collider.remove(), () => node.insertNode(collider, index, collider.name))
+    this.select(collider)
   }
 
   private setView(view: ViewMode): void {
@@ -1589,8 +1650,8 @@ export class EditorSession {
   }
 
   /** New nodes go under the selected node (or the root), at the orbit target in world space. A kind that needs a file asks for it first. */
-  private async addNode(kind: string, given?: Record<string, unknown>): Promise<void> {
-    const parent = this.selected ?? this._root
+  private async addNode(kind: string, given?: Record<string, unknown>, at?: Vector3, under?: Node3D): Promise<void> {
+    const parent = under ?? this.selected ?? this._root
     const definition = kind.startsWith(PREFAB_KIND) ? this.prefabKind(kind.slice(PREFAB_KIND.length)) : this.recipe.kinds.find((k) => k.kind === kind)
     if (!parent || !definition) return
     let picked: Record<string, unknown> = given ?? {}
@@ -1600,10 +1661,10 @@ export class EditorSession {
       if (!result) return
       picked = result
     }
-    if (parent !== (this.selected ?? this._root)) return
+    if (parent !== (under ?? this.selected ?? this._root)) return
     const node = definition.make({ name: `${definition.kind.charAt(0).toLowerCase()}${definition.kind.slice(1)}`, visualise: this.visualised, ...picked })
     parent.addNode(node)
-    node.transform.setWorldPosition(this.camera.isActive ? this.camera.orbitTarget : new Vector3(0, 1, 0))
+    node.transform.setWorldPosition(at ?? (this.camera.isActive ? this.camera.orbitTarget : new Vector3(0, 1, 0)))
     if (this.visualised) node.visualised = true
     this.collapsed.delete(parent)
     const index = parent.indexOf(node)
@@ -1743,3 +1804,6 @@ export class EditorSession {
 
 const degrees = (radians: number): number => (radians * 180) / Math.PI
 const radians = (degrees: number): number => (degrees * Math.PI) / 180
+
+/** A box's dimensions, for undo; null for a node without them. */
+const sizeOf = (node: Node3D): Vector3 | null => (isSized(node) ? new Vector3(node.width, node.height, node.depth) : null)

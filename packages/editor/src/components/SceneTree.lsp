@@ -109,12 +109,13 @@ function context(event: MouseEvent, row: Row) {
   if (!row.selected) sendCommand({ type: 'select', id: row.id })
   // The selection cell has caught up by the next tick, so the menu reads it
   setTimeout(() => {
-    const picked = selection.value as { count: number; prefab: string | null } | null
+    const picked = selection.value as { count: number; prefab: string | null; type: string } | null
     const many = (picked?.count ?? 1) > 1
     const items: MenuItem[] = row.isRoot
       ? [{ label: 'Add node…', kbd: '⌘⇧A', run: () => addDialog.set(true) }]
       : [
           { label: 'Add child…', kbd: '⌘⇧A', run: () => addDialog.set(true) },
+          ...(picked?.type === 'Model' && !many ? [{ label: 'Add collider from bounds', run: () => sendCommand({ type: 'addBoundsCollider' }) }] : []),
           { label: 'Rename', disabled: many, run: () => startRename(event, row) },
           { label: 'Duplicate', kbd: '⌘D', run: () => sendCommand({ type: 'duplicate' }) },
           { label: 'Delete', kbd: '⌦', danger: true, run: () => sendCommand({ type: 'delete' }) },
