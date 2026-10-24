@@ -9,6 +9,7 @@ import { History } from "./History"
 import { preferences, type SnapSettings, streamingQualityOf, type StreamingPreset } from "./preferences"
 import { browserFolders, folderLoader, pickFile, type FolderSource, type ProjectFolder, type ProjectStorage, type RecentProject } from "./ProjectFolder"
 import { windowRunnerLink, type RunnerLink } from "./RunnerLink"
+import { AssetFolder } from "./AssetFolder"
 import { SCRIPTS_DIR, ScriptCompiler, scriptTemplate } from "./ScriptCompiler"
 import { LEGACY_PROJECT_FILE, PROJECT_EXTENSION, createProject, readProjectImage, readProjectSettings, writeProjectImage, writeProjectSettings, type NewProject, type ProjectSettings } from "./project"
 import { openConfirm } from "./confirm"
@@ -226,7 +227,7 @@ export class EditorSession {
   private readonly app: LightspeedRuntime
   private readonly camera: EditorCamera
   private readonly input: EditorInput | null
-  private folder: ProjectFolder | null = null
+  private folder: AssetFolder | null = null
   private settings: ProjectSettings | null = null
   private unwatch: (() => void) | null = null
   private watchTimer: ReturnType<typeof setTimeout> | null = null
@@ -307,7 +308,7 @@ export class EditorSession {
     this.runner = options.runner ?? windowRunnerLink()
     const unsubscribeReady = this.runner.onReady(() => {
       this.runnerReady = true
-      this.sendToRunner()
+      void this.sendToRunner()
     })
     const unsubscribeClosed = this.runner.onClosed(() => {
       this.runnerReady = false
@@ -386,8 +387,9 @@ export class EditorSession {
   }
 
   /** Put a project in the viewport: the folder's, or a fresh one when there is no folder. */
-  async open(folder: ProjectFolder | null): Promise<void> {
+  async open(source: ProjectFolder | null): Promise<void> {
     this.close()
+    const folder = source ? await AssetFolder.open(source) : null
     this.folder = folder
     this.settings = folder ? await readProjectSettings(folder) : null
     this.engine.loader = folder ? folderLoader(folder) : this.engine.loader
@@ -404,6 +406,7 @@ export class EditorSession {
     this.history.clear()
     this.publishSettings()
     this.publishProject(folder ? "" : "unsaved")
+    if (folder) await this.relinkAssets(folder)
     this.publishTree()
     this.select(null)
     this.camera.focusPoint(new Vector3(0, 0.5, 0), 8)
@@ -1002,6 +1005,7 @@ export class EditorSession {
       return
     }
     if (scene) this.askAboutSceneOnDisk()
+    await this.relinkAssets(folder)
     void this.publishFiles()
     const notes: string[] = []
     if (scripts.length) {
@@ -1048,7 +1052,7 @@ export class EditorSession {
   async run(): Promise<void> {
     if (!this._root) return
     if (this.runner.isOpen && this.runnerReady) {
-      this.sendToRunner()
+      void this.sendToRunner()
       this.runner.focus()
       return
     }
@@ -1059,9 +1063,10 @@ export class EditorSession {
     this.set("editor:running", true)
   }
 
-  private sendToRunner(): void {
+  private async sendToRunner(): Promise<void> {
     if (!this.runner.isOpen || !this._root) return
-    const scene = this.recipe.serialise?.(this._root, this.engine) ?? this.engine.serialise(this._root)
+    const live = this.recipe.serialise?.(this._root, this.engine) ?? this.engine.serialise(this._root)
+    const scene = this.folder ? await this.folder.toPaths(live) : live
     this.runner.send({ type: "catalyst:run", recipe: this.recipe.name, scene, folder: this.folder?.transfer() ?? null })
     this.publishProject("running")
   }
@@ -1089,9 +1094,10 @@ export class EditorSession {
       if (file) download(file.name, file.text)
       return
     }
-    const folder = await this.folders.pick()
-    if (!folder) return
-    if (!(await folder.ensurePermission())) return
+    const picked = await this.folders.pick()
+    if (!picked) return
+    if (!(await picked.ensurePermission())) return
+    const folder = await AssetFolder.open(picked)
     this.folder = folder
     await folder.remember()
     void this.publishRecent()
@@ -1206,9 +1212,62 @@ export class EditorSession {
       return this.publishProject(`${from} could not be renamed: ${error instanceof Error ? error.message : error}`)
     }
     this.publishProject(`renamed ${from} to ${to}`)
+    this.retarget(from, to)
     const code = this.app.shared("editor:code").value as EditorCells["editor:code"] | undefined
     if (code?.path === from) this.set("editor:code", { ...code, path: to })
     await this.loadScriptFiles()
+    await this.loadPrefabs()
+  }
+
+  /**
+   * Point everything in the open scene that names `from` (or a file under
+   * it, when it is a folder) at `to`: node and script fields, script files
+   * and the recipe's settings. Not an edit: the saved scene names the file
+   * by id, so it does not change.
+   */
+  private retarget(from: string, to: string): void {
+    const root = this._root
+    if (!root) return
+    const moved = (value: unknown): string | null => (typeof value === "string" && (value === from || value.startsWith(`${from}/`)) ? to + value.slice(from.length) : null)
+    const retargetFields = (target: object) => {
+      for (const property of exposedProperties(target)) {
+        if (property.type !== "string" && property.type !== "file") continue
+        const next = moved(readExposed(target, property))
+        if (next !== null && !property.readonly) writeExposed(target, property, next)
+      }
+    }
+    root.walk((node) => {
+      retargetFields(node)
+      for (const script of node.scripts) {
+        const url = moved(script.url)
+        if (url !== null) script.url = url
+        retargetFields(script)
+      }
+      for (const json of node.pendingScripts) {
+        const url = moved(json.url)
+        if (url !== null) json.url = url
+      }
+    })
+    const settings = this.recipe.settings
+    if (settings) {
+      const values = settings.read(this.engine, root)
+      for (const field of settings.fields) {
+        const next = field.type === "file" ? moved(values[field.key]) : null
+        if (next !== null) settings.write(this.engine, root, field.key, next)
+      }
+      this.publishSettings()
+    }
+    this.publishSelection()
+  }
+
+  /** Files the scene names that moved outside the editor, found again and pointed at; any still missing are named. */
+  private async relinkAssets(folder: AssetFolder): Promise<void> {
+    const relinked = await folder.relink().catch(() => [])
+    for (const { from, to } of relinked) this.retarget(from, to)
+    if (relinked.length) void this.publishFiles()
+    const missing = await folder.missing().catch(() => [])
+    const notes = [...relinked.map(({ from, to }) => `found ${from} at ${to}`), ...(missing.length ? [`missing: ${missing.join(", ")}`] : [])]
+    if (notes.length) this.publishProject(notes.join("; "))
   }
 
   /** Deleting asks first; the scene is not touched, so a node pointing at the file keeps its url. */

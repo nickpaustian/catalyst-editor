@@ -1,5 +1,6 @@
 import type { Catalyst, Node3D } from "@nickpaustian/catalyst"
 import { DebugOverlay, Node3D as Node3DClass } from "@nickpaustian/catalyst"
+import { AssetFolder } from "./AssetFolder"
 import { browserFolders, folderLoader, type FolderSource } from "./ProjectFolder"
 import type { Recipe } from "./recipe"
 import { windowRunnerPageLink, type RunMessage, type RunnerPageLink } from "./RunnerLink"
@@ -42,7 +43,7 @@ export class Runner {
 
   async play(message: RunMessage): Promise<void> {
     this.stop()
-    const folder = message.folder ? this.folders.fromTransfer(message.folder) : null
+    const folder = message.folder ? await AssetFolder.open(this.folders.fromTransfer(message.folder)) : null
     if (folder) this.engine.loader = folderLoader(folder)
     this.engine.scripts.invalidate()
     if (folder) this.engine.scripts.loader = new ScriptCompiler(folder).loader
