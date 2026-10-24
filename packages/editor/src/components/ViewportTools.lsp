@@ -9,6 +9,9 @@
   <button class="icon-button tool" type="button" title="Scale (R)" aria-label="Scale (R)" $aria-pressed="shared['editor:view'].gizmo === 'scale' && !shared['editor:view'].tool" @click="setGizmo('scale')">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 13.5 9 7"/><path d="M9.5 2.5h4v4"/><path d="M13.5 2.5 9 7"/><rect x="2.5" y="8.5" width="5" height="5"/></svg>
   </button>
+  <button class="icon-button tool" type="button" title="Vertices (Tab): move the vertices of an editable mesh" aria-label="Vertices (Tab)" $aria-pressed="shared['editor:view'].vertexEdit" @click="setVertexEdit(!shared['editor:view'].vertexEdit)">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12 6 4l4 4 3-3-1.5 7z"/><circle cx="6" cy="4" r="1.4" fill="currentColor"/><circle cx="10" cy="8" r="1.4" fill="currentColor"/><circle cx="3" cy="12" r="1.4" fill="currentColor"/></svg>
+  </button>
   <span class="divider"></span>
   <button class="icon-button tool" type="button" title="Draw box (B): drag a footprint on the ground, then set the height" aria-label="Draw box (B)" $aria-pressed="shared['editor:view'].tool === 'box'" @click="setTool('box')">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8 14 4.9v6.2L8 14.2 2 11.1V4.9z"/><path d="M2 4.9 8 8l6-3.1M8 8v6.2"/><path d="M11 13.5l1.5 1.5 2-2.5"/></svg>
@@ -34,6 +37,10 @@ function setGizmo(mode: string) {
 
 function setTool(tool: string) {
   sendCommand({ type: 'setTool', tool })
+}
+
+function setVertexEdit(on: boolean) {
+  sendCommand({ type: 'setVertexEdit', on })
 }
 </logic>
 

@@ -2,7 +2,7 @@ import { Camera, Colour, Light, Model, Node3D, StreamedSurface, type AntiAliasin
 import { pickFile } from "../ProjectFolder"
 import { Interactable } from "@nickpaustian/catalyst/interaction"
 import { BoxCollider, CapsuleCollider, MeshCollider, SphereCollider } from "@nickpaustian/catalyst/physics"
-import { Box, Capsule, Cylinder, FirstPersonController, FocalPoint, FocalPointTrigger, OrbitCamera, PointOfInterest, Sphere, Wedge } from "@nickpaustian/catalyst/prefabs"
+import { Box, Capsule, Cylinder, EditMesh, FirstPersonController, FocalPoint, FocalPointTrigger, OrbitCamera, PointOfInterest, Sphere, Wedge } from "@nickpaustian/catalyst/prefabs"
 import type { ToneMapping } from "@nickpaustian/obelisk"
 import { Physics } from "@nickpaustian/catalyst/physics"
 import { Vector3 } from "@nickpaustian/catalyst"
@@ -98,6 +98,7 @@ export const sceneRecipe: Recipe = {
     { kind: "Box", label: "Box", cls: Box, description: "A block with a mesh and a matching collider: floors, walls, crates.", make: (o) => new Box(o) },
     { kind: "Sphere", label: "Sphere", cls: Sphere, description: "A ball with a mesh and a matching collider.", make: (o) => new Sphere(o) },
     { kind: "Capsule", label: "Capsule", cls: Capsule, description: "A pillar or a stand-in body with a mesh and a matching collider.", make: (o) => new Capsule(o) },
+    { kind: "EditMesh", label: "Mesh (editable)", cls: EditMesh, description: "A mesh whose vertices you move by hand with the vertex tool (Tab): starts as a cube. Any primitive can be converted to one from its menu.", make: (o) => new EditMesh(o) },
     { kind: "Cylinder", label: "Cylinder", cls: Cylinder, description: "A round pillar with a mesh collider the same shape, standing on y.", make: (o) => new Cylinder(o) },
     { kind: "Wedge", label: "Wedge", cls: Wedge, description: "A ramp with a mesh collider the same shape: full height along its back edge, sloping down to nothing at the front. Turn it to face the way it should rise.", make: (o) => new Wedge(o) },
     {

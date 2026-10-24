@@ -1,5 +1,6 @@
 import { DebugShapes, Mat4, Material, Node3D as Node3DClass, Quaternion, Ray, Vector3, Visual, boxGeometry, cylinderGeometry, mergeGeometry, torusGeometry, type Catalyst, type Geometry, type Node3D, type ViewPose } from "@nickpaustian/catalyst"
 import { pickMesh } from "@nickpaustian/obelisk"
+import { EditMesh } from "@nickpaustian/catalyst/prefabs"
 
 const CLICK_DISTANCE = 4
 const CLICK_MS = 400
@@ -120,6 +121,31 @@ const buildHandle = (mode: GizmoMode, axis: Axis): Geometry => {
 
 /** The cube at the pivot that scales all three axes together. */
 const buildCentre = (): Geometry => boxGeometry(0.12, 0.12, 0.12)
+/** A vertex of an editable mesh, as a small cube. */
+const buildVertex = (): Geometry => boxGeometry(0.1, 0.1, 0.1)
+/** A vertex's reach on screen. */
+const VERTEX_PIXELS = 8
+
+/** The gizmo on a set of a mesh's vertices: it sits at their centre and moves them together, in the mesh's own space. */
+export const vertexTarget = (mesh: EditMesh, indices: ReadonlySet<number>): GizmoTarget => {
+  const centre = () => {
+    const out = new Vector3()
+    const p = new Vector3()
+    const world = mesh.transform.worldMatrix
+    for (const i of indices) out.addVector(world.transformPoint(mesh.vertexAt(i, p), p))
+    return out.scale(1 / Math.max(1, indices.size))
+  }
+  return {
+    position: centre,
+    apply: (position) => {
+      const from = centre()
+      const inverse = new Mat4().invert(mesh.transform.worldMatrix)
+      const a = inverse.transformPoint(from, new Vector3())
+      const b = inverse.transformPoint(position, new Vector3())
+      mesh.moveVertices(indices, b.x - a.x, b.y - a.y, b.z - a.z)
+    },
+  }
+}
 const CENTRE_COLOUR = 0xd8dde6
 /** The centre handle's reach on screen. */
 const CENTRE_PIXELS = 9
@@ -167,6 +193,13 @@ export class EditorCamera implements ViewPose {
   private drawing: { phase: "footprint" | "height"; a: Vector3; b: Vector3; height: number; floor: number; preview: Visual } | null = null
   /** Called with the box a draw finished. */
   onDrawBox: ((box: DrawnBox) => void) | null = null
+  private _vertexEdit = false
+  private editMesh: EditMesh | null = null
+  private vertexHandles: Visual[] = []
+  private readonly vertexSelection = new Set<number>()
+  private readonly vertexMaterial = new Material({ colour: 0xd8dde6 })
+  private readonly vertexSelectedMaterial = new Material({ colour: HOVER_COLOUR })
+  private nodeOnGizmo: Node3D | null = null
   private gizmo: Record<Axis, Visual> | null = null
   private readonly handleMaterials: Record<Axis, Material> = { x: new Material({ colour: AXIS_COLOURS.x, name: "gizmo x" }), y: new Material({ colour: AXIS_COLOURS.y, name: "gizmo y" }), z: new Material({ colour: AXIS_COLOURS.z, name: "gizmo z" }) }
   private hovered: Handle | null = null
@@ -226,6 +259,7 @@ export class EditorCamera implements ViewPose {
     this.active = true
     if (this.gizmo) for (const visual of Object.values(this.gizmo)) engine.scene.add(visual)
     if (this.centre3) engine.scene.add(this.centre3)
+    for (const visual of this.vertexHandles) engine.scene.add(visual)
   }
 
   /** Hand rendering back to whatever camera was active before. */
@@ -347,6 +381,15 @@ export class EditorCamera implements ViewPose {
       if (this.drawing) return this.stepDraw()
       if (this.beginDraw(event.clientX, event.clientY)) this.listenPress()
       return
+    }
+    // A vertex under the pointer comes before a gizmo shaft passing by it: the vertices are what the tool edits.
+    if (this.editMesh && event.button === 0) {
+      const index = this.vertexAt(event.clientX, event.clientY)
+      if (index !== null) {
+        event.stopImmediatePropagation()
+        this.pickVertex(index, event.shiftKey)
+        return
+      }
     }
     const handle = event.button === 0 ? this.handleAt(event.clientX, event.clientY) : null
     if (handle) {
@@ -495,7 +538,100 @@ export class EditorCamera implements ViewPose {
 
   /** Put the gizmo on a node. */
   attach(node: Node3D, onChanged?: () => void): void {
-    this.attachTarget(nodeTarget(node), onChanged, isSized(node))
+    // The same mesh attached again (after an undo, a field edit) keeps its picked vertices.
+    const keep = node === this.nodeOnGizmo && this.editMesh === node && this.vertexSelection.size > 0
+    this.nodeOnGizmo = node
+    if (!keep) this.vertexSelection.clear()
+    if (keep) this.attachTarget(vertexTarget(node as EditMesh, this.vertexSelection), onChanged)
+    else this.attachTarget(nodeTarget(node), onChanged, isSized(node))
+    this.refreshVertexHandles()
+  }
+
+  //=========================
+  // Vertices
+  //=========================
+
+  /** The vertex tool: the attached editable mesh shows its vertices, a click picks one (shift adds), and the move gizmo drags the picked ones. */
+  get vertexEdit(): boolean {
+    return this._vertexEdit
+  }
+
+  set vertexEdit(on: boolean) {
+    if (on === this._vertexEdit) return
+    this._vertexEdit = on
+    this.vertexSelection.clear()
+    if (!on && this.nodeOnGizmo) this.attachTarget(nodeTarget(this.nodeOnGizmo), this.onChanged ?? undefined, isSized(this.nodeOnGizmo))
+    this.refreshVertexHandles()
+  }
+
+  /** The indices of the vertices picked, in the mesh's own order. */
+  get selectedVertices(): ReadonlySet<number> {
+    return this.vertexSelection
+  }
+
+  private refreshVertexHandles(): void {
+    for (const visual of this.vertexHandles) {
+      this.engine.scene.remove(visual)
+      this.engine.renderer?.release(visual.geometry)
+    }
+    this.vertexHandles = []
+    const node = this.nodeOnGizmo
+    this.editMesh = this._vertexEdit && node instanceof EditMesh ? node : null
+    if (!this.editMesh) return
+    for (let i = 0; i < this.editMesh.vertexCount; i++) {
+      const visual = new Visual(buildVertex(), this.vertexSelection.has(i) ? this.vertexSelectedMaterial : this.vertexMaterial)
+      visual.overlay = true
+      if (this.active) this.engine.scene.add(visual)
+      this.vertexHandles.push(visual)
+    }
+    this.placeVertexHandles()
+  }
+
+  private placeVertexHandles(): void {
+    const mesh = this.editMesh
+    if (!mesh) return
+    const scale = this.gizmoScale() * 0.35
+    const world = mesh.transform.worldMatrix
+    const p = new Vector3()
+    this.vertexHandles.forEach((visual, i) => {
+      world.transformPoint(mesh.vertexAt(i, p), p)
+      visual.matrix.composeTRS(p, IDENTITY, new Vector3(scale, scale, scale))
+      visual.material = this.vertexSelection.has(i) ? this.vertexSelectedMaterial : this.vertexMaterial
+    })
+  }
+
+  /** The vertex under a point on the canvas, the nearest within reach. */
+  private vertexAt(clientX: number, clientY: number): number | null {
+    const mesh = this.editMesh
+    if (!mesh) return null
+    const rect = this.canvas.getBoundingClientRect()
+    const world = mesh.transform.worldMatrix
+    const p = new Vector3()
+    let best: { index: number; distance: number } | null = null
+    for (let i = 0; i < mesh.vertexCount; i++) {
+      world.transformPoint(mesh.vertexAt(i, p), p)
+      const s = this.engine.camera.project(p)
+      if (s.depth <= this.near) continue
+      const distance = Math.hypot(clientX - (rect.left + s.u * rect.width), clientY - (rect.top + s.v * rect.height))
+      if (distance <= VERTEX_PIXELS && (!best || distance < best.distance)) best = { index: i, distance }
+    }
+    return best?.index ?? null
+  }
+
+  /** Pick a vertex: shift adds or removes it, otherwise it is the selection; the gizmo then sits at the picked vertices' centre. */
+  private pickVertex(index: number, extend: boolean): void {
+    const mesh = this.editMesh
+    if (!mesh) return
+    if (extend) {
+      if (this.vertexSelection.has(index)) this.vertexSelection.delete(index)
+      else this.vertexSelection.add(index)
+    } else {
+      this.vertexSelection.clear()
+      this.vertexSelection.add(index)
+    }
+    if (this.vertexSelection.size === 0) this.attachTarget(nodeTarget(mesh), this.onChanged ?? undefined, isSized(mesh))
+    else this.attachTarget(vertexTarget(mesh, this.vertexSelection), this.onChanged ?? undefined)
+    this.placeVertexHandles()
   }
 
   attachTarget(target: GizmoTarget, onChanged?: () => void, sized = false): void {
@@ -566,6 +702,9 @@ export class EditorCamera implements ViewPose {
   }
 
   detach(): void {
+    this.nodeOnGizmo = null
+    this.vertexSelection.clear()
+    this.refreshVertexHandles()
     if (this.gizmo) {
       for (const visual of Object.values(this.gizmo)) {
         this.engine.scene.remove(visual)
@@ -625,6 +764,7 @@ export class EditorCamera implements ViewPose {
 
   /** The gizmo at the pivot, world-aligned, scaled to a steady size on screen. */
   private placeGizmo(): void {
+    this.placeVertexHandles()
     if (!this.gizmo) return
     const scale = this.gizmoScale()
     for (const visual of Object.values(this.gizmo)) {

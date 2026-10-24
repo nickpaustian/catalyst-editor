@@ -103,6 +103,8 @@ function renameKey(event: KeyboardEvent, row: Row) {
 
 // ---- context menu ----
 
+const PRIMITIVES = new Set(['Box', 'Sphere', 'Capsule', 'Cylinder', 'Wedge'])
+
 function context(event: MouseEvent, row: Row) {
   event.preventDefault()
   event.stopPropagation()
@@ -116,6 +118,7 @@ function context(event: MouseEvent, row: Row) {
       : [
           { label: 'Add child…', kbd: '⌘⇧A', run: () => addDialog.set(true) },
           ...(picked?.type === 'Model' && !many ? [{ label: 'Add collider from bounds', run: () => sendCommand({ type: 'addBoundsCollider' }) }, { label: 'Add mesh collider', run: () => sendCommand({ type: 'addMeshCollider' }) }] : []),
+          ...(PRIMITIVES.has(picked?.type ?? '') && !many ? [{ label: 'Convert to editable mesh', run: () => sendCommand({ type: 'convertToMesh' }) }] : []),
           { label: 'Rename', disabled: many, run: () => startRename(event, row) },
           { label: 'Duplicate', kbd: '⌘D', run: () => sendCommand({ type: 'duplicate' }) },
           { label: 'Delete', kbd: '⌦', danger: true, run: () => sendCommand({ type: 'delete' }) },

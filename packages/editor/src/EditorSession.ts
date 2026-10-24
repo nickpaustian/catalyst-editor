@@ -1,6 +1,7 @@
 import { Mat4, Model, Node3D, Prefab, Quaternion, Vector3, editorIcon, exposedProperties, readExposed, writeExposed, type Catalyst, type ExposedProperty, type NodeClass, type NodeJSON, type Script } from "@nickpaustian/catalyst"
 import { Input } from "@nickpaustian/catalyst/input"
 import { BoxCollider, MeshCollider, Physics } from "@nickpaustian/catalyst/physics"
+import { EditMesh, Primitive } from "@nickpaustian/catalyst/prefabs"
 import type { LightspeedRuntime } from "@lightspeed-js/core"
 import { EditorCamera, groupTarget, type GizmoMode, isSized, type DrawTool, type DrawnBox } from "./EditorCamera"
 import { EditorInput } from "./EditorInput"
@@ -75,7 +76,7 @@ export interface EditorCells {
   "editor:history": { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
   /** The recipe's project-wide settings, or null when it has none. */
   "editor:settings": { title: string; fields: SelectionProperty[] } | null
-  "editor:view": { view: ViewMode; visualised: boolean; gizmo: GizmoMode; tool: DrawTool | null; physics: boolean; scripts: boolean; snap: SnapSettings; streaming: StreamingPreset }
+  "editor:view": { view: ViewMode; visualised: boolean; gizmo: GizmoMode; tool: DrawTool | null; vertexEdit: boolean; physics: boolean; scripts: boolean; snap: SnapSettings; streaming: StreamingPreset }
   "editor:tree": TreeRow[]
   /** The kinds the tree can add, as the class hierarchy they sit in: bases that are not kinds are shown but cannot be added. */
   "editor:kinds": KindNode[]
@@ -138,6 +139,8 @@ export type EditorCommand =
   | { type: "setTool"; tool: DrawTool | null }
   | { type: "addBoundsCollider" }
   | { type: "addMeshCollider" }
+  | { type: "convertToMesh" }
+  | { type: "setVertexEdit"; on: boolean }
   | { type: "setSnap"; snap: Partial<SnapSettings> }
   | { type: "setStreaming"; preset: StreamingPreset }
   | { type: "select"; id: number; mode?: SelectMode }
@@ -233,6 +236,7 @@ export class EditorSession {
   private filesGeneration = 0
   private readonly history = new History()
   private dragStart: { node: Node3D; before: Mat4; size: Vector3 | null }[] | null = null
+  private vertexDragStart: { mesh: EditMesh; before: number[] } | null = null
   private selected: Node3D | null = null
   private selection = new Set<Node3D>()
   private anchor: Node3D | null = null
@@ -309,7 +313,7 @@ export class EditorSession {
     this.camera = new EditorCamera(this.engine)
     for (const { kind, cls } of this.recipe.kinds) if (!this.engine.registry.has(kind) && typeof cls === "function") this.engine.register({ [kind]: cls as NodeClass })
     const input = this.engine.find(Input)
-    this.input = input ? new EditorInput(input, { focusSelected: () => this.focusSelected(), deleteSelected: () => this.deleteSelected(), moveTool: () => this.setGizmo("translate"), rotateTool: () => this.setGizmo("rotate"), scaleTool: () => this.setGizmo("scale"), boxTool: () => this.setTool("box"), colliderTool: () => this.setTool("collider") }) : null
+    this.input = input ? new EditorInput(input, { focusSelected: () => this.focusSelected(), deleteSelected: () => this.deleteSelected(), moveTool: () => this.setGizmo("translate"), rotateTool: () => this.setGizmo("rotate"), scaleTool: () => this.setGizmo("scale"), boxTool: () => this.setTool("box"), colliderTool: () => this.setTool("collider"), vertexTool: () => this.setVertexEdit(!this.camera.vertexEdit) }) : null
     const physics = this.engine.find(Physics)
     if (physics) physics.paused = true
     this.engine.scripts.setRunning(false, this.engine.root, this.engine)
@@ -512,7 +516,7 @@ export class EditorSession {
   }
 
   private publishView(): void {
-    this.set("editor:view", { view: this.view, visualised: this.visualised, gizmo: this.gizmo, tool: this.camera.tool, physics: !(this.engine.find(Physics)?.paused ?? true), scripts: this.engine.scripts.running, snap: this.snap, streaming: this.streaming })
+    this.set("editor:view", { view: this.view, visualised: this.visualised, gizmo: this.gizmo, tool: this.camera.tool, vertexEdit: this.camera.vertexEdit, physics: !(this.engine.find(Physics)?.paused ?? true), scripts: this.engine.scripts.running, snap: this.snap, streaming: this.streaming })
   }
 
   //=========================
@@ -545,9 +549,19 @@ export class EditorSession {
   private beginDrag(): void {
     const nodes = this.selection.size > 1 ? this.selectionRoots() : this.selected ? [this.selected] : []
     this.dragStart = nodes.map((node) => ({ node, before: node.transform.worldMatrix.clone(), size: sizeOf(node) }))
+    this.vertexDragStart = this.selected instanceof EditMesh && this.camera.vertexEdit ? { mesh: this.selected, before: this.selected.vertices } : null
   }
 
   private endDrag(): void {
+    const vertexDrag = this.vertexDragStart
+    this.vertexDragStart = null
+    if (vertexDrag) {
+      const { mesh, before } = vertexDrag
+      const after = mesh.vertices
+      if (before.some((v, i) => v !== after[i])) this.record("move vertices", () => (mesh.vertices = before), () => (mesh.vertices = after))
+      this.publishSelection()
+      return
+    }
     const start = this.dragStart
     this.dragStart = null
     if (!start || start.length === 0) return
@@ -627,6 +641,7 @@ export class EditorSession {
       position: { x: round(p.x), y: round(p.y), z: round(p.z) },
       rotation: { x: round(degrees(e.x), 2), y: round(degrees(e.y), 2), z: round(degrees(e.z), 2) },
       properties: exposedProperties(node)
+        .filter((property) => !property.hidden)
         .map((property) => ({ ...property, label: property.label ?? property.key, value: readExposed(node, property) }))
         .sort((a, b) => Number(LIST_TYPES.includes(a.type)) - Number(LIST_TYPES.includes(b.type))),
     })
@@ -753,6 +768,12 @@ export class EditorSession {
         break
       case "addMeshCollider":
         this.addMeshCollider()
+        break
+      case "convertToMesh":
+        this.convertToMesh()
+        break
+      case "setVertexEdit":
+        this.setVertexEdit(command.on)
         break
       case "setGizmo":
         this.setGizmo(command.mode)
@@ -1654,6 +1675,35 @@ export class EditorSession {
   }
 
   /** New nodes go under the selected node (or the root), at the orbit target in world space. A kind that needs a file asks for it first. */
+  /** The vertex tool: on, the selected editable mesh shows its vertices and the move gizmo drags the chosen ones. */
+  private setVertexEdit(on: boolean): void {
+    this.camera.vertexEdit = on
+    if (on) {
+      this.camera.tool = null
+      this.setGizmo("translate")
+    }
+    this.publishView()
+  }
+
+  /** The selected primitive becomes an editable mesh with the same shape, colour and place, in its place in the tree. */
+  private convertToMesh(): void {
+    const node = this.selected
+    if (!node || node === this._root || !isPrimitive(node)) return
+    const parent = node.parent as Node3D
+    const index = parent.indexOf(node)
+    const mesh = EditMesh.fromGeometry(node.mesh.geometry, { name: node.name, colour: node.colour, opacity: node.opacity, visualise: this.visualised })
+    mesh.transform.position.copy(node.transform.position)
+    mesh.transform.rotation.copy(node.transform.rotation)
+    mesh.transform.scale.copy(node.transform.scale)
+    const swap = (out: Node3D, into: Node3D) => {
+      out.remove()
+      parent.insertNode(into, index, into.name)
+      this.select(into)
+    }
+    swap(node, mesh)
+    this.record(`convert ${node.name} to mesh`, () => swap(mesh, node), () => swap(node, mesh))
+  }
+
   /** A mesh collider child reading the selected model's own file, so the physics world collides with its triangles. */
   private addMeshCollider(): void {
     const node = this.selected
@@ -1824,3 +1874,6 @@ const radians = (degrees: number): number => (degrees * Math.PI) / 180
 
 /** A box's dimensions, for undo; null for a node without them. */
 const sizeOf = (node: Node3D): Vector3 | null => (isSized(node) ? new Vector3(node.width, node.height, node.depth) : null)
+
+/** The blocking-in prefabs: a mesh child with a colour and an opacity, which an editable mesh can take over. */
+const isPrimitive = (node: Node3D): node is Primitive => node instanceof Primitive

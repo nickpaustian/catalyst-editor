@@ -8,6 +8,7 @@ export interface EditorInputHandlers {
   scaleTool: () => void
   boxTool: () => void
   colliderTool: () => void
+  vertexTool: () => void
 }
 
 /** The editor's own key bindings on the engine's Helm, on while orbiting. */
@@ -20,6 +21,7 @@ export class EditorInput {
     scaleTool: ["r"],
     boxTool: ["b"],
     colliderTool: ["v"],
+    vertexTool: ["Tab"],
   }
 
   private active = false
