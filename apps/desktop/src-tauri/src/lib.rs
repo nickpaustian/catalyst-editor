@@ -1,5 +1,6 @@
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
+use tauri_plugin_window_state::StateFlags;
 
 #[cfg(target_os = "macos")]
 mod pointer_lock;
@@ -40,6 +41,13 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![init_git, take_opened_files])
     .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_dialog::init())
+    // The project window comes back at the size, place and maximised state it was left in; the launcher keeps its own.
+    .plugin(
+      tauri_plugin_window_state::Builder::new()
+        .with_state_flags(StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED | StateFlags::FULLSCREEN)
+        .with_denylist(&["start"])
+        .build(),
+    )
     .on_page_load(|webview, _| {
       #[cfg(target_os = "macos")]
       let _ = webview.with_webview(|platform| unsafe { pointer_lock::allow(platform.inner()) });
