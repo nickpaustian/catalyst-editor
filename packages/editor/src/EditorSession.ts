@@ -83,6 +83,8 @@ export interface EditorCells {
   "editor:addDialog": boolean
   /** The script files in the project, offered to attach. */
   "editor:scripts": { path: string; name: string }[]
+  /** The project folder's files as a tree, for the files pane; empty with no project. */
+  "editor:files": FileTree[]
   /** The script file open in the code pane: its text as last read or saved, and what happened on the last save. */
   "editor:code": { path: string | null; text: string; status: string }
   /** Bumped when everything should save: the code pane answers with its unsaved file. */
@@ -148,6 +150,11 @@ export type EditorCommand =
   | { type: "newScript"; name: string }
   | { type: "reloadScripts" }
   | { type: "openScript"; path: string }
+  | { type: "importAsset"; dir?: string }
+  | { type: "refreshFiles" }
+  | { type: "openFile"; path: string }
+  | { type: "addModel"; path: string }
+  | { type: "useEnvironment"; path: string }
   | { type: "saveScript"; path: string; text: string }
   | { type: "closeScript" }
   | { type: "focus" }
@@ -160,6 +167,19 @@ const round = (n: number, places = 4) => Number(n.toFixed(places))
 const toStrings = (value: unknown): string[] => (Array.isArray(value) ? value.map(String) : String(value ?? "").split(","))
 const LIST_TYPES: ExposedProperty["type"][] = ["tags", "layers"]
 export const PREFABS_DIR = "prefabs"
+/** The assets folder, where imported files go. */
+export const ASSETS_DIR = "assets"
+
+/** A file or folder in the project, with a folder's children listed. */
+export interface FileTree {
+  path: string
+  name: string
+  kind: "file" | "directory"
+  children?: FileTree[]
+}
+
+/** Folders never listed in the files pane. */
+const HIDDEN_DIRS = new Set(["node_modules", ".git"])
 const PREFAB_KIND = "prefab:"
 const slug = (name: string) => name.trim().toLowerCase().replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "prefab"
 
@@ -197,6 +217,7 @@ export class EditorSession {
   private snap: SnapSettings = preferences.snap
   private snapInverted = false
   private streaming: StreamingPreset = preferences.streaming
+  private filesGeneration = 0
   private readonly history = new History()
   private dragStart: { node: Node3D; before: Mat4 }[] | null = null
   private selected: Node3D | null = null
@@ -318,6 +339,7 @@ export class EditorSession {
     this.publishTree()
     this.publishSelection()
     this.set("editor:scripts", [])
+    this.set("editor:files", [])
     this.set("editor:code", { path: null, text: "", status: "" })
     this.set("editor:saveRequest", 0)
     this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
@@ -769,6 +791,21 @@ export class EditorSession {
       case "openScript":
         await this.openScript(command.path)
         break
+      case "importAsset":
+        await this.importAsset(command.dir)
+        break
+      case "refreshFiles":
+        await this.publishFiles()
+        break
+      case "openFile":
+        if (/\.(ts|js)$/.test(command.path)) await this.openScript(command.path)
+        break
+      case "addModel":
+        await this.addNode("Model", { url: command.path, name: command.path.replace(/^.*\//, "").replace(/\.[^.]+$/, "") })
+        break
+      case "useEnvironment":
+        this.writeSetting("environment", command.path)
+        break
       case "saveScript":
         await this.saveScript(command.path, command.text)
         break
@@ -978,6 +1015,7 @@ export class EditorSession {
     const files = this.folder ? await this.folder.list(SCRIPTS_DIR) : []
     this.scriptFiles = files.filter((file) => file.kind === "file" && /\.(ts|js)$/.test(file.name)).map((file) => ({ path: file.path, name: file.name.replace(/\.(ts|js)$/, "") }))
     this.set("editor:scripts", this.scriptFiles)
+    void this.publishFiles()
   }
 
   private selectionScripts(node: Node3D): SelectionScript[] {
@@ -1060,6 +1098,32 @@ export class EditorSession {
   }
 
   /** Put a script file's text in the code pane. */
+  /** The folder's files as a tree, hidden folders and dotfiles left out, folders first. */
+  private async publishFiles(): Promise<void> {
+    const folder = this.folder
+    if (!folder) return this.set("editor:files", [])
+    const generation = ++this.filesGeneration
+    const read = async (dir: string): Promise<FileTree[]> => {
+      const entries = (await folder.list(dir)).filter((entry) => !entry.name.startsWith(".") && !HIDDEN_DIRS.has(entry.name))
+      const out: FileTree[] = []
+      for (const entry of entries) out.push(entry.kind === "directory" ? { ...entry, children: await read(entry.path) } : { ...entry })
+      return out.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "directory" ? -1 : 1))
+    }
+    const tree = await read("")
+    if (generation === this.filesGeneration && this.folder === folder) this.set("editor:files", tree)
+  }
+
+  /** Choose a file and copy it into the project, under `dir` (assets by default). */
+  private async importAsset(dir = ASSETS_DIR): Promise<void> {
+    const folder = this.folder
+    if (!folder) return this.publishProject("the project needs a folder before files can be imported")
+    const file = await pickFile("")
+    if (!file) return
+    const path = await folder.importFile(file, dir)
+    this.publishProject(`imported ${path}`)
+    await this.publishFiles()
+  }
+
   private async openScript(path: string): Promise<void> {
     const folder = this.folder
     if (!folder) return
@@ -1365,6 +1429,7 @@ export class EditorSession {
     const file = await pickFile(field.accept ?? "")
     if (!file || !this.folder) return
     this.writeSetting(key, await this.folder.importFile(file))
+    await this.publishFiles()
   }
 
   private writeSetting(key: string, value: unknown): void {

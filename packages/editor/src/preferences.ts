@@ -77,11 +77,11 @@ export class Preference<T> {
 import { defaultStreamingQuality, type StreamingQuality } from "@nickpaustian/catalyst"
 import { isValidLayout, pane, split, type LayoutNode, type PaneKind } from "./panes/layout"
 
-export const PANE_KINDS: PaneKind[] = ["scene", "viewport", "inspector", "code"]
+export const PANE_KINDS: PaneKind[] = ["scene", "viewport", "inspector", "code", "files"]
 
 /** Scene on the left, inspector on the right, the viewport between, as Godot lays it out. */
 export const defaultLayout = (): LayoutNode =>
-  split("row", [pane("scene"), pane("viewport"), pane("inspector")], [0.18, 0.6, 0.22])
+  split("row", [split("column", [pane("scene"), pane("files")], [0.6, 0.4]), pane("viewport"), pane("inspector")], [0.18, 0.6, 0.22])
 
 const layout = new Preference<LayoutNode>({
   key: "layout-v2",

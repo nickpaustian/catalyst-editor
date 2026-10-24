@@ -32,6 +32,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       viewport: { title: "Viewport", element: document.getElementById("app")! },
       inspector: { title: "Inspector", element: document.getElementById("editor-panel")! },
       code: { title: "Code", element: document.getElementById("code-panel")! },
+      files: {
+        title: "Files",
+        element: document.getElementById("files-panel")!,
+        actions: [{ label: "Import file…", icon: PLUS_ICON, run: () => app.shared("editor:command").set({ type: "importAsset", seq: Math.random() }) }],
+      },
     },
     layout: preferences.layout,
     onChange: preferences.setLayout,
@@ -42,6 +47,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!(await app.mount("editorpanel", "#editor-panel"))) throw new Error("EditorPanel did not mount")
   if (!(await app.mount("menubar", "#menu-bar"))) throw new Error("MenuBar did not mount")
   if (!(await app.mount("codepane", "#code-panel"))) throw new Error("CodePane did not mount")
+  if (!(await app.mount("filespane", "#files-panel"))) throw new Error("FilesPane did not mount")
   if (!(await app.mount("startscreen", "#start-screen"))) throw new Error("StartScreen did not mount")
   if (!(await app.mount("projectdialog", "#project-dialog"))) throw new Error("ProjectDialog did not mount")
   if (!(await app.mount("contextmenu", "#context-menu"))) throw new Error("ContextMenu did not mount")
