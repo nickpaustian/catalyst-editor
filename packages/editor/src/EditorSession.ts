@@ -1,6 +1,6 @@
-import { Mat4, Node3D, Prefab, Quaternion, Vector3, editorIcon, exposedProperties, readExposed, writeExposed, type Catalyst, type ExposedProperty, type NodeClass, type NodeJSON, type Script } from "@nickpaustian/catalyst"
+import { Mat4, Model, Node3D, Prefab, Quaternion, Vector3, editorIcon, exposedProperties, readExposed, writeExposed, type Catalyst, type ExposedProperty, type NodeClass, type NodeJSON, type Script } from "@nickpaustian/catalyst"
 import { Input } from "@nickpaustian/catalyst/input"
-import { BoxCollider, Physics } from "@nickpaustian/catalyst/physics"
+import { BoxCollider, MeshCollider, Physics } from "@nickpaustian/catalyst/physics"
 import type { LightspeedRuntime } from "@lightspeed-js/core"
 import { EditorCamera, groupTarget, type GizmoMode, isSized, type DrawTool, type DrawnBox } from "./EditorCamera"
 import { EditorInput } from "./EditorInput"
@@ -137,6 +137,7 @@ export type EditorCommand =
   | { type: "setGizmo"; mode: GizmoMode }
   | { type: "setTool"; tool: DrawTool | null }
   | { type: "addBoundsCollider" }
+  | { type: "addMeshCollider" }
   | { type: "setSnap"; snap: Partial<SnapSettings> }
   | { type: "setStreaming"; preset: StreamingPreset }
   | { type: "select"; id: number; mode?: SelectMode }
@@ -749,6 +750,9 @@ export class EditorSession {
         break
       case "addBoundsCollider":
         this.addBoundsCollider()
+        break
+      case "addMeshCollider":
+        this.addMeshCollider()
         break
       case "setGizmo":
         this.setGizmo(command.mode)
@@ -1650,6 +1654,19 @@ export class EditorSession {
   }
 
   /** New nodes go under the selected node (or the root), at the orbit target in world space. A kind that needs a file asks for it first. */
+  /** A mesh collider child reading the selected model's own file, so the physics world collides with its triangles. */
+  private addMeshCollider(): void {
+    const node = this.selected
+    if (!node || node === this._root || !(node instanceof Model)) return
+    const collider = new MeshCollider({ name: "meshCollider", url: node.url, visualise: this.visualised })
+    node.addNode(collider)
+    if (this.visualised) collider.visualised = true
+    this.collapsed.delete(node)
+    const index = node.indexOf(collider)
+    this.record("add mesh collider", () => collider.remove(), () => node.insertNode(collider, index, collider.name))
+    this.select(collider)
+  }
+
   private async addNode(kind: string, given?: Record<string, unknown>, at?: Vector3, under?: Node3D): Promise<void> {
     const parent = under ?? this.selected ?? this._root
     const definition = kind.startsWith(PREFAB_KIND) ? this.prefabKind(kind.slice(PREFAB_KIND.length)) : this.recipe.kinds.find((k) => k.kind === kind)

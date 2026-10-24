@@ -1,8 +1,8 @@
 import { Camera, Colour, Light, Model, Node3D, StreamedSurface, type AntiAliasing, type Catalyst, type NodeJSON, type RenderSettings } from "@nickpaustian/catalyst"
 import { pickFile } from "../ProjectFolder"
 import { Interactable } from "@nickpaustian/catalyst/interaction"
-import { BoxCollider, CapsuleCollider, SphereCollider } from "@nickpaustian/catalyst/physics"
-import { Box, Capsule, FirstPersonController, FocalPoint, FocalPointTrigger, OrbitCamera, PointOfInterest, Sphere } from "@nickpaustian/catalyst/prefabs"
+import { BoxCollider, CapsuleCollider, MeshCollider, SphereCollider } from "@nickpaustian/catalyst/physics"
+import { Box, Capsule, Cylinder, FirstPersonController, FocalPoint, FocalPointTrigger, OrbitCamera, PointOfInterest, Sphere, Wedge } from "@nickpaustian/catalyst/prefabs"
 import type { ToneMapping } from "@nickpaustian/obelisk"
 import { Physics } from "@nickpaustian/catalyst/physics"
 import { Vector3 } from "@nickpaustian/catalyst"
@@ -98,6 +98,8 @@ export const sceneRecipe: Recipe = {
     { kind: "Box", label: "Box", cls: Box, description: "A block with a mesh and a matching collider: floors, walls, crates.", make: (o) => new Box(o) },
     { kind: "Sphere", label: "Sphere", cls: Sphere, description: "A ball with a mesh and a matching collider.", make: (o) => new Sphere(o) },
     { kind: "Capsule", label: "Capsule", cls: Capsule, description: "A pillar or a stand-in body with a mesh and a matching collider.", make: (o) => new Capsule(o) },
+    { kind: "Cylinder", label: "Cylinder", cls: Cylinder, description: "A round pillar with a mesh collider the same shape, standing on y.", make: (o) => new Cylinder(o) },
+    { kind: "Wedge", label: "Wedge", cls: Wedge, description: "A ramp with a mesh collider the same shape: full height along its back edge, sloping down to nothing at the front. Turn it to face the way it should rise.", make: (o) => new Wedge(o) },
     {
       kind: "Model",
       label: "Model",
@@ -128,6 +130,17 @@ export const sceneRecipe: Recipe = {
     { kind: "BoxCollider", label: "Box collider", cls: BoxCollider, description: "An invisible box the physics world collides with, or a trigger volume.", make: (o) => new BoxCollider({ ...o, width: 1, height: 1, depth: 1 }) },
     { kind: "SphereCollider", label: "Sphere collider", cls: SphereCollider, description: "An invisible sphere the physics world collides with, or a trigger volume.", make: (o) => new SphereCollider({ ...o, radius: 0.5 }) },
     { kind: "CapsuleCollider", label: "Capsule collider", cls: CapsuleCollider, description: "An invisible capsule the physics world collides with, standing on y.", make: (o) => new CapsuleCollider({ ...o, radius: 0.3, height: 1.8 }) },
+    {
+      kind: "MeshCollider",
+      label: "Mesh collider",
+      cls: MeshCollider,
+      description: "Collision against the triangles of a glTF model imported into the project: a scanned room or a shaped floor.",
+      pick: async (folder) => {
+        const file = await pickFile(".glb,.gltf,model/gltf-binary,model/gltf+json")
+        return file ? { url: await folder.importFile(file), name: file.name.replace(/\.[^.]+$/, "") } : null
+      },
+      make: (o) => new MeshCollider({ ...o, url: String(o.url ?? "") }),
+    },
     { kind: "Interactable", label: "Interactable", cls: Interactable, description: "Something the pointer or crosshair can land on and click, with focus and interact signals for your code.", make: (o) => new Interactable({ ...o, radius: 0.25 }) },
     { kind: "PointOfInterest", label: "Point of interest", cls: PointOfInterest, description: "An interactable with a marker on screen that fades with distance and hides when something is in the way.", make: (o) => new PointOfInterest(o) },
     { kind: "FocalPoint", label: "Focal point", cls: FocalPoint, description: "Somewhere a guided camera turns to look while it is enabled.", make: (o) => new FocalPoint(o) },

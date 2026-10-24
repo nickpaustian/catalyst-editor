@@ -29,8 +29,14 @@ const screenRect = (from: { x: number; y: number }, to: { clientX: number; clien
 
 export type GizmoMode = "translate" | "rotate" | "scale"
 type Axis = "x" | "y" | "z"
-/** A gizmo handle: an axis, or the centre cube that scales every axis at once. */
-type Handle = Axis | "all"
+/** A face of a sized node, pushed by the scale gizmo: the axis and the side. */
+type Face = "+x" | "-x" | "+y" | "-y" | "+z" | "-z"
+const FACES: Face[] = ["+x", "-x", "+y", "-y", "+z", "-z"]
+const faceAxis = (face: Face): Axis => face[1] as Axis
+const faceSign = (face: Face): number => (face[0] === "+" ? 1 : -1)
+/** A gizmo handle: an axis, the centre cube that scales every axis at once, or a face of a box. */
+type Handle = Axis | "all" | Face
+const isFace = (handle: Handle): handle is Face => handle.length === 2
 /** What the viewport's pointer does besides selecting: nothing, or drawing a box or a collider volume on the ground. */
 export type DrawTool = "box" | "collider"
 
@@ -155,8 +161,10 @@ export class EditorCamera implements ViewPose {
   private gizmoMode: GizmoMode = "translate"
   private centre3: Visual | null = null
   private readonly centreMaterial = new Material({ colour: CENTRE_COLOUR })
+  private faces: Record<Face, Visual> | null = null
+  private readonly faceMaterials = Object.fromEntries(FACES.map((face) => [face, new Material({ colour: AXIS_COLOURS[faceAxis(face)] })])) as Record<Face, Material>
   private drawTool: DrawTool | null = null
-  private drawing: { phase: "footprint" | "height"; a: Vector3; b: Vector3; height: number; preview: Visual } | null = null
+  private drawing: { phase: "footprint" | "height"; a: Vector3; b: Vector3; height: number; floor: number; preview: Visual } | null = null
   /** Called with the box a draw finished. */
   onDrawBox: ((box: DrawnBox) => void) | null = null
   private gizmo: Record<Axis, Visual> | null = null
@@ -487,14 +495,14 @@ export class EditorCamera implements ViewPose {
 
   /** Put the gizmo on a node. */
   attach(node: Node3D, onChanged?: () => void): void {
-    this.sizedFlag = isSized(node)
-    this.attachTarget(nodeTarget(node), onChanged)
-    this.sizedFlag = isSized(node)
+    this.attachTarget(nodeTarget(node), onChanged, isSized(node))
   }
 
-  attachTarget(target: GizmoTarget, onChanged?: () => void): void {
-    this.sizedFlag = false
+  attachTarget(target: GizmoTarget, onChanged?: () => void, sized = false): void {
+    const changed = sized !== this.sizedFlag
+    this.sizedFlag = sized
     this.target = target
+    if (changed && this.gizmo) this.buildCentre()
     this.onChanged = onChanged ?? null
     this.syncFromTarget()
     if (!this.gizmo) {
@@ -515,23 +523,46 @@ export class EditorCamera implements ViewPose {
     return { x: make("x"), y: make("y"), z: make("z") }
   }
 
-  /** The centre cube exists in scale mode only. */
+  /** The centre cube exists in scale mode only, and the six face cubes when the target is a sized box. */
   private buildCentre(): void {
     if (this.centre3) {
       this.engine.scene.remove(this.centre3)
       this.engine.renderer?.release(this.centre3.geometry)
       this.centre3 = null
     }
+    if (this.faces) {
+      for (const visual of Object.values(this.faces)) {
+        this.engine.scene.remove(visual)
+        this.engine.renderer?.release(visual.geometry)
+      }
+      this.faces = null
+    }
     if (this.gizmoMode !== "scale") return
     this.centre3 = new Visual(buildCentre(), this.centreMaterial)
     this.centre3.overlay = true
     if (this.active && this.gizmo) this.engine.scene.add(this.centre3)
+    if (this.sizedFlag) {
+      this.faces = Object.fromEntries(
+        FACES.map((face) => {
+          const visual = new Visual(buildCentre(), this.faceMaterials[face])
+          visual.overlay = true
+          if (this.active && this.gizmo) this.engine.scene.add(visual)
+          return [face, visual]
+        }),
+      ) as Record<Face, Visual>
+    }
+  }
+
+  /** With faces to push, the axis shafts stay out of the way. */
+  private get facesShown(): boolean {
+    return this.faces !== null
   }
 
   /** The hovered handle in the highlight colour, the rest in their axis colours. */
   private colourGizmo(): void {
     for (const axis of ["x", "y", "z"] as Axis[]) this.handleMaterials[axis].setColour(axis === this.hovered ? HOVER_COLOUR : AXIS_COLOURS[axis])
     this.centreMaterial.setColour(this.hovered === "all" ? HOVER_COLOUR : CENTRE_COLOUR)
+    for (const face of FACES) this.faceMaterials[face].setColour(face === this.hovered ? HOVER_COLOUR : AXIS_COLOURS[faceAxis(face)])
   }
 
   detach(): void {
@@ -546,6 +577,13 @@ export class EditorCamera implements ViewPose {
       this.engine.scene.remove(this.centre3)
       this.engine.renderer?.release(this.centre3.geometry)
       this.centre3 = null
+    }
+    if (this.faces) {
+      for (const visual of Object.values(this.faces)) {
+        this.engine.scene.remove(visual)
+        this.engine.renderer?.release(visual.geometry)
+      }
+      this.faces = null
     }
     this.target = null
     this.onChanged = null
@@ -589,8 +627,27 @@ export class EditorCamera implements ViewPose {
   private placeGizmo(): void {
     if (!this.gizmo) return
     const scale = this.gizmoScale()
-    for (const visual of Object.values(this.gizmo)) visual.matrix.composeTRS(this.pivotPosition, IDENTITY, new Vector3(scale, scale, scale))
+    for (const visual of Object.values(this.gizmo)) {
+      visual.matrix.composeTRS(this.pivotPosition, IDENTITY, new Vector3(scale, scale, scale))
+      visual.visible = !this.facesShown
+    }
     this.centre3?.matrix.composeTRS(this.pivotPosition, IDENTITY, new Vector3(scale, scale, scale))
+    if (this.faces) {
+      const cube = new Vector3(scale * 0.9, scale * 0.9, scale * 0.9)
+      for (const face of FACES) this.faces[face].matrix.composeTRS(this.faceCentre(face), this.pivotRotation, cube)
+    }
+  }
+
+  /** The middle of a face of the sized target, in world space: the pivot pushed out along the face's normal by half the size. */
+  private faceCentre(face: Face, out = new Vector3()): Vector3 {
+    const size = this.target?.size?.() ?? new Vector3(1, 1, 1)
+    const axis = faceAxis(face)
+    return out.copy(this.pivotPosition).addScaled(this.faceNormal(face), size[axis] / 2)
+  }
+
+  /** A face's outward normal in world space. */
+  private faceNormal(face: Face, out = new Vector3()): Vector3 {
+    return out.copy(AXES[faceAxis(face)]).applyQuaternion(this.pivotRotation).scale(faceSign(face))
   }
 
   //=========================
@@ -613,12 +670,22 @@ export class EditorCamera implements ViewPose {
     return this.drawing !== null
   }
 
-  /** Where the pointer's ray meets the ground plane, snapped to the move grid; null when it looks away from it. */
-  private groundHit(clientX: number, clientY: number): Vector3 | null {
+  /** Where the pointer's ray meets the drawing plane (the ground, or the top of what a draw started on), snapped to the move grid; null when it looks away from it. */
+  private groundHit(clientX: number, clientY: number, floor = this.drawing?.floor ?? 0): Vector3 | null {
     const ray = this.rayAt(clientX, clientY)
     const hit = new Vector3()
-    if (ray.intersectPlane(new Vector3(0, 0, 0), UP, hit) === null) return null
-    return this.snapPoint(hit)
+    if (ray.intersectPlane(new Vector3(0, floor, 0), UP, hit) === null) return null
+    this.snapPoint(hit)
+    hit.y = floor
+    return hit
+  }
+
+  /** A draw that starts on top of something upward-facing builds on it: that surface's height is the floor. */
+  private drawFloorAt(clientX: number, clientY: number): number {
+    const hit = this.engine.pick(this.rayAt(clientX, clientY))
+    if (!hit || hit.worldNormal.y < 0.7) return 0
+    const snap = this.snapMove
+    return snap ? Math.round(hit.worldPoint.y / snap) * snap : hit.worldPoint.y
   }
 
   private snapPoint(point: Vector3): Vector3 {
@@ -628,11 +695,12 @@ export class EditorCamera implements ViewPose {
   }
 
   private beginDraw(clientX: number, clientY: number): boolean {
-    const a = this.groundHit(clientX, clientY)
+    const floor = this.drawFloorAt(clientX, clientY)
+    const a = this.groundHit(clientX, clientY, floor)
     if (!a) return false
     const preview = DebugShapes.box({ width: 1, height: 1, depth: 1, colour: this.drawTool === "collider" ? 0xffa64d : 0xffe14d })
     this.engine.scene.add(preview)
-    this.drawing = { phase: "footprint", a, b: a.clone(), height: 0, preview }
+    this.drawing = { phase: "footprint", a, b: a.clone(), height: 0, floor, preview }
     this.placePreview()
     return true
   }
@@ -652,7 +720,7 @@ export class EditorCamera implements ViewPose {
       normal.normalize()
       const hit = new Vector3()
       if (ray.intersectPlane(drawing.b, normal, hit) === null) return
-      let height = Math.max(0, hit.y)
+      let height = Math.max(0, hit.y - drawing.floor)
       if (this.snapMove) height = Math.round(height / this.snapMove) * this.snapMove
       drawing.height = height
     }
@@ -674,7 +742,7 @@ export class EditorCamera implements ViewPose {
     }
     const size = this.drawSize()
     const centre = drawing.a.clone().addVector(drawing.b).scale(0.5)
-    centre.y = size.y / 2
+    centre.y = drawing.floor + size.y / 2
     const kind = this.drawTool ?? "box"
     this.cancelDraw()
     this.onDrawBox?.({ kind, centre, size })
@@ -690,7 +758,7 @@ export class EditorCamera implements ViewPose {
     if (!drawing) return
     const size = this.drawSize()
     const centre = drawing.a.clone().addVector(drawing.b).scale(0.5)
-    centre.y = size.y / 2
+    centre.y = drawing.floor + size.y / 2
     // The preview is a unit box: scaled to the size, flat while only the footprint is drawn.
     drawing.preview.matrix.composeTRS(centre, IDENTITY, new Vector3(Math.max(size.x, 1e-4), Math.max(size.y, 1e-4), Math.max(size.z, 1e-4)))
   }
@@ -719,8 +787,19 @@ export class EditorCamera implements ViewPose {
     }
     const scale = this.gizmoScale()
     if (this.gizmoMode === "scale") {
+      if (this.faces) {
+        let nearest: { face: Face; distance: number } | null = null
+        for (const face of FACES) {
+          const s = toScreen(this.faceCentre(face))
+          if (!s) continue
+          const distance = Math.hypot(clientX - s[0], clientY - s[1])
+          if (distance <= CENTRE_PIXELS + 2 && (!nearest || distance < nearest.distance)) nearest = { face, distance }
+        }
+        if (nearest) return nearest.face
+      }
       const centre = toScreen(this.pivotPosition)
       if (centre && Math.hypot(clientX - centre[0], clientY - centre[1]) <= CENTRE_PIXELS) return "all"
+      if (this.faces) return null
     }
     let best: { axis: Axis; distance: number } | null = null
     for (const axis of ["x", "y", "z"] as Axis[]) {
@@ -758,7 +837,7 @@ export class EditorCamera implements ViewPose {
   private dragValue(axis: Handle, clientX: number, clientY: number): number | null {
     const ray = this.rayAt(clientX, clientY)
     if (axis === "all") return clientX - clientY
-    const a = AXES[axis]
+    const a = isFace(axis) ? this.faceNormal(axis) : AXES[axis]
     const p = this.drag?.position ?? this.pivotPosition
     if (this.gizmoMode !== "rotate") {
       // The closest point of the pointer ray to the axis line, as a distance along the axis (Ericson's closest points of two lines).
@@ -783,7 +862,7 @@ export class EditorCamera implements ViewPose {
     const value = this.dragValue(drag.axis, clientX, clientY)
     if (value === null) return
     if (this.gizmoMode === "scale") return this.scaleDrag(drag.axis, value)
-    if (drag.axis === "all") return
+    if (drag.axis === "all" || isFace(drag.axis)) return
     const a = AXES[drag.axis]
     if (this.gizmoMode === "translate") {
       let delta = value - drag.startValue
@@ -809,6 +888,7 @@ export class EditorCamera implements ViewPose {
   private scaleDrag(axis: Handle, value: number): void {
     const drag = this.drag
     if (!drag || !drag.size || !this.target?.resize) return
+    if (isFace(axis)) return this.pushFace(axis, value)
     const factor = axis === "all" ? Math.pow(2, (value - drag.startValue) / SCALE_PIXELS) : Math.max(0, 1 + (value - drag.startValue) / this.gizmoScale())
     const factors = axis === "all" ? new Vector3(factor, factor, factor) : new Vector3(1, 1, 1)
     if (axis !== "all") factors[axis] = factor
@@ -817,6 +897,25 @@ export class EditorCamera implements ViewPose {
     const snapped = (n: number) => (snap && this.sizedTarget ? Math.max(snap, Math.round(n / snap) * snap) : Math.max(MIN_SIZE, n))
     size.set(snapped(size.x), snapped(size.y), snapped(size.z))
     this.target.resize(size)
+    this.onChanged?.()
+  }
+
+  /** A face moves by the pointer's travel along its normal: that side of the box, and the centre by half of it. */
+  private pushFace(face: Face, value: number): void {
+    const drag = this.drag
+    if (!drag || !drag.size || !this.target?.resize) return
+    const axis = faceAxis(face)
+    const snap = this.snapMove
+    let size = Math.max(snap ?? MIN_SIZE, drag.size[axis] + (value - drag.startValue))
+    if (snap) size = Math.max(snap, Math.round(size / snap) * snap)
+    const applied = size - drag.size[axis]
+    const next = drag.size.clone()
+    next[axis] = size
+    this.target.resize(next)
+    this.pivotPosition.copy(drag.position).addScaled(this.faceNormal(face), applied / 2)
+    this.pivotRotation.copy(drag.rotation)
+    this.target.apply(this.pivotPosition, this.pivotRotation)
+    this.placeGizmo()
     this.onChanged?.()
   }
 

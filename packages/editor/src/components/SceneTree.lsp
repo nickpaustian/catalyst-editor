@@ -115,7 +115,7 @@ function context(event: MouseEvent, row: Row) {
       ? [{ label: 'Add node…', kbd: '⌘⇧A', run: () => addDialog.set(true) }]
       : [
           { label: 'Add child…', kbd: '⌘⇧A', run: () => addDialog.set(true) },
-          ...(picked?.type === 'Model' && !many ? [{ label: 'Add collider from bounds', run: () => sendCommand({ type: 'addBoundsCollider' }) }] : []),
+          ...(picked?.type === 'Model' && !many ? [{ label: 'Add collider from bounds', run: () => sendCommand({ type: 'addBoundsCollider' }) }, { label: 'Add mesh collider', run: () => sendCommand({ type: 'addMeshCollider' }) }] : []),
           { label: 'Rename', disabled: many, run: () => startRename(event, row) },
           { label: 'Duplicate', kbd: '⌘D', run: () => sendCommand({ type: 'duplicate' }) },
           { label: 'Delete', kbd: '⌦', danger: true, run: () => sendCommand({ type: 'delete' }) },
