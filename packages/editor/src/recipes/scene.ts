@@ -1,4 +1,4 @@
-import { Camera, Colour, Light, Model, Node3D, type Catalyst, type NodeJSON } from "@nickpaustian/catalyst"
+import { Camera, Colour, Light, Model, Node3D, StreamedSurface, type Catalyst, type NodeJSON } from "@nickpaustian/catalyst"
 import { pickFile } from "../ProjectFolder"
 import { Interactable } from "@nickpaustian/catalyst/interaction"
 import { BoxCollider, CapsuleCollider, SphereCollider } from "@nickpaustian/catalyst/physics"
@@ -90,6 +90,13 @@ export const sceneRecipe: Recipe = {
         return file ? { url: await folder.importFile(file), name: file.name.replace(/\.[^.]+$/, "") } : null
       },
       make: (o) => new Model({ ...o, url: String(o.url ?? "") }),
+    },
+    {
+      kind: "StreamedSurface",
+      label: "Streamed surface",
+      cls: StreamedSurface,
+      description: "A scanned object streamed at full detail: a Theia cluster hierarchy, with an Atlas tile pyramid for its maps. Give it the folders' urls; the budgets can be tuned live.",
+      make: (o) => new StreamedSurface({ ...o, clusters: String(o.clusters ?? ""), tiles: String(o.tiles ?? "") }),
     },
     {
       kind: "OrbitCamera",
