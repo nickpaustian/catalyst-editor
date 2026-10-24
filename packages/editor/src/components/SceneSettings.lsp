@@ -22,7 +22,7 @@
           </select>
           <select $else-if="field.type === 'file'" class="well" $aria-label="field.label" $title="field.value || 'none'" $disabled="field.readonly" @change="applyFile($event, field)">
             <option value="" $selected="!field.value">None</option>
-            <option $for="choice in field.fileChoices" $key="choice.path" $value="choice.path" $selected="choice.path === field.value">{{ choice.label }}</option>
+            <option $for="choice in field.fileChoices" $key="choice.path" $value="choice.path" $label="choice.label" $selected="choice.path === field.value">{{ choice.label }}</option>
             <option value="catalyst:import">Import from disk…</option>
           </select>
           <input $else class="well" type="text" $aria-label="field.label" $model="field.value" @change="apply(field)" />

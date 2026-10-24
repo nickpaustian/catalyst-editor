@@ -77,7 +77,7 @@
               </select>
               <select $else-if="field.type === 'file'" class="well" $aria-label="field.label" $title="field.value || 'none'" $disabled="field.readonly" @change="applyFile($event, field)">
                 <option value="" $selected="!field.value">None</option>
-                <option $for="choice in field.fileChoices" $key="choice.path" $value="choice.path" $selected="choice.path === field.value">{{ choice.label }}</option>
+                <option $for="choice in field.fileChoices" $key="choice.path" $value="choice.path" $label="choice.label" $selected="choice.path === field.value">{{ choice.label }}</option>
                 <option value="catalyst:import">Import from disk…</option>
               </select>
               <input $else class="well" type="text" $aria-label="field.label" $model="field.value" $disabled="field.readonly" @change="applyField(field)" />
@@ -116,7 +116,7 @@
                 </label>
                 <select $else-if="field.type === 'file'" class="well" $aria-label="field.label" $title="field.value || 'none'" $disabled="field.readonly" @change="applyScriptFile($event, script, field)">
                   <option value="" $selected="!field.value">None</option>
-                  <option $for="choice in field.fileChoices" $key="choice.path" $value="choice.path" $selected="choice.path === field.value">{{ choice.label }}</option>
+                  <option $for="choice in field.fileChoices" $key="choice.path" $value="choice.path" $label="choice.label" $selected="choice.path === field.value">{{ choice.label }}</option>
                   <option value="catalyst:import">Import from disk…</option>
                 </select>
                 <input $else class="well" type="text" $aria-label="field.label" $model="field.value" $disabled="field.readonly" @change="applyScriptField(script, field)" />
@@ -127,7 +127,7 @@
         <div class="attach" $if="shared['editor:scripts'].length">
           <span class="well select">
             <select aria-label="Script to attach" $model="state.attachPath">
-              <option $for="file in shared['editor:scripts']" $key="file.path" $value="file.path">{{ file.name }}</option>
+              <option $for="file in shared['editor:scripts']" $key="file.path" $value="file.path" $label="file.name">{{ file.name }}</option>
             </select>
           </span>
           <button class="button small" @click="attachScript()">Attach</button>
