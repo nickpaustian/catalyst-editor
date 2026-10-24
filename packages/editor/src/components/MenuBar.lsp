@@ -60,6 +60,13 @@
           </div>
         </div>
         <hr />
+        <div class="choices" title="How much detail streamed surfaces load in the viewport; a run uses the scene's own settings">
+          <span class="dim" id="streaming-quality">detail</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="streaming-quality">
+            <button type="button" role="radio" $for="preset in state.streamingPresets" $key="preset" $aria-checked="shared['editor:view'].streaming === preset" @click="setStreaming(preset)">{{ preset }}</button>
+          </div>
+        </div>
+        <hr />
         <button class="menu-item" role="menuitem" @click="resetLayout()">Reset pane layout</button>
       </div>
     </div>
@@ -108,7 +115,7 @@ shared('editor:history', HISTORY_DEFAULT)
 shared('editor:selection', null)
 shared('editor:running', false)
 
-const state = reactive({ open: null as string | null, moveSteps: [0.05, 0.1, 0.25, 0.5, 1], rotateSteps: [5, 15, 45, 90] })
+const state = reactive({ open: null as string | null, moveSteps: [0.05, 0.1, 0.25, 0.5, 1], rotateSteps: [5, 15, 45, 90], streamingPresets: ['full', 'balanced', 'fast'] })
 
 // A press anywhere outside the bar closes the open menu
 document.addEventListener('pointerdown', (event) => {
@@ -140,6 +147,10 @@ function setGizmo(mode: string) {
 
 function setSnap(snap: Record<string, unknown>) {
   sendCommand({ type: 'setSnap', snap })
+}
+
+function setStreaming(preset: string) {
+  sendCommand({ type: 'setStreaming', preset })
 }
 
 function resetLayout() {
@@ -259,7 +270,8 @@ function resetLayout() {
 
 .choices .dim {
   flex: 0 0 auto;
-  width: var(--cat-space-8);
+  min-width: var(--cat-space-8);
+  white-space: nowrap;
 }
 
 .choices .segmented {

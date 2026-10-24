@@ -5,7 +5,7 @@ import type { LightspeedRuntime } from "@lightspeed-js/core"
 import { EditorCamera, groupTarget, type GizmoMode } from "./EditorCamera"
 import { EditorInput } from "./EditorInput"
 import { History } from "./History"
-import { preferences, type SnapSettings } from "./preferences"
+import { preferences, type SnapSettings, streamingQualityOf, type StreamingPreset } from "./preferences"
 import { browserFolders, folderLoader, pickFile, type FolderSource, type ProjectFolder, type ProjectStorage, type RecentProject } from "./ProjectFolder"
 import { windowRunnerLink, type RunnerLink } from "./RunnerLink"
 import { SCRIPTS_DIR, ScriptCompiler, scriptTemplate } from "./ScriptCompiler"
@@ -75,7 +75,7 @@ export interface EditorCells {
   "editor:history": { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
   /** The recipe's project-wide settings, or null when it has none. */
   "editor:settings": { title: string; fields: SelectionProperty[] } | null
-  "editor:view": { view: ViewMode; visualised: boolean; gizmo: GizmoMode; physics: boolean; scripts: boolean; snap: SnapSettings }
+  "editor:view": { view: ViewMode; visualised: boolean; gizmo: GizmoMode; physics: boolean; scripts: boolean; snap: SnapSettings; streaming: StreamingPreset }
   "editor:tree": TreeRow[]
   /** The kinds the tree can add, as the class hierarchy they sit in: bases that are not kinds are shown but cannot be added. */
   "editor:kinds": KindNode[]
@@ -132,6 +132,7 @@ export type EditorCommand =
   | { type: "toggleScripts" }
   | { type: "setGizmo"; mode: GizmoMode }
   | { type: "setSnap"; snap: Partial<SnapSettings> }
+  | { type: "setStreaming"; preset: StreamingPreset }
   | { type: "select"; id: number; mode?: SelectMode }
   | { type: "add"; kind: string; options?: Record<string, unknown> }
   | { type: "toggleExpand"; id: number }
@@ -195,6 +196,7 @@ export class EditorSession {
   private gizmo: GizmoMode = "translate"
   private snap: SnapSettings = preferences.snap
   private snapInverted = false
+  private streaming: StreamingPreset = preferences.streaming
   private readonly history = new History()
   private dragStart: { node: Node3D; before: Mat4 }[] | null = null
   private selected: Node3D | null = null
@@ -311,6 +313,7 @@ export class EditorSession {
     this.publishProject()
     this.publishHistory()
     this.publishSettings()
+    this.applyStreaming()
     this.publishView()
     this.publishTree()
     this.publishSelection()
@@ -466,8 +469,13 @@ export class EditorSession {
     this.set("editor:history", { canUndo: this.history.canUndo, canRedo: this.history.canRedo, undoLabel: this.history.undoLabel, redoLabel: this.history.redoLabel })
   }
 
+  /** The viewport's streaming cap from the preference; a run's engine is separate and keeps the scene's own. */
+  private applyStreaming(): void {
+    Object.assign(this.engine.streaming, streamingQualityOf(this.streaming))
+  }
+
   private publishView(): void {
-    this.set("editor:view", { view: this.view, visualised: this.visualised, gizmo: this.gizmo, physics: !(this.engine.find(Physics)?.paused ?? true), scripts: this.engine.scripts.running, snap: this.snap })
+    this.set("editor:view", { view: this.view, visualised: this.visualised, gizmo: this.gizmo, physics: !(this.engine.find(Physics)?.paused ?? true), scripts: this.engine.scripts.running, snap: this.snap, streaming: this.streaming })
   }
 
   //=========================
@@ -698,6 +706,12 @@ export class EditorSession {
         break
       case "setGizmo":
         this.setGizmo(command.mode)
+        break
+      case "setStreaming":
+        this.streaming = command.preset
+        preferences.setStreaming(this.streaming)
+        this.applyStreaming()
+        this.publishView()
         break
       case "setSnap":
         this.snap = { ...this.snap, ...command.snap }

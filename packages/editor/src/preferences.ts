@@ -74,6 +74,7 @@ export class Preference<T> {
   }
 }
 
+import { defaultStreamingQuality, type StreamingQuality } from "@nickpaustian/catalyst"
 import { isValidLayout, pane, split, type LayoutNode, type PaneKind } from "./panes/layout"
 
 export const PANE_KINDS: PaneKind[] = ["scene", "viewport", "inspector", "code"]
@@ -101,11 +102,31 @@ const snap = new Preference<SnapSettings>({
   initial: { enabled: true, move: 0.25, rotate: 15 },
 })
 
+/** How much detail streamed surfaces load in the editor's viewport; a run uses the scene's own settings. */
+export type StreamingPreset = "full" | "balanced" | "fast"
+export const STREAMING_PRESETS: StreamingPreset[] = ["full", "balanced", "fast"]
+export const streamingQualityOf = (preset: StreamingPreset): StreamingQuality =>
+  preset === "fast"
+    ? { pixelError: 6, geometryDetailCap: 1, textureDetailCap: 2, textureLodBias: 0.5 }
+    : preset === "balanced"
+      ? { pixelError: 3, geometryDetailCap: 0, textureDetailCap: 1, textureLodBias: 0 }
+      : defaultStreamingQuality()
+
+const streaming = new Preference<StreamingPreset>({
+  key: "streaming",
+  initial: "balanced",
+})
+
 export const preferences = {
   get snap(): SnapSettings {
     return snap.value
   },
   setSnap: snap.set,
+
+  get streaming(): StreamingPreset {
+    return STREAMING_PRESETS.includes(streaming.value) ? streaming.value : "balanced"
+  },
+  setStreaming: streaming.set,
 
   /** The pane tree; a stored tree that no longer fits the known kinds falls back to the default. */
   get layout(): LayoutNode {
@@ -117,6 +138,7 @@ export const preferences = {
   init: () => {
     layout.init()
     snap.init()
+    streaming.init()
     publish()
   },
 }
