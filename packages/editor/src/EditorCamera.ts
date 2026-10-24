@@ -1,5 +1,5 @@
 import { DebugShapes, Mat4, Material, Node3D as Node3DClass, Quaternion, Ray, Vector3, Visual, boxGeometry, cylinderGeometry, mergeGeometry, torusGeometry, type Catalyst, type Geometry, type Node3D, type ViewPose } from "@nickpaustian/catalyst"
-import { pickMesh } from "@nickpaustian/obelisk"
+import { LineSet, Mesh as ObeliskMesh, computeBounds, pickMesh } from "@nickpaustian/obelisk"
 import { EditMesh } from "@nickpaustian/catalyst/prefabs"
 
 const CLICK_DISTANCE = 4
@@ -127,8 +127,12 @@ const buildHandle = (mode: GizmoMode, axis: Axis): Geometry => {
 const buildCentre = (): Geometry => boxGeometry(0.12, 0.12, 0.12)
 /** A vertex of an editable mesh, as a small cube. */
 const buildVertex = (): Geometry => boxGeometry(0.1, 0.1, 0.1)
-/** A vertex's reach on screen. */
+/** A vertex's reach on screen, and an edge line's. */
 const VERTEX_PIXELS = 8
+const EDGE_PIXELS = 6
+const EDGE_COLOUR = 0x2f3540
+/** A picked edge, as a unit tube standing on y, scaled to the edge. */
+const buildTube = (): Geometry => cylinderGeometry(1, 1, 1, 10)
 
 /** The gizmo on a set of a mesh's vertices: it sits at their centre and moves them together, in the mesh's own space. */
 export const vertexTarget = (mesh: EditMesh, indices: ReadonlySet<number>): GizmoTarget => {
@@ -206,9 +210,23 @@ export class EditorCamera implements ViewPose {
   private readonly faceSelection = new Set<number>()
   /** The edges and faces picked, drawn as lines over the mesh. */
   private highlight: Visual | null = null
-  private elementPositions: Vector3[] = []
+  private hoveredElement: number | null = null
+  private edgeList: [number, number][] = []
+  private pickedEdgeList: [number, number][] = []
+  private edgeLines: Visual | null = null
+  private edgeTubes: Visual[] = []
+  private faceFills: Visual[] = []
+  private shapeKey = ""
+  private placedKey = ""
+  /** In the vertex tool with nothing picked the gizmo has nothing to move, so it stays out of the way of the elements. */
+  private get gizmoHidden(): boolean {
+    return this.editMesh !== null && !this.hasElementSelection
+  }
   private readonly vertexMaterial = new Material({ colour: 0xd8dde6 })
+  private readonly vertexHoverMaterial = new Material({ colour: 0xffffff })
   private readonly vertexSelectedMaterial = new Material({ colour: HOVER_COLOUR })
+  private readonly faceHoverMaterial = new Material({ colour: 0xffffff, opacity: 0.22 })
+  private readonly faceSelectedMaterial = new Material({ colour: HOVER_COLOUR, opacity: 0.4 })
   private nodeOnGizmo: Node3D | null = null
   private gizmo: Record<Axis, Visual> | null = null
   private readonly handleMaterials: Record<Axis, Material> = { x: new Material({ colour: AXIS_COLOURS.x, name: "gizmo x" }), y: new Material({ colour: AXIS_COLOURS.y, name: "gizmo y" }), z: new Material({ colour: AXIS_COLOURS.z, name: "gizmo z" }) }
@@ -270,6 +288,9 @@ export class EditorCamera implements ViewPose {
     if (this.gizmo) for (const visual of Object.values(this.gizmo)) engine.scene.add(visual)
     if (this.centre3) engine.scene.add(this.centre3)
     for (const visual of this.vertexHandles) engine.scene.add(visual)
+    if (this.edgeLines) engine.scene.add(this.edgeLines)
+    for (const visual of this.edgeTubes) engine.scene.add(visual)
+    for (const visual of this.faceFills) engine.scene.add(visual)
     if (this.highlight) engine.scene.add(this.highlight)
   }
 
@@ -486,12 +507,19 @@ export class EditorCamera implements ViewPose {
   private readonly onHover = (event: PointerEvent): void => {
     if (this.drawTool) return
     if (this.drag || this.orbiting || this.marquee) return
-    const axis = this.handleAt(event.clientX, event.clientY)
+    // The same order a press uses: a vertex cube or an edge line before a gizmo shaft passing by it, a gizmo handle before the face surface behind it.
+    let element = this.editMesh && this._editMode !== "face" ? this.elementUnder(event.clientX, event.clientY) : null
+    const axis = element === null ? this.handleAt(event.clientX, event.clientY) : null
+    if (element === null && axis === null && this.editMesh && this._editMode === "face") element = this.elementUnder(event.clientX, event.clientY)
     if (axis !== this.hovered) {
       this.hovered = axis
       this.colourGizmo()
     }
-    this.canvas.style.cursor = axis ? "grab" : ""
+    if (element !== this.hoveredElement) {
+      this.hoveredElement = element
+      this.placeVertexHandles()
+    }
+    this.canvas.style.cursor = axis ? "grab" : element !== null ? "pointer" : ""
   }
 
   //=========================
@@ -625,12 +653,6 @@ export class EditorCamera implements ViewPose {
     if (this.editMesh) this.attachTarget(nodeTarget(this.editMesh), this.onChanged ?? undefined, isSized(this.editMesh))
   }
 
-  /** How many handle cubes the mode wants: one per vertex, edge or face. */
-  private elementCount(): number {
-    const mesh = this.editMesh
-    if (!mesh) return 0
-    return this._editMode === "vertex" ? mesh.vertexCount : this._editMode === "edge" ? mesh.edges().length : mesh.faces.length
-  }
 
   /** Pick these faces, as after an extrude. */
   selectFaces(faces: Iterable<number>): void {
@@ -663,108 +685,223 @@ export class EditorCamera implements ViewPose {
     this.refreshVertexHandles()
   }
 
-  /** A cube per element the mode picks: each vertex, each edge's middle, or each face's centre; the picked ones in the highlight colour, with their edges drawn. */
+  //=========================
+  // The elements drawn over the mesh
+  //=========================
+
+  /**
+   * What the mode shows: a cube at every vertex; every edge as a line, the
+   * picked ones as tubes; the hovered face tinted and the picked faces
+   * filled, with their outlines. Built again whenever the mesh changes shape.
+   */
   private refreshVertexHandles(): void {
-    for (const visual of this.vertexHandles) {
-      this.engine.scene.remove(visual)
-      this.engine.renderer?.release(visual.geometry)
-    }
-    this.vertexHandles = []
-    if (this.highlight) {
-      this.engine.scene.remove(this.highlight)
-      this.engine.renderer?.release(this.highlight.geometry)
-      this.highlight = null
-    }
+    this.clearElementVisuals()
     const node = this.nodeOnGizmo
     this.editMesh = this._vertexEdit && node instanceof EditMesh ? node : null
+    this.hoveredElement = null
+    this.placedKey = ""
     if (!this.editMesh) return
-    const count = this.elementCount()
-    for (let i = 0; i < count; i++) {
-      const visual = new Visual(buildVertex(), this.vertexMaterial)
-      visual.overlay = true
-      if (this.active) this.engine.scene.add(visual)
-      this.vertexHandles.push(visual)
+    this.edgeList = this.editMesh.edges()
+    this.shapeKey = `${this.editMesh.vertexCount}/${this.editMesh.faceCount}`
+    if (this._editMode === "vertex") {
+      for (let i = 0; i < this.editMesh.vertexCount; i++) {
+        const visual = new Visual(buildVertex(), this.vertexMaterial)
+        visual.overlay = true
+        if (this.active) this.engine.scene.add(visual)
+        this.vertexHandles.push(visual)
+      }
     }
     this.placeVertexHandles()
   }
 
-  private isElementPicked(index: number): boolean {
-    const mesh = this.editMesh
-    if (!mesh) return false
-    if (this._editMode === "vertex") return this.vertexSelection.has(index)
-    if (this._editMode === "edge") {
-      const [a, b] = mesh.edges()[index]
-      return this.edgeSelection.has(edgeKey(a, b))
+  private clearElementVisuals(): void {
+    const drop = (visual: Visual | null) => {
+      if (!visual) return
+      this.engine.scene.remove(visual)
+      this.engine.renderer?.release(visual.geometry)
     }
-    return this.faceSelection.has(index)
+    for (const visual of this.vertexHandles) drop(visual)
+    this.vertexHandles = []
+    drop(this.edgeLines)
+    this.edgeLines = null
+    for (const visual of this.edgeTubes) drop(visual)
+    this.edgeTubes = []
+    for (const visual of this.faceFills) drop(visual)
+    this.faceFills = []
+    drop(this.highlight)
+    this.highlight = null
   }
 
+  /** Every frame: the cubes and tubes keep their size on screen; the lines and fills are rebuilt when the mesh, the hover or the pick changed. */
   private placeVertexHandles(): void {
     const mesh = this.editMesh
     if (!mesh) return
-    // The mesh changed shape under the handles (an extrude, a delete, a mode switch): build them again first.
-    if (this.vertexHandles.length !== this.elementCount()) return this.refreshVertexHandles()
-    const scale = this.gizmoScale() * (this._editMode === "vertex" ? 0.35 : 0.28)
+    if (`${mesh.vertexCount}/${mesh.faceCount}` !== this.shapeKey) return this.refreshVertexHandles()
     const world = mesh.transform.worldMatrix
+    const scale = this.gizmoScale()
     const p = new Vector3(), q = new Vector3()
-    const edges = this._editMode === "edge" ? mesh.edges() : []
-    this.elementPositions = this.vertexHandles.map((visual, i) => {
-      if (this._editMode === "vertex") world.transformPoint(mesh.vertexAt(i, p), p)
-      else if (this._editMode === "edge") {
-        const [a, b] = edges[i]
-        world.transformPoint(mesh.vertexAt(a, p), p)
-        world.transformPoint(mesh.vertexAt(b, q), q)
-        p.addVector(q).scale(0.5)
-      } else world.transformPoint(mesh.faceCentre(i, p), p)
-      visual.matrix.composeTRS(p, IDENTITY, new Vector3(scale, scale, scale))
-      visual.material = this.isElementPicked(i) ? this.vertexSelectedMaterial : this.vertexMaterial
-      return p.clone()
-    })
-    this.placeHighlight()
+    if (this._editMode === "vertex") {
+      const cube = new Vector3(scale * 0.35, scale * 0.35, scale * 0.35)
+      this.vertexHandles.forEach((visual, i) => {
+        world.transformPoint(mesh.vertexAt(i, p), p)
+        visual.matrix.composeTRS(p, IDENTITY, cube)
+        visual.material = this.vertexSelection.has(i) ? this.vertexSelectedMaterial : this.hoveredElement === i ? this.vertexHoverMaterial : this.vertexMaterial
+      })
+      return
+    }
+    const key = `${mesh.version}|${this.hoveredElement}|${[...this.edgeSelection].join(",")}|${[...this.faceSelection].join(",")}`
+    if (key !== this.placedKey) {
+      this.placedKey = key
+      if (this._editMode === "edge") this.buildEdgeVisuals()
+      else this.buildFaceVisuals()
+    }
+    if (this._editMode === "edge") {
+      // A tube per picked edge, sized on screen like the gizmo.
+      this.edgeTubes.forEach((visual, n) => {
+        const edge = this.pickedEdgeList[n]
+        if (!edge) return
+        world.transformPoint(mesh.vertexAt(edge[0], p), p)
+        world.transformPoint(mesh.vertexAt(edge[1], q), q)
+        const length = p.distanceTo(q)
+        const direction = q.clone().subVector(p).normalize()
+        const middle = p.clone().addVector(q).scale(0.5)
+        visual.matrix.composeTRS(middle, new Quaternion().setFromUnitVectors(UP, direction), new Vector3(scale * 0.03, length, scale * 0.03))
+      })
+    } else {
+      for (const visual of this.faceFills) visual.matrix.copy(world)
+      if (this.highlight) this.highlight.matrix.identity()
+    }
   }
 
-  /** The picked edges, and the outlines of the picked faces, as lines over everything. */
-  private placeHighlight(): void {
+  /** Every edge as a line in the mesh's space, grey, the hovered one white, the picked ones yellow; and a tube for each picked edge. */
+  private buildEdgeVisuals(): void {
     const mesh = this.editMesh
-    if (this.highlight) {
-      this.engine.scene.remove(this.highlight)
-      this.engine.renderer?.release(this.highlight.geometry)
-      this.highlight = null
+    if (!mesh) return
+    const drop = (visual: Visual | null) => {
+      if (!visual) return
+      this.engine.scene.remove(visual)
+      this.engine.renderer?.release(visual.geometry)
     }
-    if (!mesh || this._editMode === "vertex") return
+    drop(this.edgeLines)
+    for (const visual of this.edgeTubes) drop(visual)
+    this.edgeTubes = []
+    const lines = new LineSet()
+    const positions = new Float32Array(this.edgeList.length * 6)
+    const colours = new Float32Array(this.edgeList.length * 8)
+    const world = mesh.transform.worldMatrix
+    const a = new Vector3(), b = new Vector3()
+    this.pickedEdgeList = []
+    this.edgeList.forEach((edge, i) => {
+      world.transformPoint(mesh.vertexAt(edge[0], a), a)
+      world.transformPoint(mesh.vertexAt(edge[1], b), b)
+      positions.set([a.x, a.y, a.z, b.x, b.y, b.z], i * 6)
+      const picked = this.edgeSelection.has(edgeKey(edge[0], edge[1]))
+      const colour = picked ? rgba(HOVER_COLOUR) : this.hoveredElement === i ? rgba(0xffffff) : rgba(EDGE_COLOUR)
+      colours.set(colour, i * 8)
+      colours.set(colour, i * 8 + 4)
+      if (picked) this.pickedEdgeList.push(edge)
+    })
+    lines.positions = positions
+    lines.colours = colours
+    this.edgeLines = new Visual(lines)
+    this.edgeLines.overlay = true
+    if (this.active) this.engine.scene.add(this.edgeLines)
+    for (const _ of this.pickedEdgeList) {
+      const tube = new Visual(buildTube(), this.vertexSelectedMaterial)
+      tube.overlay = true
+      if (this.active) this.engine.scene.add(tube)
+      this.edgeTubes.push(tube)
+    }
+  }
+
+  /** A translucent fill over the hovered face and each picked face, on the surface so only what shows is tinted, and the picked faces' outlines. */
+  private buildFaceVisuals(): void {
+    const mesh = this.editMesh
+    if (!mesh) return
+    const drop = (visual: Visual | null) => {
+      if (!visual) return
+      this.engine.scene.remove(visual)
+      this.engine.renderer?.release(visual.geometry)
+    }
+    for (const visual of this.faceFills) drop(visual)
+    this.faceFills = []
+    drop(this.highlight)
+    this.highlight = null
+    const faces = new Set<number>(this.faceSelection)
+    if (this.hoveredElement !== null && !faces.has(this.hoveredElement)) faces.add(this.hoveredElement)
+    const lift = this.gizmoScale() * 0.004
+    for (const index of faces) {
+      const face = mesh.face(index)
+      if (!face || face.length < 3) continue
+      const normal = mesh.faceNormal(index)
+      const geometry = new ObeliskMesh()
+      const positions: number[] = [], normals: number[] = [], uvs: number[] = [], indices: number[] = []
+      const corner = new Vector3()
+      for (const i of face) {
+        mesh.vertexAt(i, corner).addScaled(normal, lift)
+        positions.push(corner.x, corner.y, corner.z)
+        normals.push(normal.x, normal.y, normal.z)
+        uvs.push(0, 0)
+      }
+      for (let i = 1; i + 1 < face.length; i++) indices.push(0, i, i + 1)
+      geometry.vertices = new Float32Array(positions)
+      geometry.normals = new Float32Array(normals)
+      geometry.uvs = new Float32Array(uvs)
+      geometry.indices = new Uint32Array(indices)
+      geometry.bounds = computeBounds(geometry.vertices)
+      const fill = new Visual(geometry, this.faceSelection.has(index) ? this.faceSelectedMaterial : this.faceHoverMaterial)
+      fill.matrix.copy(mesh.transform.worldMatrix)
+      if (this.active) this.engine.scene.add(fill)
+      this.faceFills.push(fill)
+    }
     const segments: number[] = []
     const world = mesh.transform.worldMatrix
     const a = new Vector3(), b = new Vector3()
-    const push = (i: number, j: number) => {
-      world.transformPoint(mesh.vertexAt(i, a), a)
-      world.transformPoint(mesh.vertexAt(j, b), b)
-      segments.push(a.x, a.y, a.z, b.x, b.y, b.z)
-    }
-    if (this._editMode === "edge") for (const key of this.edgeSelection) push(...edgeOf(key))
-    else {
-      const faces = mesh.faces
-      for (const f of this.faceSelection) {
-        const face = faces[f]
-        if (face) for (let i = 0; i < face.length; i++) push(face[i], face[(i + 1) % face.length])
+    for (const f of this.faceSelection) {
+      const face = mesh.face(f)
+      if (!face) continue
+      for (let i = 0; i < face.length; i++) {
+        world.transformPoint(mesh.vertexAt(face[i], a), a)
+        world.transformPoint(mesh.vertexAt(face[(i + 1) % face.length], b), b)
+        segments.push(a.x, a.y, a.z, b.x, b.y, b.z)
       }
     }
-    if (segments.length === 0) return
-    this.highlight = DebugShapes.segments(new Float32Array(segments), HOVER_COLOUR)
-    this.highlight.overlay = true
-    if (this.active) this.engine.scene.add(this.highlight)
+    if (segments.length) {
+      this.highlight = DebugShapes.segments(new Float32Array(segments), HOVER_COLOUR)
+      this.highlight.overlay = true
+      if (this.active) this.engine.scene.add(this.highlight)
+    }
   }
 
-  /** The element whose handle cube is under a point on the canvas, the nearest within reach. */
+  /** The element under a point on the canvas: the nearest vertex cube within reach, or the nearest edge line within reach; faces are found on their surface. */
   private vertexAt(clientX: number, clientY: number): number | null {
-    if (!this.editMesh) return null
+    const mesh = this.editMesh
+    if (!mesh) return null
     const rect = this.canvas.getBoundingClientRect()
+    const world = mesh.transform.worldMatrix
+    const p = new Vector3()
+    const toScreen = (v: Vector3): [number, number] | null => {
+      const s = this.engine.camera.project(v)
+      if (s.depth <= this.near) return null
+      return [rect.left + s.u * rect.width, rect.top + s.v * rect.height]
+    }
     let best: { index: number; distance: number } | null = null
-    this.elementPositions.forEach((p, i) => {
-      const s = this.engine.camera.project(p)
-      if (s.depth <= this.near) return
-      const distance = Math.hypot(clientX - (rect.left + s.u * rect.width), clientY - (rect.top + s.v * rect.height))
-      if (distance <= VERTEX_PIXELS && (!best || distance < best.distance)) best = { index: i, distance }
-    })
+    if (this._editMode === "vertex") {
+      for (let i = 0; i < mesh.vertexCount; i++) {
+        const s = toScreen(world.transformPoint(mesh.vertexAt(i, p), p))
+        if (!s) continue
+        const distance = Math.hypot(clientX - s[0], clientY - s[1])
+        if (distance <= VERTEX_PIXELS && (!best || distance < best.distance)) best = { index: i, distance }
+      }
+    } else if (this._editMode === "edge") {
+      this.edgeList.forEach((edge, i) => {
+        const a = toScreen(world.transformPoint(mesh.vertexAt(edge[0], p), p))
+        const b = toScreen(world.transformPoint(mesh.vertexAt(edge[1], p), p))
+        if (!a || !b) return
+        const distance = distanceToSegment(clientX, clientY, a[0], a[1], b[0], b[1])
+        if (distance <= EDGE_PIXELS && (!best || distance < best.distance)) best = { index: i, distance }
+      })
+    }
     return best ? (best as { index: number }).index : null
   }
 
@@ -776,12 +913,18 @@ export class EditorCamera implements ViewPose {
     return hit ? mesh.faceOfTriangle(hit.triangle) : null
   }
 
+  /** The element the pointer is over in the current mode, by whichever test the mode uses. */
+  private elementUnder(clientX: number, clientY: number): number | null {
+    return this._editMode === "face" ? this.faceUnder(clientX, clientY) : this.vertexAt(clientX, clientY)
+  }
+
   /** Pick an element of the mode: shift adds or removes it, otherwise it is the selection; the gizmo then sits at the moved vertices' centre. */
   private pickVertex(index: number, extend: boolean): void {
     const mesh = this.editMesh
     if (!mesh) return
     const set: Set<number | string> = this._editMode === "vertex" ? this.vertexSelection : this._editMode === "face" ? this.faceSelection : this.edgeSelection
-    const key: number | string = this._editMode === "edge" ? edgeKey(...mesh.edges()[index]) : index
+    const edge = this._editMode === "edge" ? this.edgeList[index] : null
+    const key: number | string = edge ? edgeKey(edge[0], edge[1]) : index
     if (extend) {
       if (set.has(key)) set.delete(key)
       else set.add(key)
@@ -927,14 +1070,21 @@ export class EditorCamera implements ViewPose {
     this.placeVertexHandles()
     if (!this.gizmo) return
     const scale = this.gizmoScale()
+    const hidden = this.gizmoHidden
     for (const visual of Object.values(this.gizmo)) {
       visual.matrix.composeTRS(this.pivotPosition, IDENTITY, new Vector3(scale, scale, scale))
-      visual.visible = !this.facesShown
+      visual.visible = !this.facesShown && !hidden
     }
-    this.centre3?.matrix.composeTRS(this.pivotPosition, IDENTITY, new Vector3(scale, scale, scale))
+    if (this.centre3) {
+      this.centre3.matrix.composeTRS(this.pivotPosition, IDENTITY, new Vector3(scale, scale, scale))
+      this.centre3.visible = !hidden
+    }
     if (this.faces) {
       const cube = new Vector3(scale * 0.9, scale * 0.9, scale * 0.9)
-      for (const face of FACES) this.faces[face].matrix.composeTRS(this.faceCentre(face), this.pivotRotation, cube)
+      for (const face of FACES) {
+        this.faces[face].matrix.composeTRS(this.faceCentre(face), this.pivotRotation, cube)
+        this.faces[face].visible = !hidden
+      }
     }
   }
 
@@ -1078,7 +1228,7 @@ export class EditorCamera implements ViewPose {
 
   /** The handle under a point on the canvas, by distance on screen to its lines; the centre cube first in scale mode. */
   private handleAt(clientX: number, clientY: number): Handle | null {
-    if (!this.gizmo || !this.target) return null
+    if (!this.gizmo || !this.target || this.gizmoHidden) return null
     const rect = this.canvas.getBoundingClientRect()
     const toScreen = (p: Vector3): [number, number] | null => {
       const s = this.engine.camera.project(p)
@@ -1236,3 +1386,5 @@ export class EditorCamera implements ViewPose {
 }
 
 const IDENTITY = new Quaternion()
+
+const rgba = (colour: number): [number, number, number, number] => [((colour >> 16) & 255) / 255, ((colour >> 8) & 255) / 255, (colour & 255) / 255, 1]
