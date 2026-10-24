@@ -12,7 +12,12 @@ export interface ProjectSettings {
   description: string
   /** ISO date of creation. */
   created?: string
+  /** A picture of the project, as a path in its folder (`cover.png`), for the recent list; null or absent for none. */
+  image?: string | null
 }
+
+/** Where the project's picture is written. */
+export const PROJECT_IMAGE = "cover.png"
 
 /** The fields the new-project dialog collects. */
 export interface NewProject {
@@ -23,6 +28,8 @@ export interface NewProject {
   location: string | null
   /** Start a git repository in the folder, where the shell can. */
   git?: boolean
+  /** The project's picture as a data url, written into the folder. */
+  image?: string | null
 }
 
 export const GITIGNORE = `node_modules/
@@ -44,7 +51,7 @@ export const readProjectSettings = async (folder: ProjectFolder): Promise<Projec
   if (!file) return null
   try {
     const json = await folder.readJSON<Partial<ProjectSettings>>(file)
-    return { name: String(json.name ?? folder.name), recipe: String(json.recipe ?? "scene"), description: String(json.description ?? ""), created: json.created }
+    return { name: String(json.name ?? folder.name), recipe: String(json.recipe ?? "scene"), description: String(json.description ?? ""), created: json.created, image: typeof json.image === "string" ? json.image : null }
   } catch {
     return null
   }
@@ -57,11 +64,35 @@ export const writeProjectSettings = async (folder: ProjectFolder, settings: Proj
   return file
 }
 
+/** Write the picture given as a data url into the folder and give back its path. */
+export const writeProjectImage = async (folder: ProjectFolder, dataUrl: string): Promise<string> => {
+  const blob = await (await fetch(dataUrl)).blob()
+  await folder.writeFile(PROJECT_IMAGE, blob)
+  return PROJECT_IMAGE
+}
+
+/** The project's picture as a data url the start screen can show, or null when it has none or the file is gone. */
+export const readProjectImage = async (folder: ProjectFolder, settings: ProjectSettings | null): Promise<string | null> => {
+  if (!settings?.image) return null
+  try {
+    const file = await folder.readFile(settings.image)
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result))
+      reader.onerror = () => reject(reader.error)
+      reader.readAsDataURL(file)
+    })
+  } catch {
+    return null
+  }
+}
+
 /** Make the project's folder (named after the project under `location`, or in the browser) and its `<name>.catalyst`. */
 export const createProject = async (folders: FolderSource, fields: NewProject): Promise<ProjectFolder> => {
   const name = fields.name.trim() || "untitled"
   const folder = await folders.create(name, fields.location)
-  await writeProjectSettings(folder, { name, recipe: fields.recipe || "scene", description: fields.description.trim(), created: new Date().toISOString() })
+  const image = fields.image ? await writeProjectImage(folder, fields.image) : null
+  await writeProjectSettings(folder, { name, recipe: fields.recipe || "scene", description: fields.description.trim(), created: new Date().toISOString(), image })
   if (fields.git && folders.canInitGit) {
     if (!(await folder.exists(".gitignore"))) await folder.writeText(".gitignore", GITIGNORE)
     await folders.initGit(folder)

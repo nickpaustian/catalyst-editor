@@ -1,5 +1,5 @@
 import { fetchLoader, type Loader } from "@nickpaustian/catalyst"
-import { readProjectSettings, slug } from "./project"
+import { readProjectImage, readProjectSettings, slug } from "./project"
 
 declare global {
   interface Window {
@@ -57,6 +57,8 @@ export interface RecentProject {
   missing?: boolean
   /** When it was last opened, in ms since the epoch, where that is known. */
   opened?: number
+  /** Its picture as a data url, when it has one. */
+  image?: string | null
 }
 
 /** Where projects come from: the browser's pickers and storage, or a desktop shell's. */
@@ -111,8 +113,11 @@ const withStore = async <T>(mode: IDBTransactionMode, run: (store: IDBObjectStor
   })
 }
 
-/** The name the project's file gives it, or the folder's own when there is none. */
-const projectName = async (folder: ProjectFolder): Promise<string> => (await readProjectSettings(folder))?.name ?? folder.name
+/** The name the project's file gives it, or the folder's own when there is none, and its picture. */
+const projectCard = async (folder: ProjectFolder): Promise<{ name: string; image: string | null }> => {
+  const settings = await readProjectSettings(folder)
+  return { name: settings?.name ?? folder.name, image: await readProjectImage(folder, settings) }
+}
 
 const importPath = async (folder: ProjectFolder, file: File, dir: string): Promise<string> => {
   const base = file.name.replace(/[^\w.-]+/g, "-")
@@ -352,7 +357,7 @@ export const browserFolders: FolderSource = {
     const out: RecentProject[] = []
     const last = await HandleFolder.last()
     if (last && last.storage === "disk") out.push({ id: "last", name: last.name, location: "a folder on disk, last opened", storage: "disk" })
-    for (const name of await HandleFolder.browserProjects()) out.push({ id: `browser:${name}`, name: await projectName(await HandleFolder.inBrowser(name)), location: "in the browser", storage: "browser" })
+    for (const name of await HandleFolder.browserProjects()) out.push({ id: `browser:${name}`, ...(await projectCard(await HandleFolder.inBrowser(name))), location: "in the browser", storage: "browser" })
     return out
   },
   openRecent: async (id) => {
@@ -594,7 +599,8 @@ export const nativeFolders = (fs: NativeFs): FolderSource => ({
     return Promise.all(
       recentPaths().map(async (path) => {
         const missing = !(await fs.exists(path))
-        return { id: path, name: missing ? basename(path) : await projectName(new NativeFolder(fs, path)), location: fromHome(path, home), storage: "native" as const, missing, opened: opened[path] }
+        const card = missing ? { name: basename(path), image: null } : await projectCard(new NativeFolder(fs, path))
+        return { id: path, ...card, location: fromHome(path, home), storage: "native" as const, missing, opened: opened[path] }
       }),
     )
   },

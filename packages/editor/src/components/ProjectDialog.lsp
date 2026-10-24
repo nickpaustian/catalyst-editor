@@ -36,6 +36,20 @@
     <label class="dialog-field">Description
       <textarea class="well" rows="3" $model="state.description" placeholder="A line or two about it"></textarea>
     </label>
+    <div class="dialog-field">
+      <span>Image</span>
+      <span class="image-field">
+        <span class="cover" $class="{ empty: !state.image }">
+          <img $if="state.image" $src="state.image" alt="" />
+          <svg $else viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="m2.5 11 3.5-3.5 2.5 2.5 2-2 3 3"/><circle cx="10.5" cy="6" r="1"/></svg>
+        </span>
+        <span class="image-actions">
+          <button class="button" type="button" @click="pickImage()">{{ state.image ? 'Replace…' : 'Choose…' }}</button>
+          <button class="button ghost" type="button" $if="state.image" @click="removeImage()">Remove</button>
+          <span class="hint">Shown in the recent list.</span>
+        </span>
+      </span>
+    </div>
     <label class="check" title="git init, with a .gitignore for node_modules and .DS_Store" $if="state.mode === 'create' && shared['editor:projectDialog'].canGit">
       <input class="checkbox" type="checkbox" $model="state.git" /> Start a git repository
     </label>
@@ -54,12 +68,15 @@ import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { PROJECT_DIALOG_DEFAULT } from '../cells.ts'
 
-interface Dialog { mode: 'create' | 'edit' | null; name: string; recipe: string; description: string; location: string | null; locations: boolean; git: boolean; canGit: boolean; error: string; taken: string }
+interface Dialog { mode: 'create' | 'edit' | null; name: string; recipe: string; description: string; image: string | null; location: string | null; locations: boolean; git: boolean; canGit: boolean; error: string; taken: string }
 
 const dialog = shared('editor:projectDialog', PROJECT_DIALOG_DEFAULT)
 shared('editor:recipes', ['scene'])
 
-const state = reactive({ mode: null as Dialog['mode'], name: '', recipe: 'scene', description: '', location: null as string | null, git: false, error: '', taken: '', problem: '', preview: '', valid: false })
+const state = reactive({ mode: null as Dialog['mode'], name: '', recipe: 'scene', description: '', image: null as string | null, imageChanged: false, location: null as string | null, git: false, error: '', taken: '', problem: '', preview: '', valid: false })
+
+/** The picture is kept small: the longest side at most this many pixels. */
+const IMAGE_SIZE = 640
 
 const NOT_IN_NAMES = /[/\\:*?"<>|]/
 
@@ -71,6 +88,8 @@ dialog.subscribe((next: Dialog | undefined) => {
     state.name = next.name
     state.recipe = next.recipe
     state.description = next.description
+    state.image = next.image ?? null
+    state.imageChanged = false
     state.git = next.git
   }
   state.mode = next.mode
@@ -125,11 +144,48 @@ function pickLocation() {
   sendCommand({ type: 'pickLocation' })
 }
 
+// The chosen picture is scaled down and kept as a data url until Save writes it
+function pickImage() {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = 'image/*'
+  input.style.display = 'none'
+  document.body.appendChild(input)
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0]
+    input.remove()
+    if (!file) return
+    try {
+      state.image = await shrink(file)
+      state.imageChanged = true
+    } catch (error) {
+      state.error = `That image could not be read: ${error instanceof Error ? error.message : error}`
+    }
+  })
+  input.click()
+}
+
+function removeImage() {
+  state.image = null
+  state.imageChanged = true
+}
+
+async function shrink(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file)
+  const scale = Math.min(1, IMAGE_SIZE / Math.max(bitmap.width, bitmap.height))
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale))
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale))
+  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+  bitmap.close()
+  return canvas.toDataURL('image/png')
+}
+
 function submit(event: Event) {
   event.preventDefault()
   if (!state.valid) return
-  if (state.mode === 'create') sendCommand({ type: 'createProject', name: state.name.trim(), recipe: state.recipe, description: state.description, location: state.location, git: state.git })
-  else if (state.mode === 'edit') sendCommand({ type: 'saveProjectSettings', name: state.name.trim(), description: state.description })
+  if (state.mode === 'create') sendCommand({ type: 'createProject', name: state.name.trim(), recipe: state.recipe, description: state.description, location: state.location, git: state.git, image: state.image })
+  else if (state.mode === 'edit') sendCommand({ type: 'saveProjectSettings', name: state.name.trim(), description: state.description, image: state.imageChanged ? state.image : undefined })
 }
 
 function cancel() {
@@ -208,6 +264,44 @@ document.addEventListener('keydown', (event) => {
 
 .problem {
   color: var(--cat-danger);
+}
+
+.image-field {
+  display: flex;
+  align-items: center;
+  gap: var(--cat-space-3);
+}
+
+.cover {
+  flex: 0 0 auto;
+  width: 112px;
+  height: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--cat-bg-field);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-md);
+  color: var(--cat-text-tertiary);
+}
+
+.cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cover svg {
+  width: 20px;
+  height: 20px;
+}
+
+.image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cat-space-2);
 }
 
 .check {

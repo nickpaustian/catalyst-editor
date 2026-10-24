@@ -46,8 +46,9 @@
           </template>
           <template $else>
             <button class="open" type="button" @click="openRecent(project)">
-              <span class="tile">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.5 14 4.75v6.5L8 14.5 2 11.25v-6.5z"/><path d="M2 4.75 8 8l6-3.25M8 8v6.5"/></svg>
+              <span class="tile" $class="{ pictured: Boolean(project.image) }">
+                <img $if="project.image" $src="project.image" alt="" />
+                <svg $else viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.5 14 4.75v6.5L8 14.5 2 11.25v-6.5z"/><path d="M2 4.75 8 8l6-3.25M8 8v6.5"/></svg>
               </span>
               <span class="text">
                 <span class="name">{{ project.name }}</span>
@@ -78,7 +79,7 @@ import { sendCommand } from '../commands.ts'
 import { PROJECT_DEFAULT, PROJECT_DIALOG_DEFAULT } from '../cells.ts'
 import { LOGO_ON_DARK } from '../assets/logo.ts'
 
-interface Project { id: string; name: string; location: string; missing?: boolean; opened?: number }
+interface Project { id: string; name: string; location: string; missing?: boolean; opened?: number; image?: string | null }
 interface Row extends Project { when: string }
 
 const project = shared('editor:project', PROJECT_DEFAULT)
@@ -363,6 +364,19 @@ document.addEventListener('keydown', (event) => {
 .tile svg {
   width: var(--cat-icon);
   height: var(--cat-icon);
+}
+
+.tile.pictured {
+  flex-basis: 58px;
+  width: 58px;
+  overflow: hidden;
+  padding: 0;
+}
+
+.tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .missing .tile {

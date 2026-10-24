@@ -9,7 +9,7 @@ import { preferences, type SnapSettings } from "./preferences"
 import { browserFolders, folderLoader, pickFile, type FolderSource, type ProjectFolder, type ProjectStorage, type RecentProject } from "./ProjectFolder"
 import { windowRunnerLink, type RunnerLink } from "./RunnerLink"
 import { SCRIPTS_DIR, ScriptCompiler, scriptTemplate } from "./ScriptCompiler"
-import { LEGACY_PROJECT_FILE, PROJECT_EXTENSION, createProject, readProjectSettings, writeProjectSettings, type NewProject, type ProjectSettings } from "./project"
+import { LEGACY_PROJECT_FILE, PROJECT_EXTENSION, createProject, readProjectImage, readProjectSettings, writeProjectImage, writeProjectSettings, type NewProject, type ProjectSettings } from "./project"
 import { openConfirm } from "./confirm"
 import { PROJECT_DIALOG_DEFAULT } from "./cells"
 import type { NodeKind, Recipe } from "./recipe"
@@ -117,7 +117,7 @@ export type EditorCommand =
   | { type: "pickLocation" }
   | { type: "checkProjectName"; name: string; location: string | null }
   | { type: "createProject"; name: string; recipe: string; description: string; location: string | null; git?: boolean }
-  | { type: "saveProjectSettings"; name: string; description: string }
+  | { type: "saveProjectSettings"; name: string; description: string; image?: string | null }
   | { type: "save" }
   | { type: "saveAll" }
   | { type: "saveAs" }
@@ -651,7 +651,7 @@ export class EditorSession {
         await this.createProject(command)
         break
       case "saveProjectSettings":
-        await this.saveProjectSettings(command.name, command.description)
+        await this.saveProjectSettings(command.name, command.description, command.image)
         break
       case "save":
         if (this.folder) await this.save(this.folder)
@@ -793,7 +793,8 @@ export class EditorSession {
     if (mode === "edit" && !this.folder) return
     const current = mode === "edit" ? this.settings : null
     const location = mode === "create" ? await this.folders.defaultLocation() : null
-    this.set("editor:projectDialog", { ...PROJECT_DIALOG_DEFAULT, mode, name: current?.name ?? (mode === "edit" ? this.folder!.name : PROJECT_DIALOG_DEFAULT.name), recipe: current?.recipe ?? this.recipe.name, description: current?.description ?? "", location, locations: this.folders.hasLocations, git: this.folders.canInitGit, canGit: this.folders.canInitGit })
+    const image = mode === "edit" ? await readProjectImage(this.folder!, current) : null
+    this.set("editor:projectDialog", { ...PROJECT_DIALOG_DEFAULT, mode, name: current?.name ?? (mode === "edit" ? this.folder!.name : PROJECT_DIALOG_DEFAULT.name), recipe: current?.recipe ?? this.recipe.name, description: current?.description ?? "", image, location, locations: this.folders.hasLocations, git: this.folders.canInitGit, canGit: this.folders.canInitGit })
   }
 
   private async createProject(fields: NewProject): Promise<void> {
@@ -806,10 +807,13 @@ export class EditorSession {
     }
   }
 
-  private async saveProjectSettings(name: string, description: string): Promise<void> {
+  /** `image` is a data url to write as the project's picture, null to drop it, or undefined to leave it. */
+  private async saveProjectSettings(name: string, description: string, image?: string | null): Promise<void> {
     const folder = this.folder
     if (!folder) return
     const next: ProjectSettings = { ...(this.settings ?? { recipe: this.recipe.name, created: new Date().toISOString() }), name: name.trim() || folder.name, description: description.trim() }
+    if (image === null) next.image = null
+    else if (image) next.image = await writeProjectImage(folder, image)
     const file = await writeProjectSettings(folder, next)
     this.settings = next
     this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
