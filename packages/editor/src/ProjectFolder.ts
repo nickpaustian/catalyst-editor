@@ -1,5 +1,6 @@
 import { fetchLoader, type Loader } from "@nickpaustian/catalyst"
 import { readProjectImage, readProjectSettings, slug } from "./project"
+import { acceptedExtensions } from "./fileField"
 
 declare global {
   interface Window {
@@ -429,6 +430,8 @@ export const browserFolders: FolderSource = {
 /** A filesystem a desktop shell gives the editor: absolute paths, the shell's own picker. */
 export interface NativeFs {
   pickDirectory(): Promise<string | null>
+  /** Ask for a file with the shell's own dialog, limited to `extensions` (without dots) unless null; its absolute path, or null when cancelled. */
+  pickFile?(extensions: string[] | null): Promise<string | null>
   exists(path: string): Promise<boolean>
   readText(path: string): Promise<string>
   readBinary(path: string): Promise<Uint8Array>
@@ -642,7 +645,20 @@ export class NativeFolder implements ProjectFolder {
 }
 
 /** Projects through a desktop shell's filesystem: folders picked by path, the last one remembered by path. */
-export const nativeFolders = (fs: NativeFs): FolderSource => ({
+/**
+ * Folders through a desktop shell's filesystem. A shell that can show its
+ * own file dialog takes over `pickFile` too: a webview may not open the
+ * browser's chooser from a click that has passed through the command queue.
+ */
+export const nativeFolders = (fs: NativeFs): FolderSource => {
+  if (fs.pickFile) nativePicker = async (accept) => {
+    const path = await fs.pickFile!(acceptedExtensions(accept)?.map((extension) => extension.slice(1)) ?? null)
+    return path ? new File([(await fs.readBinary(path)) as BlobPart], basename(path)) : null
+  }
+  return nativeFolderSource(fs)
+}
+
+const nativeFolderSource = (fs: NativeFs): FolderSource => ({
   isSupported: true,
   hasBrowserStorage: false,
   pick: async () => {
@@ -699,8 +715,12 @@ export const nativeFolders = (fs: NativeFs): FolderSource => ({
   },
 })
 
-/** Ask the user for a file through the browser's own chooser; null when they cancel. */
-export const pickFile = (accept: string): Promise<File | null> =>
+let nativePicker: ((accept: string) => Promise<File | null>) | null = null
+
+/** Ask the user for a file: through the desktop shell's own dialog where there is one, else the browser's chooser; null when they cancel. */
+export const pickFile = (accept: string): Promise<File | null> => (nativePicker ? nativePicker(accept) : pickFileInBrowser(accept))
+
+const pickFileInBrowser = (accept: string): Promise<File | null> =>
   new Promise((resolve) => {
     const input = document.createElement("input")
     input.type = "file"

@@ -10,6 +10,7 @@ import { preferences, type SnapSettings, streamingQualityOf, type StreamingPrese
 import { browserFolders, folderLoader, pickFile, type FolderSource, type ProjectFolder, type ProjectStorage, type RecentProject } from "./ProjectFolder"
 import { windowRunnerLink, type RunnerLink } from "./RunnerLink"
 import { AssetFolder } from "./AssetFolder"
+import { accepts } from "./fileField"
 import { SCRIPTS_DIR, ScriptCompiler, scriptTemplate } from "./ScriptCompiler"
 import { LEGACY_PROJECT_FILE, PROJECT_EXTENSION, createProject, readProjectImage, readProjectSettings, writeProjectImage, writeProjectSettings, type NewProject, type ProjectSettings } from "./project"
 import { openConfirm } from "./confirm"
@@ -198,21 +199,6 @@ export interface FileTree {
   name: string
   kind: "file" | "directory"
   children?: FileTree[]
-}
-
-const MEDIA_EXTENSIONS: Record<string, string[]> = {
-  image: [".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif", ".svg", ".ktx2"],
-  audio: [".mp3", ".ogg", ".wav", ".m4a", ".flac", ".aac"],
-  video: [".mp4", ".webm", ".mov"],
-  model: [".glb", ".gltf"],
-}
-
-/** Whether a path matches an input's `accept`: extensions (`.hdr`) or media types (`image/*`); no accept takes any file. */
-const accepts = (accept: string | undefined, path: string): boolean => {
-  const kinds = (accept ?? "").split(",").map((kind) => kind.trim().toLowerCase()).filter(Boolean)
-  if (!kinds.length) return true
-  const extension = path.slice(path.lastIndexOf(".")).toLowerCase()
-  return kinds.some((kind) => (kind.startsWith(".") ? kind === extension : (MEDIA_EXTENSIONS[kind.split("/")[0]] ?? []).includes(extension)))
 }
 
 /** Folders never listed in the files pane. */

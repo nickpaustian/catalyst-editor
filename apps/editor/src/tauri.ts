@@ -29,6 +29,10 @@ const fs: NativeFs = {
     const picked = await open({ directory: true, multiple: false, title: "Open a Catalyst project" })
     return typeof picked === "string" ? picked : null
   },
+  pickFile: async (extensions) => {
+    const picked = await open({ multiple: false, directory: false, filters: extensions ? [{ name: "Accepted files", extensions }] : undefined })
+    return typeof picked === "string" ? picked : null
+  },
   exists: (path) => exists(path),
   readText: (path) => readTextFile(path),
   readBinary: (path) => readFile(path),
