@@ -45,6 +45,9 @@ export const openFilePicker = (request: FilePickerRequest): void => {
 
 export const FILE_PICKER_CELL = CELL
 
+/** The project file being dragged from the files pane, by path, while a drag is on; null otherwise. Drag events only say what they carry on the drop. */
+export const DRAGGING_FILE_CELL = "editor:draggingFile"
+
 const MEDIA_EXTENSIONS: Record<string, string[]> = {
   image: [".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif", ".svg", ".ktx2"],
   audio: [".mp3", ".ogg", ".wav", ".m4a", ".flac", ".aac"],

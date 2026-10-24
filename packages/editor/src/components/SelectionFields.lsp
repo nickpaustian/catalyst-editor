@@ -75,7 +75,7 @@
                   <option $value="choice" $selected="choice === field.value">{{ choice }}</option>
                 </template>
               </select>
-              <button $else-if="field.type === 'file'" class="well file-pick" type="button" $class="{ missing: field.missing }" $aria-label="field.label" $title="field.value || 'None'" $disabled="field.readonly" @click="openFile($event, field)">
+              <button $else-if="field.type === 'file'" class="well file-pick" type="button" $class="{ missing: field.missing, droppable: field.droppable, over: field.over }" $aria-label="field.label" $title="field.value || 'None'" $disabled="field.readonly" @click="openFile($event, field)" @dragover="fileOver($event, field)" @dragleave="field.over = false" @drop="dropFile($event, field)">
                 <span class="file-name" $class="{ empty: !field.value }">{{ field.display }}</span>
                 <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"/></svg>
               </button>
@@ -113,7 +113,7 @@
                   <input class="swatch" type="color" $aria-label="field.label" $model="field.hex" @input="applyScriptColour($event, script, field)" />
                   <span class="mono">{{ field.hex }}</span>
                 </label>
-                <button $else-if="field.type === 'file'" class="well file-pick" type="button" $class="{ missing: field.missing }" $aria-label="field.label" $title="field.value || 'None'" $disabled="field.readonly" @click="openScriptFile($event, script, field)">
+                <button $else-if="field.type === 'file'" class="well file-pick" type="button" $class="{ missing: field.missing, droppable: field.droppable, over: field.over }" $aria-label="field.label" $title="field.value || 'None'" $disabled="field.readonly" @click="openScriptFile($event, script, field)" @dragover="fileOver($event, field)" @dragleave="field.over = false" @drop="dropScriptFile($event, script, field)">
                   <span class="file-name" $class="{ empty: !field.value }">{{ field.display }}</span>
                   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"/></svg>
                 </button>
@@ -148,14 +148,15 @@ import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { SCRIPTS_DEFAULT } from '../cells.ts'
 import { scrub } from '../scrub.ts'
-import { basename, openFilePicker } from '../fileField.ts'
+import { DRAGGING_FILE_CELL, accepts, basename, openFilePicker } from '../fileField.ts'
 
 const selection = shared('editor:selection', null)
 const scriptFiles = shared('editor:scripts', SCRIPTS_DEFAULT)
+const dragging = shared(DRAGGING_FILE_CELL, null)
 
 // Local copies of the fields, so typing doesn't fight the scene publishing
 // the same values back on every gizmo move
-interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number; options?: string[]; readonly?: boolean; hex?: string; ranged?: boolean; choices?: string[]; display?: string; missing?: boolean }
+interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number; options?: string[]; readonly?: boolean; hex?: string; ranged?: boolean; choices?: string[]; display?: string; missing?: boolean; droppable?: boolean; over?: boolean }
 interface ScriptEntry { index: number; url: string; name: string; built: boolean; fields: Field[] }
 
 const state = reactive({
@@ -194,6 +195,7 @@ selection.subscribe((next: any) => {
   state.rz = next.rotation.z
   state.fields = (next.properties ?? []).map(local)
   state.scripts = (next.scripts ?? []).map((script: ScriptEntry) => ({ ...script, fields: script.fields.map(local) }))
+  markAllDroppable(dragging.value ?? null)
 })
 
 function applyScriptField(script: ScriptEntry, field: Field) {
@@ -219,6 +221,7 @@ const SCRIPT_FILE = /\.(ts|js)$/i
 
 function scriptOver(event: DragEvent) {
   if (!selection.value || !event.dataTransfer?.types.includes('text/catalyst-file')) return
+  if (dragging.value && !SCRIPT_FILE.test(dragging.value)) return
   event.preventDefault()
   event.dataTransfer.dropEffect = 'link'
   state.dropping = true
@@ -274,6 +277,53 @@ function applySelect(event: Event, field: Field) {
 
 function applyField(field: Field) {
   sendCommand({ type: 'setProperty', key: field.key, value: field.value })
+}
+
+// A file dragged from the files pane lights up the fields that take it; a drop on one points it there
+function fileOver(event: DragEvent, field: Field) {
+  if (!field.droppable || !event.dataTransfer) return
+  event.preventDefault()
+  event.stopPropagation()
+  event.dataTransfer.dropEffect = 'link'
+  field.over = true
+}
+
+function droppedFile(event: DragEvent, field: Field): string | null {
+  field.over = false
+  const path = event.dataTransfer?.getData('text/catalyst-file')
+  if (!field.droppable || !path) return null
+  event.preventDefault()
+  event.stopPropagation()
+  return path
+}
+
+function markDroppable(fields: Field[], path: string | null) {
+  for (const field of fields) {
+    if (field.type !== 'file') continue
+    field.droppable = Boolean(path) && !field.readonly && accepts(field.accept, path!)
+    field.over = false
+  }
+}
+
+function markAllDroppable(path: string | null) {
+  markDroppable(state.fields, path)
+  for (const script of state.scripts) markDroppable(script.fields, path)
+}
+
+dragging.subscribe((path: string | null | undefined) => markAllDroppable(path ?? null))
+
+function dropFile(event: DragEvent, field: Field) {
+  const path = droppedFile(event, field)
+  if (!path) return
+  field.value = path
+  applyField(field)
+}
+
+function dropScriptFile(event: DragEvent, script: ScriptEntry, field: Field) {
+  const path = droppedFile(event, field)
+  if (!path) return
+  field.value = path
+  applyScriptField(script, field)
 }
 
 function fileDisplay(field: Field) {

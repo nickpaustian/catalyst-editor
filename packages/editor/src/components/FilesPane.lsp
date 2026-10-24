@@ -15,10 +15,11 @@
       $class="{ selected: row.path === state.selected, dir: row.kind === 'directory', creating: row.kind === 'creating', drop: row.kind === 'directory' && row.path === state.dropTarget }"
       $style="'--depth: ' + row.depth"
       $aria-expanded="row.kind === 'directory' ? row.expanded : null"
-      $draggable="row.kind !== 'creating'"
+      $draggable="row.kind === 'creating' || state.renaming === row.path ? 'false' : 'true'"
       @click="pick(row)"
       @contextmenu="context($event, row)"
       @dragstart="dragStart($event, row)"
+      @dragend="dragEnd()"
       @dragover="dragOver($event, row)"
       @drop="drop($event, row)"
     >
@@ -73,6 +74,7 @@
 
 <logic lang="ts">
 import { reactive, shared } from '@lightspeed-js/core'
+import { DRAGGING_FILE_CELL } from '../fileField.ts'
 import { sendCommand } from '../commands.ts'
 import { openContextMenu, type MenuItem } from '../contextMenu.ts'
 import { PROJECT_DEFAULT } from '../cells.ts'
@@ -318,6 +320,11 @@ function dragStart(event: DragEvent, row: Row) {
   event.dataTransfer.setData('text/catalyst-file', row.path)
   event.dataTransfer.setData('text/plain', row.path)
   event.dataTransfer.effectAllowed = 'copyMove'
+  if (row.kind === 'file') shared(DRAGGING_FILE_CELL).set(row.path)
+}
+
+function dragEnd() {
+  shared(DRAGGING_FILE_CELL).set(null)
 }
 
 // Where a drop on this row would land: the folder itself, or a file's folder

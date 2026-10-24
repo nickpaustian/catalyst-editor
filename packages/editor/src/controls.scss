@@ -564,6 +564,16 @@ input[type="number"] {
     color: var(--cat-danger);
   }
 
+  &.droppable {
+    border-style: dashed;
+    border-color: var(--cat-accent);
+  }
+
+  &.over {
+    background: var(--cat-accent-soft);
+    border-style: solid;
+  }
+
   &:disabled {
     cursor: default;
   }

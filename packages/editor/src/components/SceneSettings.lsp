@@ -20,7 +20,7 @@
               <option $value="choice" $selected="choice === field.value">{{ choice }}</option>
             </template>
           </select>
-          <button $else-if="field.type === 'file'" class="well file-pick" type="button" $class="{ missing: field.missing }" $aria-label="field.label" $title="field.value || 'None'" $disabled="field.readonly" @click="openFile($event, field)">
+          <button $else-if="field.type === 'file'" class="well file-pick" type="button" $class="{ missing: field.missing, droppable: field.droppable, over: field.over }" $aria-label="field.label" $title="field.value || 'None'" $disabled="field.readonly" @click="openFile($event, field)" @dragover="fileOver($event, field)" @dragleave="field.over = false" @drop="dropFile($event, field)">
             <span class="file-name" $class="{ empty: !field.value }">{{ field.display }}</span>
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"/></svg>
           </button>
@@ -36,15 +36,17 @@
 import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { scrub } from '../scrub.ts'
-import { basename, openFilePicker } from '../fileField.ts'
+import { DRAGGING_FILE_CELL, accepts, basename, openFilePicker } from '../fileField.ts'
 
-interface Field { key: string; label: string; type: string; value: unknown; min?: number; max?: number; step?: number; options?: string[]; accept?: string; ranged?: boolean; hex?: string; choices?: string[]; display?: string; missing?: boolean }
+interface Field { key: string; label: string; type: string; value: unknown; min?: number; max?: number; step?: number; options?: string[]; accept?: string; ranged?: boolean; hex?: string; choices?: string[]; display?: string; missing?: boolean; readonly?: boolean; droppable?: boolean; over?: boolean }
 
 const settings = shared('editor:settings', null)
+const dragging = shared(DRAGGING_FILE_CELL, null)
 const state = reactive({ fields: [] as Field[], open: true })
 
 settings.subscribe((next: any) => {
   state.fields = (next?.fields ?? []).map((field: Field) => ({ ...field, ranged: field.type === 'number' && field.min !== undefined && field.max !== undefined, hex: field.type === 'colour' ? toHex(field.value) : undefined, ...fileDisplay(field) }))
+  markDroppable(state.fields, dragging.value ?? null)
 })
 
 function toHex(value: unknown): string {
@@ -78,6 +80,41 @@ function openFile(event: Event, field: Field) {
     importFile: () => sendCommand({ type: 'setSetting', key: field.key, value: null, pick: true }),
   })
 }
+
+// A file dragged from the files pane lights up the fields that take it; a drop on one points it there
+function fileOver(event: DragEvent, field: Field) {
+  if (!field.droppable || !event.dataTransfer) return
+  event.preventDefault()
+  event.stopPropagation()
+  event.dataTransfer.dropEffect = 'link'
+  field.over = true
+}
+
+function droppedFile(event: DragEvent, field: Field): string | null {
+  field.over = false
+  const path = event.dataTransfer?.getData('text/catalyst-file')
+  if (!field.droppable || !path) return null
+  event.preventDefault()
+  event.stopPropagation()
+  return path
+}
+
+function markDroppable(fields: Field[], path: string | null) {
+  for (const field of fields) {
+    if (field.type !== 'file') continue
+    field.droppable = Boolean(path) && !field.readonly && accepts(field.accept, path!)
+    field.over = false
+  }
+}
+
+function dropFile(event: DragEvent, field: Field) {
+  const path = droppedFile(event, field)
+  if (!path) return
+  field.value = path
+  apply(field)
+}
+
+dragging.subscribe((path: string | null | undefined) => markDroppable(state.fields, path ?? null))
 
 function applyColour(event: Event, field: Field) {
   field.hex = (event.target as HTMLInputElement).value
