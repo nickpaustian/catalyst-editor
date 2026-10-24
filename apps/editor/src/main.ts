@@ -52,6 +52,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!(await app.mount("projectdialog", "#project-dialog"))) throw new Error("ProjectDialog did not mount")
   if (!(await app.mount("contextmenu", "#context-menu"))) throw new Error("ContextMenu did not mount")
   if (!(await app.mount("confirmdialog", "#confirm-dialog"))) throw new Error("ConfirmDialog did not mount")
+  if (!(await app.mount("filepicker", "#file-picker"))) throw new Error("FilePicker did not mount")
   if (!(await app.mount("viewporttools", "#viewport-tools"))) throw new Error("ViewportTools did not mount")
   app.shared("editor:code").subscribe((code: { path: string | null } | undefined) => {
     if (code?.path) panes.open("code", "viewport")

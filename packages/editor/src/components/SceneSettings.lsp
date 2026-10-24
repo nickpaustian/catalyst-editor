@@ -20,11 +20,10 @@
               <option $value="choice" $selected="choice === field.value">{{ choice }}</option>
             </template>
           </select>
-          <select $else-if="field.type === 'file'" class="well" $aria-label="field.label" $title="field.value || 'none'" $disabled="field.readonly" @change="applyFile($event, field)">
-            <option value="" $selected="!field.value">None</option>
-            <option $for="choice in field.fileChoices" $key="choice.path" $value="choice.path" $label="choice.label" $selected="choice.path === field.value">{{ choice.label }}</option>
-            <option value="catalyst:import">Import from disk…</option>
-          </select>
+          <button $else-if="field.type === 'file'" class="well file-pick" type="button" $class="{ missing: field.missing }" $aria-label="field.label" $title="field.value || 'None'" $disabled="field.readonly" @click="openFile($event, field)">
+            <span class="file-name" $class="{ empty: !field.value }">{{ field.display }}</span>
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"/></svg>
+          </button>
           <input $else class="well" type="text" $aria-label="field.label" $model="field.value" @change="apply(field)" />
         </div>
       </template>
@@ -37,15 +36,15 @@
 import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { scrub } from '../scrub.ts'
-import { IMPORT_CHOICE, fileChoices, type FileChoice } from '../fileField.ts'
+import { basename, openFilePicker } from '../fileField.ts'
 
-interface Field { key: string; label: string; type: string; value: unknown; min?: number; max?: number; step?: number; options?: string[]; accept?: string; ranged?: boolean; hex?: string; choices?: string[]; fileChoices?: FileChoice[] }
+interface Field { key: string; label: string; type: string; value: unknown; min?: number; max?: number; step?: number; options?: string[]; accept?: string; ranged?: boolean; hex?: string; choices?: string[]; display?: string; missing?: boolean }
 
 const settings = shared('editor:settings', null)
 const state = reactive({ fields: [] as Field[], open: true })
 
 settings.subscribe((next: any) => {
-  state.fields = (next?.fields ?? []).map((field: Field) => ({ ...field, ranged: field.type === 'number' && field.min !== undefined && field.max !== undefined, hex: field.type === 'colour' ? toHex(field.value) : undefined, fileChoices: field.type === 'file' ? fileChoices(field.choices, field.value) : undefined }))
+  state.fields = (next?.fields ?? []).map((field: Field) => ({ ...field, ranged: field.type === 'number' && field.min !== undefined && field.max !== undefined, hex: field.type === 'colour' ? toHex(field.value) : undefined, ...fileDisplay(field) }))
 })
 
 function toHex(value: unknown): string {
@@ -61,14 +60,23 @@ function applySelect(event: Event, field: Field) {
   apply(field)
 }
 
-function applyFile(event: Event, field: Field) {
-  const select = event.target as HTMLSelectElement
-  if (select.value === IMPORT_CHOICE) {
-    select.value = typeof field.value === 'string' ? field.value : ''
-    return sendCommand({ type: 'setSetting', key: field.key, value: null, pick: true })
-  }
-  field.value = select.value || null
-  apply(field)
+function fileDisplay(field: Field) {
+  if (field.type !== 'file') return {}
+  const value = typeof field.value === 'string' ? field.value : ''
+  return { display: value ? basename(value) : 'None', missing: Boolean(value) && !(field.choices ?? []).includes(value) }
+}
+
+function openFile(event: Event, field: Field) {
+  openFilePicker({
+    trigger: event.currentTarget as HTMLElement,
+    value: typeof field.value === 'string' ? field.value : null,
+    choices: field.choices ?? [],
+    pick: (path) => {
+      field.value = path
+      apply(field)
+    },
+    importFile: () => sendCommand({ type: 'setSetting', key: field.key, value: null, pick: true }),
+  })
 }
 
 function applyColour(event: Event, field: Field) {
