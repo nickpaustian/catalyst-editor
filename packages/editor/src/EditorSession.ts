@@ -85,6 +85,8 @@ export interface EditorCells {
   "editor:scripts": { path: string; name: string }[]
   /** The project folder's files as a tree, for the files pane; empty with no project. */
   "editor:files": FileTree[]
+  /** The file the files pane has selected: its size, when it changed, and a preview of an image. */
+  "editor:fileInfo": { path: string; size: number; modified: number; preview: string | null } | null
   /** The script file open in the code pane: its text as last read or saved, and what happened on the last save. */
   "editor:code": { path: string | null; text: string; status: string }
   /** Bumped when everything should save: the code pane answers with its unsaved file. */
@@ -147,10 +149,15 @@ export type EditorCommand =
   | { type: "attachScript"; url: string }
   | { type: "detachScript"; index: number }
   | { type: "setScriptProperty"; index: number; key: string; value: unknown }
-  | { type: "newScript"; name: string }
+  | { type: "newScript"; name: string; attach?: boolean }
   | { type: "reloadScripts" }
   | { type: "openScript"; path: string }
   | { type: "importAsset"; dir?: string }
+  | { type: "importDropped"; dir?: string; files: File[] }
+  | { type: "renameFile"; from: string; to: string }
+  | { type: "deleteFile"; path: string }
+  | { type: "newFolder"; path: string }
+  | { type: "fileInfo"; path: string | null }
   | { type: "refreshFiles" }
   | { type: "openFile"; path: string }
   | { type: "addModel"; path: string }
@@ -180,6 +187,8 @@ export interface FileTree {
 
 /** Folders never listed in the files pane. */
 const HIDDEN_DIRS = new Set(["node_modules", ".git"])
+/** Images up to this size get a preview in the files pane. */
+const PREVIEW_BYTES = 6 * 1024 * 1024
 const PREFAB_KIND = "prefab:"
 const slug = (name: string) => name.trim().toLowerCase().replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "prefab"
 
@@ -340,6 +349,7 @@ export class EditorSession {
     this.publishSelection()
     this.set("editor:scripts", [])
     this.set("editor:files", [])
+    this.set("editor:fileInfo", null)
     this.set("editor:code", { path: null, text: "", status: "" })
     this.set("editor:saveRequest", 0)
     this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
@@ -783,7 +793,7 @@ export class EditorSession {
         this.writeScriptProperty(command.index, command.key, command.value)
         break
       case "newScript":
-        await this.newScript(command.name)
+        await this.newScript(command.name, command.attach ?? true)
         break
       case "reloadScripts":
         await this.reloadScripts()
@@ -793,6 +803,21 @@ export class EditorSession {
         break
       case "importAsset":
         await this.importAsset(command.dir)
+        break
+      case "importDropped":
+        await this.importDropped(command.files, command.dir)
+        break
+      case "renameFile":
+        await this.renameFile(command.from, command.to)
+        break
+      case "deleteFile":
+        this.deleteFile(command.path)
+        break
+      case "newFolder":
+        await this.newFolder(command.path)
+        break
+      case "fileInfo":
+        await this.publishFileInfo(command.path)
         break
       case "refreshFiles":
         await this.publishFiles()
@@ -1085,7 +1110,87 @@ export class EditorSession {
   }
 
   /** Write a starting script named after the class into scripts/, and attach it to the selected node. */
-  private async newScript(name: string): Promise<void> {
+  private async importDropped(files: File[], dir = ASSETS_DIR): Promise<void> {
+    const folder = this.folder
+    if (!folder) return this.publishProject("the project needs a folder before files can be imported")
+    const paths: string[] = []
+    for (const file of files) paths.push(await folder.importFile(file, dir))
+    if (paths.length) this.publishProject(paths.length === 1 ? `imported ${paths[0]}` : `imported ${paths.length} files into ${dir || "the project"}`)
+    await this.publishFiles()
+  }
+
+  private async renameFile(from: string, to: string): Promise<void> {
+    const folder = this.folder
+    if (!folder || from === to) return
+    if (!/^[^/\\:*?"<>|]+(\/[^/\\:*?"<>|]+)*$/.test(to) || to.split("/").some((part) => part === "." || part === "..")) return this.publishProject(`“${to}” is not a name a file can have`)
+    if (await folder.exists(to)) return this.publishProject(`${to} already exists`)
+    try {
+      await folder.rename(from, to)
+    } catch (error) {
+      return this.publishProject(`${from} could not be renamed: ${error instanceof Error ? error.message : error}`)
+    }
+    this.publishProject(`renamed ${from} to ${to}`)
+    const code = this.app.shared("editor:code").value as EditorCells["editor:code"] | undefined
+    if (code?.path === from) this.set("editor:code", { ...code, path: to })
+    await this.loadScriptFiles()
+  }
+
+  /** Deleting asks first; the scene is not touched, so a node pointing at the file keeps its url. */
+  private deleteFile(path: string): void {
+    const folder = this.folder
+    if (!folder) return
+    openConfirm(`Delete ${path}?`, "It is removed from the project folder. Nodes and settings that name it keep the name.", [
+      { label: "Cancel", run: () => undefined, primary: true },
+      {
+        label: "Delete",
+        run: () => {
+          void folder
+            .remove(path)
+            .then(() => {
+              this.publishProject(`deleted ${path}`)
+              const code = this.app.shared("editor:code").value as EditorCells["editor:code"] | undefined
+              if (code?.path === path) this.set("editor:code", { path: null, text: "", status: "" })
+              this.set("editor:fileInfo", null)
+              return this.loadScriptFiles()
+            })
+            .catch((error) => this.publishProject(`${path} could not be deleted: ${error instanceof Error ? error.message : error}`))
+        },
+      },
+    ])
+  }
+
+  private async newFolder(path: string): Promise<void> {
+    const folder = this.folder
+    if (!folder) return
+    if (!/^[^/\\:*?"<>|]+(\/[^/\\:*?"<>|]+)*$/.test(path)) return this.publishProject(`“${path}” is not a name a folder can have`)
+    await folder.mkdir(path)
+    this.publishProject(`made ${path}/`)
+    await this.publishFiles()
+  }
+
+  /** The selected file's size and date, and a preview when it is an image of a sensible size. */
+  private async publishFileInfo(path: string | null): Promise<void> {
+    const folder = this.folder
+    if (!folder || !path) return this.set("editor:fileInfo", null)
+    try {
+      const info = await folder.stat(path)
+      let preview: string | null = null
+      if (/\.(png|jpe?g|webp|gif|avif|svg)$/i.test(path) && info.size <= PREVIEW_BYTES) {
+        const file = await folder.readFile(path)
+        preview = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(String(reader.result))
+          reader.onerror = () => reject(reader.error)
+          reader.readAsDataURL(file)
+        })
+      }
+      this.set("editor:fileInfo", { path, size: info.size, modified: info.modified, preview })
+    } catch {
+      this.set("editor:fileInfo", null)
+    }
+  }
+
+  private async newScript(name: string, attach = true): Promise<void> {
     const folder = this.folder
     if (!folder) return this.publishProject("the project needs a folder before scripts can be written")
     const className = name.trim().replace(/[^\w$]+/g, "").replace(/^[0-9]+/, "")
@@ -1094,7 +1199,7 @@ export class EditorSession {
     if (!(await folder.exists(path))) await folder.writeText(path, scriptTemplate(className.charAt(0).toUpperCase() + className.slice(1)))
     await this.loadScriptFiles()
     this.publishProject(`saved ${path}`)
-    if (this.selected && this.selected !== this._root) await this.attachScript(path)
+    if (attach && this.selected && this.selected !== this._root) await this.attachScript(path)
   }
 
   /** Put a script file's text in the code pane. */

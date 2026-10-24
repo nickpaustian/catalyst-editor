@@ -1,6 +1,6 @@
 import { nativeFolders, type FolderTransfer, type NativeFs, type RunMessage, type RunnerLink, type RunnerPageLink } from "@nickpaustian/catalyst-editor"
 import { open } from "@tauri-apps/plugin-dialog"
-import { exists, mkdir, readDir, readFile, readTextFile, remove, watch, writeFile, writeTextFile } from "@tauri-apps/plugin-fs"
+import { exists, mkdir, readDir, readFile, readTextFile, remove, rename, stat, watch, writeFile, writeTextFile } from "@tauri-apps/plugin-fs"
 import { invoke } from "@tauri-apps/api/core"
 import { documentDir, homeDir } from "@tauri-apps/api/path"
 import { emitTo, listen } from "@tauri-apps/api/event"
@@ -37,6 +37,11 @@ const fs: NativeFs = {
   readDir: async (path) => (await readDir(path)).map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory })),
   mkdir: (path) => mkdir(path, { recursive: true }),
   remove: (path) => remove(path, { recursive: true }),
+  rename: (from, to) => rename(from, to),
+  stat: async (path) => {
+    const info = await stat(path)
+    return { size: info.size, modified: info.mtime?.getTime() ?? 0 }
+  },
   initGit: (path) => invoke("init_git", { path }),
   watch: (path, listener) => watch(path, (event) => listener(event.paths), { recursive: true, delayMs: 250 }),
   homeDir: () => homeDir(),

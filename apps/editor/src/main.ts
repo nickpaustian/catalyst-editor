@@ -93,5 +93,30 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("recipe-sections")!.appendChild(host)
     await app.mount(id, host)
   }
+  // Files dragged from the files pane land in the scene: a model is placed, an hdr becomes the environment; files from outside are imported.
+  const viewport = document.getElementById("app")!
+  const command = (c: Record<string, unknown>) => app.shared("editor:command").set({ ...c, seq: Math.random() })
+  viewport.addEventListener("dragover", (event) => {
+    if (!event.dataTransfer) return
+    if (event.dataTransfer.types.includes("text/catalyst-file") || event.dataTransfer.types.includes("Files")) {
+      event.preventDefault()
+      event.dataTransfer.dropEffect = "copy"
+    }
+  })
+  viewport.addEventListener("drop", (event) => {
+    const transfer = event.dataTransfer
+    if (!transfer) return
+    const path = transfer.getData("text/catalyst-file")
+    if (path) {
+      event.preventDefault()
+      if (/\.(glb|gltf)$/i.test(path)) command({ type: "addModel", path })
+      else if (/\.hdr$/i.test(path)) command({ type: "useEnvironment", path })
+      return
+    }
+    if (transfer.files.length) {
+      event.preventDefault()
+      command({ type: "importDropped", files: [...transfer.files] })
+    }
+  })
   Object.assign(window, { engine, session, folders })
 })

@@ -15,6 +15,13 @@ export interface FolderEntry {
   kind: "file" | "directory"
 }
 
+export interface FileInfo {
+  size: number
+  modified: number
+}
+
+const parentOf = (path: string): string => path.replace(/\/?[^/]*$/, "")
+
 /** What a folder sends to another window (the runner) so it can open the same project. */
 export type FolderTransfer = { kind: "handle"; handle: FileSystemDirectoryHandle } | { kind: "path"; path: string }
 
@@ -37,6 +44,14 @@ export interface ProjectFolder {
   writeFile(path: string, data: Blob | ArrayBuffer): Promise<void>
   /** Copy a file the user chose into the project, under `dir`, and give back its path; a name clash gets a number. */
   importFile(file: File, dir?: string): Promise<string>
+  /** A file's size in bytes and when it was last changed, in ms since the epoch. */
+  stat(path: string): Promise<FileInfo>
+  /** Make a folder, and the folders above it. */
+  mkdir(path: string): Promise<void>
+  /** Delete a file, or a folder and everything in it. */
+  remove(path: string): Promise<void>
+  /** Move a file or folder; the folders above `to` are made. */
+  rename(from: string, to: string): Promise<void>
   /** The entries directly under a directory, with their paths. */
   list(dir?: string): Promise<FolderEntry[]>
   /** Remove everything in the project. */
@@ -255,6 +270,41 @@ export class HandleFolder implements ProjectFolder {
     this.written.set(path, Date.now())
   }
 
+  private async dirAt(path: string, create = false): Promise<FileSystemDirectoryHandle> {
+    let dir = this.handle
+    for (const part of path.split("/").filter(Boolean)) dir = await dir.getDirectoryHandle(part, { create })
+    return dir
+  }
+
+  async stat(path: string): Promise<FileInfo> {
+    const file = await (await this.fileAt(path)).getFile()
+    return { size: file.size, modified: file.lastModified }
+  }
+
+  async mkdir(path: string): Promise<void> {
+    await this.dirAt(path, true)
+  }
+
+  async remove(path: string): Promise<void> {
+    const name = path.split("/").filter(Boolean).pop()
+    if (!name) return
+    await (await this.dirAt(parentOf(path))).removeEntry(name, { recursive: true })
+  }
+
+  /** The File System Access API has no move, so a file is copied and the old one removed; a folder recursively. */
+  async rename(from: string, to: string): Promise<void> {
+    const entries = await this.list(parentOf(from))
+    const entry = entries.find((e) => e.path === from)
+    if (!entry) throw new Error(`${from} is not in the project`)
+    if (entry.kind === "file") {
+      await this.writeFile(to, await this.readFile(from))
+    } else {
+      await this.mkdir(to)
+      for (const child of await this.list(from)) await this.rename(child.path, `${to}/${child.name}`)
+    }
+    await this.remove(from)
+  }
+
   /** The browser has no file events, so a folder on disk is polled: the root, scripts/ and prefabs/ files by modification time. */
   async watch(listener: (paths: string[]) => void): Promise<() => void> {
     if (this.storage !== "disk") return () => undefined
@@ -387,6 +437,10 @@ export interface NativeFs {
   readDir(path: string): Promise<{ name: string; isDirectory: boolean }[]>
   mkdir(path: string): Promise<void>
   remove(path: string): Promise<void>
+  /** Move a file or folder; without it the folder copies and removes. */
+  rename?(from: string, to: string): Promise<void>
+  /** A file's size and modification time; without it the file is read for its size. */
+  stat?(path: string): Promise<FileInfo>
   /** Start a git repository at the path, where the shell has git. */
   initGit?(path: string): Promise<void>
   /** Watch a directory tree; the listener gets absolute paths. Resolves to the way to stop. */
@@ -540,6 +594,33 @@ export class NativeFolder implements ProjectFolder {
     const path = await importPath(this, file, dir)
     await this.writeFile(path, file)
     return path
+  }
+
+  async stat(path: string): Promise<FileInfo> {
+    if (this.fs.stat) return this.fs.stat(this.at(path))
+    const bytes = await this.fs.readBinary(this.at(path))
+    return { size: bytes.byteLength, modified: 0 }
+  }
+
+  async mkdir(path: string): Promise<void> {
+    await this.fs.mkdir(this.at(path))
+  }
+
+  async remove(path: string): Promise<void> {
+    await this.fs.remove(this.at(path))
+  }
+
+  async rename(from: string, to: string): Promise<void> {
+    await this.ensureDir(to)
+    if (this.fs.rename) return this.fs.rename(this.at(from), this.at(to))
+    const entries = await this.fs.readDir(this.at(parentOf(from)))
+    const entry = entries.find((e) => e.name === from.split("/").pop())
+    if (!entry) throw new Error(`${from} is not in the project`)
+    if (entry.isDirectory) {
+      await this.fs.mkdir(this.at(to))
+      for (const child of await this.fs.readDir(this.at(from))) await this.rename(`${from}/${child.name}`, `${to}/${child.name}`)
+    } else await this.fs.writeBinary(this.at(to), await this.fs.readBinary(this.at(from)))
+    await this.fs.remove(this.at(from))
   }
 
   async list(dir = ""): Promise<FolderEntry[]> {
