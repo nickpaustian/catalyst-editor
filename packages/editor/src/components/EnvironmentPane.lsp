@@ -5,32 +5,39 @@
     <span class="how">The scene's lighting and sky are set here.</span>
   </div>
   <div class="settings" $else>
-    <div class="properties">
-      <template $for="field in state.fields" $key="field.key">
-        <label class="label" $class="{ scrub: field.type === 'number' }" $title="field.label" @pointerdown="scrubField($event, field)">{{ field.label }}</label>
-        <div class="control">
-          <div class="well" $if="field.type === 'number'">
-            <span class="fill" $if="field.ranged" $style="'width: ' + Math.min(100, Math.max(0, (field.value - field.min) / (field.max - field.min) * 100)) + '%'"></span>
-            <input type="number" $aria-label="field.label" $step="field.step" $min="field.min" $max="field.max" $model="field.value" @change="apply(field)" />
-          </div>
-          <input $else-if="field.type === 'boolean'" class="checkbox" type="checkbox" $aria-label="field.label" $model="field.value" @change="apply(field)" />
-          <label class="well colour" $else-if="field.type === 'colour'">
-            <input class="swatch" type="color" $aria-label="field.label" $model="field.hex" @input="applyColour($event, field)" />
-            <span class="mono">{{ field.hex }}</span>
-          </label>
-          <select $else-if="field.type === 'select'" class="well" $aria-label="field.label" @change="applySelect($event, field)">
-            <template $for="choice in field.options" $key="choice">
-              <option $value="choice" $selected="choice === field.value">{{ choice }}</option>
+    <template $for="section in state.sections" $key="section.title">
+      <section class="section">
+        <button class="section-header" type="button" $aria-expanded="section.open" @click="toggle(section)"><span class="title">{{ section.title }}</span></button>
+        <div class="section-body" $if="section.open">
+          <div class="properties">
+            <template $for="field in section.fields" $key="field.key">
+              <label class="label" $class="{ scrub: field.type === 'number' }" $title="field.label" @pointerdown="scrubField($event, field)">{{ field.label }}</label>
+              <div class="control">
+                <div class="well" $if="field.type === 'number'">
+                  <span class="fill" $if="field.ranged" $style="'width: ' + Math.min(100, Math.max(0, (field.value - field.min) / (field.max - field.min) * 100)) + '%'"></span>
+                  <input type="number" $aria-label="field.label" $step="field.step" $min="field.min" $max="field.max" $model="field.value" @change="apply(field)" />
+                </div>
+                <input $else-if="field.type === 'boolean'" class="checkbox" type="checkbox" $aria-label="field.label" $model="field.value" @change="apply(field)" />
+                <label class="well colour" $else-if="field.type === 'colour'">
+                  <input class="swatch" type="color" $aria-label="field.label" $model="field.hex" @input="applyColour($event, field)" />
+                  <span class="mono">{{ field.hex }}</span>
+                </label>
+                <select $else-if="field.type === 'select'" class="well" $aria-label="field.label" @change="applySelect($event, field)">
+                  <template $for="choice in field.options" $key="choice">
+                    <option $value="choice" $selected="choice === field.value">{{ choice }}</option>
+                  </template>
+                </select>
+                <button $else-if="field.type === 'file'" class="well file-pick" type="button" $class="{ missing: field.missing, droppable: field.droppable, over: field.over }" $aria-label="field.label" $title="field.value || 'None'" $disabled="field.readonly" @click="openFile($event, field)" @dragover="fileOver($event, field)" @dragleave="field.over = false" @drop="dropFile($event, field)">
+                  <span class="file-name" $class="{ empty: !field.value }">{{ field.display }}</span>
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"/></svg>
+                </button>
+                <input $else class="well" type="text" $aria-label="field.label" $model="field.value" @change="apply(field)" />
+              </div>
             </template>
-          </select>
-          <button $else-if="field.type === 'file'" class="well file-pick" type="button" $class="{ missing: field.missing, droppable: field.droppable, over: field.over }" $aria-label="field.label" $title="field.value || 'None'" $disabled="field.readonly" @click="openFile($event, field)" @dragover="fileOver($event, field)" @dragleave="field.over = false" @drop="dropFile($event, field)">
-            <span class="file-name" $class="{ empty: !field.value }">{{ field.display }}</span>
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"/></svg>
-          </button>
-          <input $else class="well" type="text" $aria-label="field.label" $model="field.value" @change="apply(field)" />
+          </div>
         </div>
-      </template>
-    </div>
+      </section>
+    </template>
   </div>
 </aside>
 </view>
@@ -41,16 +48,36 @@ import { sendCommand } from '../commands.ts'
 import { scrub } from '../scrub.ts'
 import { DRAGGING_FILE_CELL, accepts, basename, openFilePicker } from '../fileField.ts'
 
-interface Field { key: string; label: string; type: string; value: unknown; min?: number; max?: number; step?: number; options?: string[]; accept?: string; ranged?: boolean; hex?: string; choices?: string[]; display?: string; missing?: boolean; readonly?: boolean; droppable?: boolean; over?: boolean }
+interface Field { key: string; label: string; type: string; value: unknown; min?: number; max?: number; step?: number; options?: string[]; accept?: string; ranged?: boolean; hex?: string; choices?: string[]; display?: string; missing?: boolean; readonly?: boolean; droppable?: boolean; over?: boolean; section?: string }
+
+interface Section { title: string; open: boolean; fields: Field[] }
 
 const settings = shared('editor:settings', null)
 const dragging = shared(DRAGGING_FILE_CELL, null)
-const state = reactive({ fields: [] as Field[] })
+const state = reactive({ sections: [] as Section[] })
+const closed = new Set<string>()
 
 settings.subscribe((next: any) => {
-  state.fields = (next?.fields ?? []).map((field: Field) => ({ ...field, ranged: field.type === 'number' && field.min !== undefined && field.max !== undefined, hex: field.type === 'colour' ? toHex(field.value) : undefined, ...fileDisplay(field) }))
-  markDroppable(state.fields, dragging.value ?? null)
+  const sections: Section[] = []
+  for (const field of (next?.fields ?? []) as Field[]) {
+    const title = field.section ?? next.title
+    let section = sections[sections.length - 1]
+    if (section?.title !== title) sections.push(section = { title, open: !closed.has(title), fields: [] })
+    section.fields.push({ ...field, ranged: field.type === 'number' && field.min !== undefined && field.max !== undefined, hex: field.type === 'colour' ? toHex(field.value) : undefined, ...fileDisplay(field) })
+  }
+  state.sections = sections
+  markAllDroppable(dragging.value ?? null)
 })
+
+function toggle(section: Section) {
+  section.open = !section.open
+  if (section.open) closed.delete(section.title)
+  else closed.add(section.title)
+}
+
+function markAllDroppable(path: string | null) {
+  for (const section of state.sections) markDroppable(section.fields, path)
+}
 
 function toHex(value: unknown): string {
   return '#' + Math.max(0, Math.min(0xffffff, Number(value) || 0)).toString(16).padStart(6, '0')
@@ -117,7 +144,7 @@ function dropFile(event: DragEvent, field: Field) {
   apply(field)
 }
 
-dragging.subscribe((path: string | null | undefined) => markDroppable(state.fields, path ?? null))
+dragging.subscribe((path: string | null | undefined) => markAllDroppable(path ?? null))
 
 function applyColour(event: Event, field: Field) {
   field.hex = (event.target as HTMLInputElement).value
@@ -150,10 +177,6 @@ function scrubField(event: PointerEvent, field: Field) {
   background: var(--cat-bg-panel);
   color: var(--cat-text-primary);
   font: var(--cat-text-sm) / var(--cat-leading-body) var(--cat-font-ui);
-}
-
-.settings {
-  padding: var(--cat-space-3);
 }
 
 .control > .well:not(.colour) {

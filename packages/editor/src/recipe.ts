@@ -9,6 +9,9 @@ export interface RunContext {
   folder: ProjectFolder | null
 }
 
+/** A setting, with the heading it is listed under. */
+export type RecipeSetting = ExposedProperty & { section?: string }
+
 /**
  * Project-wide settings a recipe keeps beside the node tree: the physics
  * floor, gravity, a sky. Shown in the panel as fields, read and written
@@ -16,7 +19,8 @@ export interface RunContext {
  */
 export interface RecipeSettings {
   title: string
-  fields: ExposedProperty[]
+  /** Listed in order, under a heading wherever `section` changes. */
+  fields: RecipeSetting[]
   read: (engine: Catalyst, root: Node3D) => Record<string, unknown>
   write: (engine: Catalyst, root: Node3D, key: string, value: unknown) => void
 }

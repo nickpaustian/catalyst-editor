@@ -1,4 +1,4 @@
-import { Camera, Colour, Light, Model, Node3D, StreamedSurface, type AntiAliasing, type Catalyst, type NodeJSON, type RenderSettings } from "@nickpaustian/catalyst"
+import { Camera, Colour, Html, Light, Model, Node3D, Slate, StreamedSurface, type AntiAliasing, type Catalyst, type NodeJSON, type RenderSettings } from "@nickpaustian/catalyst"
 import { pickFile } from "../ProjectFolder"
 import { Interactable } from "@nickpaustian/catalyst/interaction"
 import { BoxCollider, CapsuleCollider, MeshCollider, SphereCollider } from "@nickpaustian/catalyst/physics"
@@ -142,6 +142,8 @@ export const sceneRecipe: Recipe = {
       },
       make: (o) => new MeshCollider({ ...o, url: String(o.url ?? "") }),
     },
+    { kind: "Slate", label: "Slate", cls: Slate, description: "A canvas for UI over the scene, styled by its own stylesheet: one per screen, such as a HUD, a menu or a modal.", make: (o) => new Slate(o) },
+    { kind: "Html", label: "HTML", cls: Html, description: "Markup on a slate, from an .html file or written in place, styled by the slate's stylesheet.", make: (o) => new Html(o) },
     { kind: "Interactable", label: "Interactable", cls: Interactable, description: "Something the pointer or crosshair can land on and click, with focus and interact signals for your code.", make: (o) => new Interactable({ ...o, radius: 0.25 }) },
     { kind: "PointOfInterest", label: "Point of interest", cls: PointOfInterest, description: "An interactable with a marker on screen that fades with distance and hides when something is in the way.", make: (o) => new PointOfInterest(o) },
     { kind: "FocalPoint", label: "Focal point", cls: FocalPoint, description: "Somewhere a guided camera turns to look while it is enabled.", make: (o) => new FocalPoint(o) },
@@ -150,21 +152,21 @@ export const sceneRecipe: Recipe = {
   settings: {
     title: "Environment",
     fields: [
-      { key: "floored", label: "Floor", type: "boolean" },
-      { key: "floor", label: "Floor height", type: "number", step: 0.1 },
-      { key: "gravity", type: "number", min: 0, step: 0.1 },
-      { key: "drag", type: "number", min: 0, max: 1, step: 0.01 },
-      { key: "ambient", label: "Ambient", type: "colour" },
-      { key: "ambientIntensity", label: "Ambient strength", type: "number", min: 0, step: 0.05 },
-      { key: "headlight", label: "Headlight", type: "number", min: 0, step: 0.05 },
-      { key: "environment", label: "Environment", type: "file", accept: ".hdr" },
-      { key: "environmentIntensity", label: "Environment strength", type: "number", min: 0, step: 0.05 },
-      { key: "toneMapping", label: "Tone map", type: "select", options: TONE_MAPPINGS },
-      { key: "exposure", label: "Exposure", type: "number", step: 0.1 },
-      { key: "antialias", label: "Anti-aliasing", type: "select", options: ANTI_ALIASING },
-      { key: "pixelRatio", label: "Pixel ratio", type: "number", min: 0.5, max: 3, step: 0.25 },
-      { key: "renderScale", label: "Render scale", type: "number", min: 0.5, max: 1, step: 0.05 },
-      { key: "adaptiveScale", label: "Adaptive scale", type: "boolean" },
+      { section: "Lighting", key: "environment", label: "Environment", type: "file", accept: ".hdr" },
+      { section: "Lighting", key: "environmentIntensity", label: "Environment strength", type: "number", min: 0, step: 0.05 },
+      { section: "Lighting", key: "ambient", label: "Ambient", type: "colour" },
+      { section: "Lighting", key: "ambientIntensity", label: "Ambient strength", type: "number", min: 0, step: 0.05 },
+      { section: "Lighting", key: "headlight", label: "Headlight", type: "number", min: 0, step: 0.05 },
+      { section: "Tone", key: "toneMapping", label: "Tone map", type: "select", options: TONE_MAPPINGS },
+      { section: "Tone", key: "exposure", label: "Exposure", type: "number", step: 0.1 },
+      { section: "Physics", key: "floored", label: "Floor", type: "boolean" },
+      { section: "Physics", key: "floor", label: "Floor height", type: "number", step: 0.1 },
+      { section: "Physics", key: "gravity", type: "number", min: 0, step: 0.1 },
+      { section: "Physics", key: "drag", type: "number", min: 0, max: 1, step: 0.01 },
+      { section: "Rendering", key: "antialias", label: "Anti-aliasing", type: "select", options: ANTI_ALIASING },
+      { section: "Rendering", key: "pixelRatio", label: "Pixel ratio", type: "number", min: 0.5, max: 3, step: 0.25 },
+      { section: "Rendering", key: "renderScale", label: "Render scale", type: "number", min: 0.5, max: 1, step: 0.05 },
+      { section: "Rendering", key: "adaptiveScale", label: "Adaptive scale", type: "boolean" },
     ],
     read: (engine) => {
       const environment = readEnvironment(engine)

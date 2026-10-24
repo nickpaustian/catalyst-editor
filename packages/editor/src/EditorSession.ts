@@ -1,4 +1,4 @@
-import { Mat4, Model, Node3D, Prefab, Quaternion, Vector3, DebugShapes, Visual, editorIcon, exposedProperties, readExposed, writeExposed, type Catalyst, type ExposedProperty, type NodeClass, type NodeJSON, type Script } from "@nickpaustian/catalyst"
+import { Mat4, Model, Node3D, Prefab, Quaternion, Slate, UIElement, Vector3, DebugShapes, Visual, editorIcon, uiLayer, exposedProperties, readExposed, writeExposed, type Catalyst, type ExposedProperty, type NodeClass, type NodeJSON, type Script } from "@nickpaustian/catalyst"
 import { Input } from "@nickpaustian/catalyst/input"
 import { BoxCollider, MeshCollider, Physics } from "@nickpaustian/catalyst/physics"
 import { EditMesh, Primitive } from "@nickpaustian/catalyst/prefabs"
@@ -51,6 +51,8 @@ export interface SelectionProperty extends ExposedProperty {
   value: unknown
   /** For a `file`: the project's files it accepts, by path. */
   choices?: string[]
+  /** For a recipe setting: the heading it is listed under. */
+  section?: string
 }
 
 /** A script on the selected node: built, with its fields, or still named by a file that could not be built. */
@@ -107,6 +109,8 @@ export interface EditorCells {
     prefab: string | null
     /** Buttons the inspector offers for this kind of node. */
     actions: { id: string; label: string; title: string }[]
+    /** Whether the node has a place in the scene to show and move; UI nodes on a slate don't. */
+    spatial: boolean
     position: { x: number; y: number; z: number }
     rotation: { x: number; y: number; z: number }
     properties: SelectionProperty[]
@@ -327,6 +331,7 @@ export class EditorSession {
       unsubscribeFailed()
     }
     this.camera = new EditorCamera(this.engine)
+    uiLayer(this.engine)?.setAttribute("inert", "")
     for (const { kind, cls } of this.recipe.kinds) if (!this.engine.registry.has(kind) && typeof cls === "function") this.engine.register({ [kind]: cls as NodeClass })
     const input = this.engine.find(Input)
     this.input = input ? new EditorInput(input, { focusSelected: () => this.focusSelected(), deleteSelected: () => this.deleteSelected(), moveTool: () => this.setGizmo("translate"), rotateTool: () => this.setGizmo("rotate"), scaleTool: () => this.setGizmo("scale"), boxTool: () => this.setTool("box"), colliderTool: () => this.setTool("collider"), vertexTool: () => this.setVertexEdit(!this.camera.vertexEdit), vertexMode: () => this.setEditMode("vertex"), edgeMode: () => this.setEditMode("edge"), faceMode: () => this.setEditMode("face"), extrude: () => this.extrude() }) : null
@@ -674,6 +679,7 @@ export class EditorSession {
       prefab: node instanceof Prefab ? node.url : null,
       scripts: this.selectionScripts(node),
       actions: this.nodeActions(node),
+      spatial: isSpatial(node),
       position: { x: round(p.x), y: round(p.y), z: round(p.z) },
       rotation: { x: round(degrees(e.x), 2), y: round(degrees(e.y), 2), z: round(degrees(e.z), 2) },
       properties: exposedProperties(node)
@@ -1673,12 +1679,14 @@ export class EditorSession {
   private attachGizmo(node: Node3D): void {
     if (!this.camera.isActive) return
     const changed = () => this.publishSelection()
-    if (this.selection.size > 1) this.camera.attachTarget(groupTarget(this.selectionRoots(), node), changed)
-    else this.camera.attach(node, changed)
+    const roots = this.selectionRoots().filter(isSpatial)
+    if (this.selection.size > 1 && roots.length) this.camera.attachTarget(groupTarget(roots, isSpatial(node) ? node : roots[roots.length - 1]), changed)
+    else if (isSpatial(node)) this.camera.attach(node, changed)
+    else this.camera.detach()
   }
 
   private focusSelected(): void {
-    if (!this.selected || !this.camera.isActive) return
+    if (!this.selected || !this.camera.isActive || !isSpatial(this.selected)) return
     // In the vertex tool, F looks at the picked vertices, edges or faces: their average, from a distance that shows their spread.
     const elements = this.camera.vertexEdit ? this.camera.elementFocus() : null
     if (elements) return this.camera.focusPoint(elements.centre, elements.distance)
@@ -1968,13 +1976,35 @@ export class EditorSession {
     }
     if (parent !== (under ?? this.selected ?? this._root)) return
     const node = definition.make({ name: `${definition.kind.charAt(0).toLowerCase()}${definition.kind.slice(1)}`, visualise: this.visualised, ...picked })
-    parent.addNode(node)
-    node.transform.setWorldPosition(at ?? (this.camera.isActive ? this.camera.orbitTarget : new Vector3(0, 1, 0)))
+    // A UI node only draws on a slate: added elsewhere, it goes on the scene's first slate, or a new one
+    let target = parent
+    let added: Node3D = node
+    if (node instanceof UIElement && !(parent instanceof Slate || parent instanceof UIElement)) {
+      const slate = this.firstSlate()
+      if (slate) target = slate
+      else {
+        added = new Slate()
+        added.addNode(node)
+        target = this._root!
+      }
+    }
+    target.addNode(added)
+    if (isSpatial(added)) added.transform.setWorldPosition(at ?? (this.camera.isActive ? this.camera.orbitTarget : new Vector3(0, 1, 0)))
     if (this.visualised) node.visualised = true
-    this.collapsed.delete(parent)
-    const index = parent.indexOf(node)
-    this.record(`add ${definition.label.toLowerCase()}`, () => node.remove(), () => parent.insertNode(node, index, node.name))
+    this.collapsed.delete(target)
+    this.collapsed.delete(added)
+    const index = target.indexOf(added)
+    this.record(`add ${definition.label.toLowerCase()}`, () => added.remove(), () => target.insertNode(added, index, added.name))
     this.select(node)
+  }
+
+  private firstSlate(): Slate | null {
+    let found: Slate | null = null
+    this._root?.walk((node) => {
+      if (found) return false
+      if (node instanceof Slate && !node.internal) found = node
+    })
+    return found
   }
 
   /** A kind for one of the project's prefab files, named after the file. */
@@ -2122,6 +2152,8 @@ const degrees = (radians: number): number => (radians * 180) / Math.PI
 const radians = (degrees: number): number => (degrees * Math.PI) / 180
 
 /** A box's dimensions, for undo; null for a node without them. */
+const isSpatial = (node: Node3D): boolean => !(node instanceof Slate || node instanceof UIElement)
+
 const sizeOf = (node: Node3D): Vector3 | null => (isSized(node) ? new Vector3(node.width, node.height, node.depth) : null)
 
 /** The blocking-in prefabs: a mesh child with a colour and an opacity, which an editable mesh can take over. */

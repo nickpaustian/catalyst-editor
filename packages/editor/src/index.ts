@@ -10,7 +10,7 @@ export { PROJECT_EXTENSION, LEGACY_PROJECT_FILE, projectFileOf, projectFolderOfF
 export { PROJECT_DIALOG_DEFAULT } from "./cells"
 export { openContextMenu, closeContextMenu, CONTEXT_MENU_CELL, type MenuItem, type ContextMenuState } from "./contextMenu"
 export { openConfirm, closeConfirm, CONFIRM_CELL, type ConfirmAction, type ConfirmState } from "./confirm"
-export type { Recipe, NodeKind, RunContext, RecipeSettings } from "./recipe"
+export type { Recipe, NodeKind, RunContext, RecipeSetting, RecipeSettings } from "./recipe"
 export { sceneRecipe, SCENE_FILE, type SceneEnvironment } from "./recipes/scene"
 export { PlayerStart } from "./recipes/playerStart"
 export { createEngine } from "./engine"

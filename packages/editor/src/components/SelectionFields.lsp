@@ -13,7 +13,7 @@
     <div class="actions" $if="shared['editor:selection'].actions && shared['editor:selection'].actions.length && shared['editor:selection'].count === 1">
       <button class="button small" type="button" $for="action in shared['editor:selection'].actions" $key="action.id" $title="action.title" @click="runAction(action.id)">{{ action.label }}</button>
     </div>
-    <section class="section">
+    <section class="section" $if="shared['editor:selection'].spatial">
       <button class="section-header" type="button" $aria-expanded="state.transformOpen" @click="state.transformOpen = !state.transformOpen"><span class="title">Transform</span></button>
       <div class="section-body" $if="state.transformOpen">
         <div class="properties">
