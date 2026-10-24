@@ -13,7 +13,7 @@ export const createEngine = (recipe: Recipe, options: CatalystOptions & { grid?:
   const { grid = true, ...rest } = options
   const engine = new Catalyst({
     background: 0x15181d,
-    pixelRatio: 2,
+    render: { pixelRatio: 2 },
     log: (message, tag) => console.debug(`[${tag ?? "catalyst"}] ${message}`),
     ...rest,
     modules: [new Physics({ gravity: 9.8 }), new Input(), new Interaction(), new Resources(), ...(recipe.modules?.() ?? []), ...(rest.modules ?? [])],

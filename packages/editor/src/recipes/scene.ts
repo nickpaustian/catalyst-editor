@@ -1,4 +1,4 @@
-import { Camera, Colour, Light, Model, Node3D, StreamedSurface, type Catalyst, type NodeJSON } from "@nickpaustian/catalyst"
+import { Camera, Colour, Light, Model, Node3D, StreamedSurface, type AntiAliasing, type Catalyst, type NodeJSON, type RenderSettings } from "@nickpaustian/catalyst"
 import { pickFile } from "../ProjectFolder"
 import { Interactable } from "@nickpaustian/catalyst/interaction"
 import { BoxCollider, CapsuleCollider, SphereCollider } from "@nickpaustian/catalyst/physics"
@@ -27,10 +27,20 @@ export interface SceneEnvironment {
   toneMapping: ToneMapping
   /** In stops. */
   exposure: number
+  /** How a run draws; the editor's own viewport keeps its settings. */
+  antialias: AntiAliasing
+  pixelRatio: number
+  renderScale: number
+  adaptiveScale: boolean
 }
 
+const ANTI_ALIASING: AntiAliasing[] = ["taa", "msaa", "none"]
+/** The run's render settings per engine, as the scene last set them; the editor viewport does not draw with them. */
+const renderSettings = new WeakMap<Catalyst, RenderSettings>()
+const renderOf = (engine: Catalyst): RenderSettings => renderSettings.get(engine) ?? { antialias: DEFAULT_ENVIRONMENT.antialias, pixelRatio: DEFAULT_ENVIRONMENT.pixelRatio, renderScale: DEFAULT_ENVIRONMENT.renderScale, adaptiveScale: DEFAULT_ENVIRONMENT.adaptiveScale, gpuTiming: false }
+
 const TONE_MAPPINGS: ToneMapping[] = ["none", "neutral", "aces"]
-const DEFAULT_ENVIRONMENT: SceneEnvironment = { floor: 0, gravity: 9.8, drag: 0.1, ambient: 0xffffff, ambientIntensity: 0.35, headlight: 0.4, environment: null, environmentIntensity: 1, toneMapping: "none", exposure: 0 }
+const DEFAULT_ENVIRONMENT: SceneEnvironment = { floor: 0, gravity: 9.8, drag: 0.1, ambient: 0xffffff, ambientIntensity: 0.35, headlight: 0.4, environment: null, environmentIntensity: 1, toneMapping: "none", exposure: 0, antialias: "taa", pixelRatio: 2, renderScale: 1, adaptiveScale: true }
 
 const hexOf = (c: Colour): number => (Math.round(c.x) << 16) | (Math.round(c.y) << 8) | Math.round(c.z)
 const colourOf = (hex: number): Colour => new Colour((hex >> 16) & 255, (hex >> 8) & 255, hex & 255)
@@ -50,10 +60,18 @@ const readEnvironment = (engine: Catalyst): SceneEnvironment => {
     environmentIntensity: engine.environment?.intensity ?? 1,
     toneMapping: engine.toneMapping,
     exposure: engine.exposure,
+    antialias: renderOf(engine).antialias,
+    pixelRatio: renderOf(engine).pixelRatio,
+    renderScale: renderOf(engine).renderScale,
+    adaptiveScale: renderOf(engine).adaptiveScale,
   }
 }
-const applyEnvironment = (engine: Catalyst, environment: Partial<SceneEnvironment> | undefined): void => {
+/** `running` applies the render settings to the engine too; while editing they are only kept for the run. */
+const applyEnvironment = (engine: Catalyst, environment: Partial<SceneEnvironment> | undefined, running = false): void => {
   const next = { ...DEFAULT_ENVIRONMENT, ...environment }
+  const render: RenderSettings = { antialias: ANTI_ALIASING.includes(next.antialias) ? next.antialias : "taa", pixelRatio: next.pixelRatio, renderScale: next.renderScale, adaptiveScale: next.adaptiveScale, gpuTiming: false }
+  renderSettings.set(engine, render)
+  if (running) engine.render.apply({ ...render, gpuTiming: engine.render.gpuTiming })
   const world = engine.find(Physics)?.world
   if (world) {
     world.floor = next.floor
@@ -129,6 +147,10 @@ export const sceneRecipe: Recipe = {
       { key: "environmentIntensity", label: "Environment strength", type: "number", min: 0, step: 0.05 },
       { key: "toneMapping", label: "Tone map", type: "select", options: TONE_MAPPINGS },
       { key: "exposure", label: "Exposure", type: "number", step: 0.1 },
+      { key: "antialias", label: "Anti-aliasing", type: "select", options: ANTI_ALIASING },
+      { key: "pixelRatio", label: "Pixel ratio", type: "number", min: 0.5, max: 3, step: 0.25 },
+      { key: "renderScale", label: "Render scale", type: "number", min: 0.5, max: 1, step: 0.05 },
+      { key: "adaptiveScale", label: "Adaptive scale", type: "boolean" },
     ],
     read: (engine) => {
       const environment = readEnvironment(engine)
@@ -176,7 +198,7 @@ export const sceneRecipe: Recipe = {
       : "click to look around · WASD move · shift sprint · space jump · F interacts · run again from the editor to reload"
   },
   run: async ({ engine, root, scene }) => {
-    applyEnvironment(engine, (scene as { environment?: Partial<SceneEnvironment> }).environment)
+    applyEnvironment(engine, (scene as { environment?: Partial<SceneEnvironment> }).environment, true)
     const physics = engine.find(Physics)
     let orbit: OrbitCamera | null = null
     root.walk((node) => {
