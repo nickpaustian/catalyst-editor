@@ -48,6 +48,8 @@ export type SelectMode = "replace" | "toggle" | "range"
 export interface SelectionProperty extends ExposedProperty {
   label: string
   value: unknown
+  /** For a `file`: the project's files it accepts, by path. */
+  choices?: string[]
 }
 
 /** A script on the selected node: built, with its fields, or still named by a file that could not be built. */
@@ -161,7 +163,7 @@ export type EditorCommand =
   | { type: "attachScript"; url: string }
   | { type: "attachScriptTo"; id: number; url: string }
   | { type: "detachScript"; index: number }
-  | { type: "setScriptProperty"; index: number; key: string; value: unknown }
+  | { type: "setScriptProperty"; index: number; key: string; value: unknown; pick?: boolean }
   | { type: "newScript"; name: string; attach?: boolean }
   | { type: "reloadScripts" }
   | { type: "openScript"; path: string }
@@ -179,7 +181,7 @@ export type EditorCommand =
   | { type: "closeScript" }
   | { type: "focus" }
   | { type: "setTransform"; position: { x: number; y: number; z: number }; rotation: { x: number; y: number; z: number } }
-  | { type: "setProperty"; key: string; value: unknown }
+  | { type: "setProperty"; key: string; value: unknown; pick?: boolean }
   | { type: "rename"; name: string }
   | { type: "setSetting"; key: string; value: unknown; pick?: boolean }
 
@@ -196,6 +198,21 @@ export interface FileTree {
   name: string
   kind: "file" | "directory"
   children?: FileTree[]
+}
+
+const MEDIA_EXTENSIONS: Record<string, string[]> = {
+  image: [".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif", ".svg", ".ktx2"],
+  audio: [".mp3", ".ogg", ".wav", ".m4a", ".flac", ".aac"],
+  video: [".mp4", ".webm", ".mov"],
+  model: [".glb", ".gltf"],
+}
+
+/** Whether a path matches an input's `accept`: extensions (`.hdr`) or media types (`image/*`); no accept takes any file. */
+const accepts = (accept: string | undefined, path: string): boolean => {
+  const kinds = (accept ?? "").split(",").map((kind) => kind.trim().toLowerCase()).filter(Boolean)
+  if (!kinds.length) return true
+  const extension = path.slice(path.lastIndexOf(".")).toLowerCase()
+  return kinds.some((kind) => (kind.startsWith(".") ? kind === extension : (MEDIA_EXTENSIONS[kind.split("/")[0]] ?? []).includes(extension)))
 }
 
 /** Folders never listed in the files pane. */
@@ -240,6 +257,8 @@ export class EditorSession {
   private snapInverted = false
   private streaming: StreamingPreset = preferences.streaming
   private filesGeneration = 0
+  /** Every file in the project by path, as the files pane last listed them. */
+  private projectFiles: string[] = []
   private readonly history = new History()
   private dragStart: { node: Node3D; before: Mat4; size: Vector3 | null }[] | null = null
   private vertexDragStart: { mesh: EditMesh; before: number[] } | null = null
@@ -522,11 +541,18 @@ export class EditorSession {
     this.set("editor:project", { open: this._root !== null, name: this.settings?.name ?? this.folder?.name ?? null, recipe: this.recipe.name, storage: this.folder?.storage ?? null, status: status ?? (dirty ? "unsaved changes" : ""), supported: this.folders.isSupported, browserStorage: this.folders.hasBrowserStorage, dirty })
   }
 
+  /** A property as the panels show it; a `file` lists the project's files it accepts. */
+  private field(property: ExposedProperty, value: unknown): SelectionProperty {
+    const field: SelectionProperty = { ...property, label: property.label ?? property.key, value }
+    if (property.type === "file") field.choices = this.projectFiles.filter((path) => accepts(property.accept, path) && !this.recipe.files?.includes(path))
+    return field
+  }
+
   private publishSettings(): void {
     const settings = this.recipe.settings
     if (!settings || !this._root) return this.set("editor:settings", null)
     const values = settings.read(this.engine, this._root)
-    this.set("editor:settings", { title: settings.title, fields: settings.fields.map((field) => ({ ...field, label: field.label ?? field.key, value: values[field.key] })) })
+    this.set("editor:settings", { title: settings.title, fields: settings.fields.map((field) => this.field(field, values[field.key])) })
   }
 
   private publishHistory(): void {
@@ -666,7 +692,7 @@ export class EditorSession {
       rotation: { x: round(degrees(e.x), 2), y: round(degrees(e.y), 2), z: round(degrees(e.z), 2) },
       properties: exposedProperties(node)
         .filter((property) => !property.hidden)
-        .map((property) => ({ ...property, label: property.label ?? property.key, value: readExposed(node, property) }))
+        .map((property) => this.field(property, readExposed(node, property)))
         .sort((a, b) => Number(LIST_TYPES.includes(a.type)) - Number(LIST_TYPES.includes(b.type))),
     })
   }
@@ -867,7 +893,8 @@ export class EditorSession {
         this.detachScript(command.index)
         break
       case "setScriptProperty":
-        this.writeScriptProperty(command.index, command.key, command.value)
+        if (command.pick) void this.pickFileFor(command.key, command.index)
+        else this.writeScriptProperty(command.index, command.key, command.value)
         break
       case "newScript":
         await this.newScript(command.name, command.attach ?? true)
@@ -921,13 +948,14 @@ export class EditorSession {
         this.writeTransform(command.position, command.rotation)
         break
       case "setProperty":
-        this.writeProperty(command.key, command.value)
+        if (command.pick) void this.pickFileFor(command.key)
+        else this.writeProperty(command.key, command.value)
         break
       case "rename":
         this.renameSelected(command.name)
         break
       case "setSetting":
-        if (command.pick) void this.pickSetting(command.key)
+        if (command.pick) void this.pickFileFor(command.key, "setting")
         else this.writeSetting(command.key, command.value)
         break
     }
@@ -1133,7 +1161,7 @@ export class EditorSession {
       url: script.url,
       name: name(script.url),
       built: true,
-      fields: exposedProperties(script).map((property) => ({ ...property, label: property.label ?? property.key, value: readExposed(script, property) })),
+      fields: exposedProperties(script).map((property) => this.field(property, readExposed(script, property))),
     }))
     const pending = node.pendingScripts.map((json, i) => ({ index: node.scripts.length + i, url: json.url, name: name(json.url), built: false, fields: [] }))
     return [...built, ...pending]
@@ -1182,9 +1210,9 @@ export class EditorSession {
     if (!node || !script) return
     const property = exposedProperties(script).find((p) => p.key === key)
     if (!property || property.readonly) return
-    const next = this.coerce(property, value)
-    if (next === undefined) return
     const before = readExposed(script, property)
+    const next = this.coerce(property, value, before)
+    if (next === undefined) return
     if (JSON.stringify(before) === JSON.stringify(next)) return
     writeExposed(script, property, next)
     this.record(property.label ?? key, () => writeExposed(script, property, before), () => writeExposed(script, property, next), `script:${this.idOf(node)}:${index}:${key}`)
@@ -1352,7 +1380,17 @@ export class EditorSession {
       return out.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "directory" ? -1 : 1))
     }
     const tree = await read("")
-    if (generation === this.filesGeneration && this.folder === folder) this.set("editor:files", tree)
+    if (generation !== this.filesGeneration || this.folder !== folder) return
+    this.set("editor:files", tree)
+    const files: string[] = []
+    const gather = (entries: FileTree[]) => {
+      for (const entry of entries) entry.kind === "directory" ? gather(entry.children ?? []) : files.push(entry.path)
+    }
+    gather(tree)
+    if (files.join("\n") === this.projectFiles.join("\n")) return
+    this.projectFiles = files.sort()
+    this.publishSettings()
+    this.publishSelection()
   }
 
   /** Choose a file and copy it into the project, under `dir` (assets by default). */
@@ -1704,9 +1742,9 @@ export class EditorSession {
     if (!node) return
     const property = exposedProperties(node).find((p) => p.key === key)
     if (!property || property.readonly) return
-    const next = this.coerce(property, value)
-    if (next === undefined) return
     const before = readExposed(node, property)
+    const next = this.coerce(property, value, before)
+    if (next === undefined) return
     if (JSON.stringify(before) === JSON.stringify(next)) return
     const after = Array.isArray(next) ? [...next] : next
     const previous = Array.isArray(before) ? [...before] : before
@@ -1716,14 +1754,22 @@ export class EditorSession {
     if (key === "active" || key === "visible") this.publishTree()
   }
 
-  /** A `file` setting: choose a file, import it into the project's assets and point the setting at it. */
-  private async pickSetting(key: string): Promise<void> {
-    const field = this.recipe.settings?.fields.find((f) => f.key === key)
+  /**
+   * A `file` field of the selected node, one of its scripts (by index) or
+   * the recipe's settings: choose a file from disk, import it into the
+   * project's assets and point the field at it.
+   */
+  private async pickFileFor(key: string, owner?: number | "setting"): Promise<void> {
+    const target = owner === "setting" ? null : owner === undefined ? this.selected : this.selected?.scripts[owner]
+    const field = owner === "setting" ? this.recipe.settings?.fields.find((f) => f.key === key) : target ? exposedProperties(target).find((p) => p.key === key) : undefined
     if (!field || field.type !== "file") return
     const file = await pickFile(field.accept ?? "")
     if (!file || !this.folder) return
-    this.writeSetting(key, await this.folder.importFile(file))
+    const path = await this.folder.importFile(file, ASSETS_DIR)
     await this.publishFiles()
+    if (owner === "setting") this.writeSetting(key, path)
+    else if (owner === undefined) this.writeProperty(key, path)
+    else this.writeScriptProperty(owner, key, path)
   }
 
   private writeSetting(key: string, value: unknown): void {
@@ -1748,7 +1794,7 @@ export class EditorSession {
   }
 
   /** A value from the panel in the property's type, or undefined when it is not one. */
-  private coerce(property: ExposedProperty, value: unknown): unknown {
+  private coerce(property: ExposedProperty, value: unknown, current?: unknown): unknown {
     if (property.type === "number") {
       let n = Number(value)
       if (!Number.isFinite(n)) return undefined
@@ -1763,7 +1809,7 @@ export class EditorSession {
     }
     if (property.type === "tags") return [...new Set(toStrings(value).map((tag) => tag.trim()).filter(Boolean))]
     if (property.type === "select") return typeof value === "string" && (property.options ?? []).includes(value) ? value : undefined
-    if (property.type === "file") return value === null || value === "" ? null : String(value)
+    if (property.type === "file") return value === null || value === "" ? (typeof current === "string" ? "" : null) : String(value)
     if (property.type === "layers") return [...new Set(toStrings(value).map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n < 32))].sort((a, b) => a - b)
     return String(value)
   }

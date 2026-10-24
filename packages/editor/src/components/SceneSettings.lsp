@@ -20,11 +20,11 @@
               <option $value="choice" $selected="choice === field.value">{{ choice }}</option>
             </template>
           </select>
-          <div class="well file" $else-if="field.type === 'file'">
-            <span class="name" $title="field.value || ''">{{ field.value || 'none' }}</span>
-            <button class="small" type="button" $if="field.value" aria-label="Clear" @click="clearFile(field)">×</button>
-            <button class="small" type="button" @click="pickFile(field)">Choose…</button>
-          </div>
+          <select $else-if="field.type === 'file'" class="well" $aria-label="field.label" $title="field.value || 'none'" $disabled="field.readonly" @change="applyFile($event, field)">
+            <option value="" $selected="!field.value">None</option>
+            <option $for="choice in field.fileChoices" $key="choice.path" $value="choice.path" $selected="choice.path === field.value">{{ choice.label }}</option>
+            <option value="catalyst:import">Import from disk…</option>
+          </select>
           <input $else class="well" type="text" $aria-label="field.label" $model="field.value" @change="apply(field)" />
         </div>
       </template>
@@ -37,14 +37,15 @@
 import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { scrub } from '../scrub.ts'
+import { IMPORT_CHOICE, fileChoices, type FileChoice } from '../fileField.ts'
 
-interface Field { key: string; label: string; type: string; value: unknown; min?: number; max?: number; step?: number; options?: string[]; accept?: string; ranged?: boolean; hex?: string }
+interface Field { key: string; label: string; type: string; value: unknown; min?: number; max?: number; step?: number; options?: string[]; accept?: string; ranged?: boolean; hex?: string; choices?: string[]; fileChoices?: FileChoice[] }
 
 const settings = shared('editor:settings', null)
 const state = reactive({ fields: [] as Field[], open: true })
 
 settings.subscribe((next: any) => {
-  state.fields = (next?.fields ?? []).map((field: Field) => ({ ...field, ranged: field.type === 'number' && field.min !== undefined && field.max !== undefined, hex: field.type === 'colour' ? toHex(field.value) : undefined }))
+  state.fields = (next?.fields ?? []).map((field: Field) => ({ ...field, ranged: field.type === 'number' && field.min !== undefined && field.max !== undefined, hex: field.type === 'colour' ? toHex(field.value) : undefined, fileChoices: field.type === 'file' ? fileChoices(field.choices, field.value) : undefined }))
 })
 
 function toHex(value: unknown): string {
@@ -60,12 +61,13 @@ function applySelect(event: Event, field: Field) {
   apply(field)
 }
 
-function pickFile(field: Field) {
-  sendCommand({ type: 'setSetting', key: field.key, value: null, pick: true })
-}
-
-function clearFile(field: Field) {
-  field.value = null
+function applyFile(event: Event, field: Field) {
+  const select = event.target as HTMLSelectElement
+  if (select.value === IMPORT_CHOICE) {
+    select.value = typeof field.value === 'string' ? field.value : ''
+    return sendCommand({ type: 'setSetting', key: field.key, value: null, pick: true })
+  }
+  field.value = select.value || null
   apply(field)
 }
 
@@ -96,30 +98,6 @@ function scrubField(event: PointerEvent, field: Field) {
   flex: 1 1 auto;
 }
 
-.file {
-  display: flex;
-  align-items: center;
-  gap: var(--cat-space-1);
-  min-width: 0;
-}
-
-.file .name {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.file .small {
-  flex: 0 0 auto;
-  font: inherit;
-  color: inherit;
-  background: none;
-  border: 0;
-  padding: 0 var(--cat-space-1);
-  cursor: pointer;
-}
 
 .colour {
   gap: var(--cat-space-2);

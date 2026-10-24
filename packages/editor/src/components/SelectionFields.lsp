@@ -75,6 +75,11 @@
                   <option $value="choice" $selected="choice === field.value">{{ choice }}</option>
                 </template>
               </select>
+              <select $else-if="field.type === 'file'" class="well" $aria-label="field.label" $title="field.value || 'none'" $disabled="field.readonly" @change="applyFile($event, field)">
+                <option value="" $selected="!field.value">None</option>
+                <option $for="choice in field.fileChoices" $key="choice.path" $value="choice.path" $selected="choice.path === field.value">{{ choice.label }}</option>
+                <option value="catalyst:import">Import from disk…</option>
+              </select>
               <input $else class="well" type="text" $aria-label="field.label" $model="field.value" $disabled="field.readonly" @change="applyField(field)" />
             </div>
           </template>
@@ -109,6 +114,11 @@
                   <input class="swatch" type="color" $aria-label="field.label" $model="field.hex" @input="applyScriptColour($event, script, field)" />
                   <span class="mono">{{ field.hex }}</span>
                 </label>
+                <select $else-if="field.type === 'file'" class="well" $aria-label="field.label" $title="field.value || 'none'" $disabled="field.readonly" @change="applyScriptFile($event, script, field)">
+                  <option value="" $selected="!field.value">None</option>
+                  <option $for="choice in field.fileChoices" $key="choice.path" $value="choice.path" $selected="choice.path === field.value">{{ choice.label }}</option>
+                  <option value="catalyst:import">Import from disk…</option>
+                </select>
                 <input $else class="well" type="text" $aria-label="field.label" $model="field.value" $disabled="field.readonly" @change="applyScriptField(script, field)" />
               </div>
             </template>
@@ -140,13 +150,14 @@ import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { SCRIPTS_DEFAULT } from '../cells.ts'
 import { scrub } from '../scrub.ts'
+import { IMPORT_CHOICE, fileChoices, type FileChoice } from '../fileField.ts'
 
 const selection = shared('editor:selection', null)
 const scriptFiles = shared('editor:scripts', SCRIPTS_DEFAULT)
 
 // Local copies of the fields, so typing doesn't fight the scene publishing
 // the same values back on every gizmo move
-interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number; options?: string[]; readonly?: boolean; hex?: string; ranged?: boolean }
+interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number; options?: string[]; readonly?: boolean; hex?: string; ranged?: boolean; choices?: string[]; fileChoices?: FileChoice[] }
 interface ScriptEntry { index: number; url: string; name: string; built: boolean; fields: Field[] }
 
 const state = reactive({
@@ -167,6 +178,7 @@ const local = (field: Field): Field => ({
   ...field,
   hex: field.type === 'colour' ? toHex(field.value) : undefined,
   ranged: field.type === 'number' && field.min !== undefined && field.max !== undefined,
+  fileChoices: field.type === 'file' ? fileChoices(field.choices, field.value) : undefined,
 })
 
 scriptFiles.subscribe((files: { path: string }[]) => {
@@ -264,6 +276,27 @@ function applySelect(event: Event, field: Field) {
 
 function applyField(field: Field) {
   sendCommand({ type: 'setProperty', key: field.key, value: field.value })
+}
+
+/** A file field's list changed: a file, none, or the import choice, which asks the session to pick one and leaves the field as it was. */
+function chooseFile(event: Event, field: Field): boolean {
+  const select = event.target as HTMLSelectElement
+  if (select.value !== IMPORT_CHOICE) {
+    field.value = select.value
+    return false
+  }
+  select.value = typeof field.value === 'string' ? field.value : ''
+  return true
+}
+
+function applyFile(event: Event, field: Field) {
+  if (chooseFile(event, field)) sendCommand({ type: 'setProperty', key: field.key, value: null, pick: true })
+  else applyField(field)
+}
+
+function applyScriptFile(event: Event, script: ScriptEntry, field: Field) {
+  if (chooseFile(event, field)) sendCommand({ type: 'setScriptProperty', index: script.index, key: field.key, value: null, pick: true })
+  else applyScriptField(script, field)
 }
 
 function toHex(value: unknown): string {
