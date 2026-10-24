@@ -67,7 +67,7 @@
                 >{{ n }}</button>
               </div>
               <label class="well colour" $else-if="field.type === 'colour'">
-                <input class="swatch" type="color" $aria-label="field.label" $value="field.hex" @input="applyColour($event, field)" />
+                <input class="swatch" type="color" $aria-label="field.label" $model="field.hex" @input="applyColour($event, field)" />
                 <span class="mono">{{ field.hex }}</span>
               </label>
               <select $else-if="field.type === 'select'" class="well" $aria-label="field.label" $disabled="field.readonly" @change="applySelect($event, field)">
@@ -106,7 +106,7 @@
                 </div>
                 <input $else-if="field.type === 'boolean'" class="checkbox" type="checkbox" $aria-label="field.label" $model="field.value" @change="applyScriptField(script, field)" />
                 <label class="well colour" $else-if="field.type === 'colour'">
-                  <input class="swatch" type="color" $aria-label="field.label" $value="field.hex" @input="applyScriptColour($event, script, field)" />
+                  <input class="swatch" type="color" $aria-label="field.label" $model="field.hex" @input="applyScriptColour($event, script, field)" />
                   <span class="mono">{{ field.hex }}</span>
                 </label>
                 <input $else class="well" type="text" $aria-label="field.label" $model="field.value" $disabled="field.readonly" @change="applyScriptField(script, field)" />

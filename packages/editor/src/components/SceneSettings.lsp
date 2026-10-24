@@ -12,7 +12,7 @@
           </div>
           <input $else-if="field.type === 'boolean'" class="checkbox" type="checkbox" $aria-label="field.label" $model="field.value" @change="apply(field)" />
           <label class="well colour" $else-if="field.type === 'colour'">
-            <input class="swatch" type="color" $aria-label="field.label" $value="field.hex" @input="applyColour($event, field)" />
+            <input class="swatch" type="color" $aria-label="field.label" $model="field.hex" @input="applyColour($event, field)" />
             <span class="mono">{{ field.hex }}</span>
           </label>
           <select $else-if="field.type === 'select'" class="well" $aria-label="field.label" @change="applySelect($event, field)">
