@@ -1575,6 +1575,9 @@ export class EditorSession {
 
   private focusSelected(): void {
     if (!this.selected || !this.camera.isActive) return
+    // In the vertex tool, F looks at the picked vertices, edges or faces: their average, from a distance that shows their spread.
+    const elements = this.camera.vertexEdit ? this.camera.elementFocus() : null
+    if (elements) return this.camera.focusPoint(elements.centre, elements.distance)
     if (this.selection.size <= 1) return this.camera.focus(this.selected)
     const centre = new Vector3()
     for (const node of this.selection) centre.addVector(node.transform.getWorldPosition())

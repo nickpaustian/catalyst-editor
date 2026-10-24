@@ -662,6 +662,22 @@ export class EditorCamera implements ViewPose {
     this.retarget()
   }
 
+  /** Where the picked elements are, in world space: their vertices' average, and a distance to look from that shows their spread. Null with nothing picked. */
+  elementFocus(): { centre: Vector3; distance: number } | null {
+    const mesh = this.editMesh
+    if (!mesh) return null
+    const moved = this.movedVertices()
+    if (moved.size === 0) return null
+    const world = mesh.transform.worldMatrix
+    const points = [...moved].map((i) => world.transformPoint(mesh.vertexAt(i), new Vector3()))
+    const centre = new Vector3()
+    for (const p of points) centre.addVector(p)
+    centre.scale(1 / points.length)
+    let spread = 0
+    for (const p of points) spread = Math.max(spread, p.distanceTo(centre))
+    return { centre, distance: Math.max(1, spread * 3) }
+  }
+
   /** The vertices the picked elements move: the picked vertices, or the ends of the picked edges, or the corners of the picked faces. */
   private movedVertices(): Set<number> {
     const mesh = this.editMesh
