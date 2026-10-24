@@ -12,6 +12,8 @@
     @pointerdown="press($event, row)"
     @click="select($event, row)"
     @contextmenu="context($event, row)"
+    @dragover="fileOver($event, row)"
+    @drop="fileDrop($event, row)"
   >
     <span class="twisty" $class="{ hidden: !row.hasChildren, open: row.expanded }" @click="toggle($event, row)">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>
@@ -46,6 +48,25 @@ shared('editor:tree', [])
 const addDialog = shared('editor:addDialog', false)
 const selection = shared('editor:selection', null)
 const state = reactive({ renaming: null as number | null })
+
+// ---- files dragged from the files pane ----
+
+const SCRIPT_FILE = /\.(ts|js)$/i
+
+// A script dropped on a node attaches to it
+function fileOver(event: DragEvent, row: Row) {
+  if (row.isRoot || !event.dataTransfer?.types.includes('text/catalyst-file')) return
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'link'
+}
+
+function fileDrop(event: DragEvent, row: Row) {
+  const path = event.dataTransfer?.getData('text/catalyst-file')
+  if (!path || row.isRoot) return
+  event.preventDefault()
+  event.stopPropagation()
+  if (SCRIPT_FILE.test(path)) sendCommand({ type: 'attachScriptTo', id: row.id, url: path })
+}
 
 // ---- inline rename ----
 

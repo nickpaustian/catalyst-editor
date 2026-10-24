@@ -15,7 +15,7 @@
       $class="{ selected: row.path === state.selected, dir: row.kind === 'directory', creating: row.kind === 'creating', drop: row.kind === 'directory' && row.path === state.dropTarget }"
       $style="'--depth: ' + row.depth"
       $aria-expanded="row.kind === 'directory' ? row.expanded : null"
-      $draggable="row.kind === 'file'"
+      $draggable="row.kind !== 'creating'"
       @click="pick(row)"
       @contextmenu="context($event, row)"
       @dragstart="dragStart($event, row)"
@@ -105,6 +105,7 @@ const IMAGE = /\.(png|jpe?g|webp|gif|avif|svg)$/i
 const SCRIPT = /\.(ts|js)$/i
 const HDR = /\.hdr$/i
 const SCRIPTS_DIR = 'scripts'
+const PREFAB = /^prefabs\/.+\.json$/i
 
 function extension(name: string): string {
   const dot = name.lastIndexOf('.')
@@ -291,27 +292,57 @@ function keyDown(event: KeyboardEvent) {
   } else if (event.key === 'Backspace' || event.key === 'Delete') {
     event.preventDefault()
     remove(row)
+  } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault()
+    step(row, event.key === 'ArrowDown' ? 1 : -1)
+  } else if (event.key === 'ArrowRight') {
+    event.preventDefault()
+    if (row.kind === 'directory' && !row.expanded) toggle(event, row)
+    else step(row, 1)
+  } else if (event.key === 'ArrowLeft') {
+    event.preventDefault()
+    if (row.kind === 'directory' && row.expanded) toggle(event, row)
+    else {
+      const parent = state.rows.find((r) => r.path === parentOf(row.path))
+      if (parent) choose(parent)
+    }
   }
+}
+
+function step(from: Row, by: number) {
+  const rows = state.rows.filter((r) => r.kind !== 'creating')
+  const next = rows[rows.indexOf(from) + by]
+  if (next) choose(next)
+}
+
+function choose(row: Row) {
+  state.selected = row.path
+  sendCommand({ type: 'fileInfo', path: row.kind === 'file' ? row.path : null })
 }
 
 // ---- drag out, drop in ----
 
-// A row dragged onto the viewport is placed there (a model) or applied (an hdr)
+// A row dragged onto a folder here moves into it; onto the viewport it is placed (a model) or applied (an hdr); onto a scene node a script attaches
 function dragStart(event: DragEvent, row: Row) {
-  if (row.kind === 'creating') return
-  if (row.kind !== 'file' || !event.dataTransfer) return
+  if (row.kind === 'creating' || !event.dataTransfer) return
   event.dataTransfer.setData('text/catalyst-file', row.path)
   event.dataTransfer.setData('text/plain', row.path)
-  event.dataTransfer.effectAllowed = 'copy'
+  event.dataTransfer.effectAllowed = 'copyMove'
 }
 
-// Files from outside the page land in the folder they are dropped on, or in assets
+// Where a drop on this row would land: the folder itself, or a file's folder
+function targetDir(row: Row | null): string {
+  return row ? (row.kind === 'directory' ? row.path : parentOf(row.path)) : ''
+}
+
+// Files from outside the page, and rows from this pane, land in the folder they are dropped on (or in assets, or the root for a row)
 function dragOver(event: DragEvent, row: Row | null) {
-  if (!event.dataTransfer || !event.dataTransfer.types.includes('Files')) return
+  const types = event.dataTransfer?.types
+  if (!event.dataTransfer || !types || !(types.includes('Files') || types.includes('text/catalyst-file'))) return
   event.preventDefault()
   event.stopPropagation()
-  event.dataTransfer.dropEffect = 'copy'
-  state.dropTarget = row ? (row.kind === 'directory' ? row.path : parentOf(row.path)) : ''
+  event.dataTransfer.dropEffect = types.includes('Files') ? 'copy' : 'move'
+  state.dropTarget = targetDir(row)
 }
 
 function dragLeave(event: DragEvent) {
@@ -319,13 +350,25 @@ function dragLeave(event: DragEvent) {
 }
 
 function drop(event: DragEvent, row: Row | null) {
-  const dropped = event.dataTransfer?.files
+  const transfer = event.dataTransfer
   state.dropTarget = null
-  if (!dropped || dropped.length === 0) return
+  if (!transfer) return
+  const moved = transfer.getData('text/catalyst-file')
+  if (moved) {
+    event.preventDefault()
+    event.stopPropagation()
+    const dir = targetDir(row)
+    const name = moved.split('/').pop() ?? moved
+    // Not onto itself, its own folder, or inside itself
+    if (dir === parentOf(moved) || dir === moved || dir.startsWith(`${moved}/`)) return
+    sendCommand({ type: 'renameFile', from: moved, to: dir ? `${dir}/${name}` : name })
+    return
+  }
+  if (transfer.files.length === 0) return
   event.preventDefault()
   event.stopPropagation()
-  const dir = row ? (row.kind === 'directory' ? row.path : parentOf(row.path)) : 'assets'
-  sendCommand({ type: 'importDropped', dir: dir || 'assets', files: [...dropped] })
+  const dir = row ? targetDir(row) : 'assets'
+  sendCommand({ type: 'importDropped', dir: dir || 'assets', files: [...transfer.files] })
 }
 
 // ---- menus ----
@@ -341,6 +384,7 @@ function itemsFor(row: Row): MenuItem[] {
     if (SCRIPT.test(row.name)) items.push({ label: 'Open in code pane', run: () => sendCommand({ type: 'openFile', path: row.path }) })
     if (MODEL.test(row.name)) items.push({ label: 'Add to scene', run: () => sendCommand({ type: 'addModel', path: row.path }) })
     if (HDR.test(row.name)) items.push({ label: 'Use as environment', run: () => sendCommand({ type: 'useEnvironment', path: row.path }) })
+    if (PREFAB.test(row.path)) items.push({ label: 'Add to scene', run: () => sendCommand({ type: 'add', kind: `prefab:${row.path}` }) })
   }
   items.push({ separator: true })
   items.push({ label: 'Rename', kbd: '↵', run: () => startRename(row) })

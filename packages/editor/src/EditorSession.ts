@@ -147,6 +147,7 @@ export type EditorCommand =
   | { type: "makePrefab" }
   | { type: "unpackPrefab" }
   | { type: "attachScript"; url: string }
+  | { type: "attachScriptTo"; id: number; url: string }
   | { type: "detachScript"; index: number }
   | { type: "setScriptProperty"; index: number; key: string; value: unknown }
   | { type: "newScript"; name: string; attach?: boolean }
@@ -783,6 +784,11 @@ export class EditorSession {
       case "unpackPrefab":
         await this.unpackPrefab()
         break
+      case "attachScriptTo": {
+        const node = this.nodesById.get(command.id)
+        if (node instanceof Node3D && node !== this._root) await this.attachScript(command.url, node)
+        break
+      }
       case "attachScript":
         await this.attachScript(command.url)
         break
@@ -893,6 +899,7 @@ export class EditorSession {
     const file = await writeProjectSettings(folder, next)
     this.settings = next
     this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
+    void this.publishFiles()
     this.publishProject(`saved ${file}`)
     void this.publishRecent()
   }
@@ -927,6 +934,7 @@ export class EditorSession {
       return
     }
     if (scene) this.askAboutSceneOnDisk()
+    void this.publishFiles()
     const notes: string[] = []
     if (scripts.length) {
       await this.reloadScripts()
@@ -1002,6 +1010,7 @@ export class EditorSession {
   private async save(folder: ProjectFolder): Promise<void> {
     if (!this._root) return
     const written = await this.recipe.save(folder, this._root, this.engine)
+    void this.publishFiles()
     this.history.markSaved()
     this.publishProject(`saved ${written.join(", ")}`)
   }
@@ -1057,8 +1066,7 @@ export class EditorSession {
   }
 
   /** Attach a script file to the selected node; its fields appear once it is built. */
-  private async attachScript(url: string): Promise<void> {
-    const node = this.selected
+  private async attachScript(url: string, node: Node3D | null = this.selected): Promise<void> {
     if (!node || node === this._root) return
     await node.addScript({ url })
     if (this.selected === node) this.publishSelection()
@@ -1298,6 +1306,7 @@ export class EditorSession {
     const path = `${PREFABS_DIR}/${slug(node.name)}.json`
     const { transform: _transform, ...json } = this.engine.serialise(node)
     await folder.writeJSON(path, json)
+    void this.publishFiles()
     const parent = node.parent as Node3D
     const index = parent.indexOf(node)
     const instance = new Prefab({ name: node.name, url: path, visualise: this.visualised })
