@@ -1,5 +1,5 @@
 <view>
-<div class="selection">
+<div class="selection" @dragover="scriptOver($event)" @dragleave="scriptLeave($event)" @drop="scriptDrop($event)">
   <div class="empty-state" $if="!shared['editor:selection']">
     <span class="what">Nothing selected</span>
     <span class="how">Pick a node in the scene tree or the viewport.</span>
@@ -78,7 +78,7 @@
         </div>
       </div>
     </section>
-    <section class="section">
+    <section class="section" $class="{ drop: state.dropping }">
       <button class="section-header" type="button" $aria-expanded="state.scriptsOpen" @click="state.scriptsOpen = !state.scriptsOpen"><span class="title">Scripts</span><span class="count">{{ state.scripts.length }}</span></button>
       <div class="section-body" $if="state.scriptsOpen">
         <div class="script" $for="script in state.scripts" $key="script.index">
@@ -147,6 +147,7 @@ interface Field { key: string; label: string; type: string; value: number | bool
 interface ScriptEntry { index: number; url: string; name: string; built: boolean; fields: Field[] }
 
 const state = reactive({
+  dropping: false,
   name: '',
   px: 0, py: 0, pz: 0, rx: 0, ry: 0, rz: 0,
   fields: [] as Field[],
@@ -198,6 +199,30 @@ function editScript(script: ScriptEntry) {
 
 function detachScript(script: ScriptEntry) {
   sendCommand({ type: 'detachScript', index: script.index })
+}
+
+// A script dragged from the files pane onto the inspector attaches to the selected node
+const SCRIPT_FILE = /\.(ts|js)$/i
+
+function scriptOver(event: DragEvent) {
+  if (!selection.value || !event.dataTransfer?.types.includes('text/catalyst-file')) return
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'link'
+  state.dropping = true
+}
+
+function scriptLeave(event: DragEvent) {
+  if (!(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node | null)) state.dropping = false
+}
+
+function scriptDrop(event: DragEvent) {
+  state.dropping = false
+  const path = event.dataTransfer?.getData('text/catalyst-file')
+  if (!path || !selection.value) return
+  event.preventDefault()
+  if (!SCRIPT_FILE.test(path)) return
+  state.scriptsOpen = true
+  sendCommand({ type: 'attachScript', url: path })
 }
 
 function attachScript() {
@@ -515,5 +540,9 @@ function apply() {
 
 .attach > .well {
   flex: 1 1 auto;
+}
+.section.drop {
+  box-shadow: inset 0 0 0 1px var(--cat-accent);
+  border-radius: var(--cat-radius-sm);
 }
 </style>
