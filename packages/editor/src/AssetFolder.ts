@@ -1,11 +1,11 @@
 import type { FileInfo, FolderEntry, FolderTransfer, ProjectFolder, ProjectStorage } from "./ProjectFolder"
 
-export const ASSET_TABLE = ".catalyst/assets.json"
+export const ASSET_TABLE = ".assets.json"
 const ASSET_PREFIX = "asset:"
 const ID_PATTERN = /^asset:[0-9a-f-]{36}$/
 const FILE_PATH = /^[^:?#\s][^:?#]*\.[A-Za-z0-9]{1,10}$/
 const NOT_REFERENCES = new Set(["name", "type"])
-const SKIPPED_DIRS = new Set(["node_modules", ".git", ".catalyst"])
+const SKIPPED_DIRS = new Set(["node_modules", ".git"])
 const HASHED_UP_TO = 32 * 1024 * 1024
 const PREVIOUS_KEPT = 8
 
@@ -52,7 +52,7 @@ const mapStrings = async (value: unknown, map: (text: string) => string | Promis
 
 /**
  * A project folder whose saved JSON names files by id. The ids and the
- * paths they stand for live in `.catalyst/assets.json`; a file is given one
+ * paths they stand for live in `.assets.json`; a file is given one
  * the first time a saved scene or prefab names it. Reads give back paths,
  * so the engine and the editor only ever see paths; a rename through this
  * folder moves the path an id stands for, and the old path keeps loading.

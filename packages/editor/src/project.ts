@@ -1,3 +1,4 @@
+import { AssetFolder } from "./AssetFolder"
 import type { FolderSource, ProjectFolder } from "./ProjectFolder"
 
 /** The extension of a project's own file, `<name>.catalyst`: its settings, and what opens the project from outside. */
@@ -12,7 +13,7 @@ export interface ProjectSettings {
   description: string
   /** ISO date of creation. */
   created?: string
-  /** A picture of the project, as a path in its folder (`cover.png`), for the recent list; null or absent for none. */
+  /** A picture of the project, as a path in its folder (`cover.png`), for the recent list; null or absent for none. Saved by id. */
   image?: string | null
 }
 
@@ -50,7 +51,7 @@ export const readProjectSettings = async (folder: ProjectFolder): Promise<Projec
   const file = await projectFileOf(folder)
   if (!file) return null
   try {
-    const json = await folder.readJSON<Partial<ProjectSettings>>(file)
+    const json = await (await AssetFolder.open(folder)).readJSON<Partial<ProjectSettings>>(file)
     return { name: String(json.name ?? folder.name), recipe: String(json.recipe ?? "scene"), description: String(json.description ?? ""), created: json.created, image: typeof json.image === "string" ? json.image : null }
   } catch {
     return null
@@ -60,7 +61,8 @@ export const readProjectSettings = async (folder: ProjectFolder): Promise<Projec
 /** Write the settings to the project's file: the one it has, or a new `<name>.catalyst`. */
 export const writeProjectSettings = async (folder: ProjectFolder, settings: ProjectSettings): Promise<string> => {
   const file = (await projectFileOf(folder)) ?? `${slug(settings.name)}${PROJECT_EXTENSION}`
-  await folder.writeJSON(file, settings)
+  const assets = await AssetFolder.open(folder)
+  await assets.raw.writeJSON(file, settings.image ? { ...settings, image: await assets.toIds(settings.image) } : settings)
   return file
 }
 
@@ -75,7 +77,7 @@ export const writeProjectImage = async (folder: ProjectFolder, dataUrl: string):
 export const readProjectImage = async (folder: ProjectFolder, settings: ProjectSettings | null): Promise<string | null> => {
   if (!settings?.image) return null
   try {
-    const file = await folder.readFile(settings.image)
+    const file = await (await AssetFolder.open(folder)).readFile(settings.image)
     return await new Promise<string>((resolve, reject) => {
       const reader = new FileReader()
       reader.onload = () => resolve(String(reader.result))

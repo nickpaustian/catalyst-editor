@@ -1248,6 +1248,8 @@ export class EditorSession {
         if (url !== null) json.url = url
       }
     })
+    const image = moved(this.settings?.image)
+    if (this.settings && image !== null) this.settings = { ...this.settings, image }
     const settings = this.recipe.settings
     if (settings) {
       const values = settings.read(this.engine, root)
