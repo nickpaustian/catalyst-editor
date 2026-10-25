@@ -93,6 +93,8 @@ const streamable = shared('editor:streamable', STREAMABLE_DEFAULT)
 const state = reactive({ shown: [] as Row[], count: 0, before: 0, height: 0, selected: null as string | null, filter: '', renaming: null as string | null, creating: null as Creating | null, dropTarget: null as string | null })
 // Folders closed by hand; every folder starts open
 const collapsed = new Set<string>()
+// Packages shown as folders by hand; every package starts as one asset
+const opened = new Set<string>()
 let tree: Entry[] = []
 // Every row, open folders flattened; only the rows in view (state.shown) are rendered
 let rows: Row[] = []
@@ -107,10 +109,12 @@ const icons = {
   light: svg('<circle cx="8" cy="8" r="3"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>'),
   scene: svg('<rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/>'),
   file: svg('<path d="M4 1.5h5.5l3 3v10h-8.5z"/><path d="M9.5 1.5v3h3"/>'),
+  theca: svg('<path d="M2 11.5 8 14.5l6-3V5L8 2 2 5z"/><path d="M2 5l6 3 6-3M8 8v6.5"/><path d="M4.5 9.5h7M4.5 11.5h7" stroke-dasharray="1 1"/>'),
 }
 
 const MODEL = /\.(glb|gltf)$/i
 const GLB = /\.glb$/i
+const THECA = /\.theca$/i
 const IMAGE = /\.(png|jpe?g|webp|gif|avif|svg)$/i
 const SCRIPT = /\.(ts|js)$/i
 const HDR = /\.hdr$/i
@@ -139,6 +143,11 @@ function parentOf(path: string): string {
 // With a filter every folder is open and only matching files and their folders are listed
 function flatten(entries: Entry[], depth: number, out: Row[], needle: string) {
   for (const entry of entries) {
+    // A package is one asset, listed as a file, until it is opened to show what is inside
+    if (entry.kind === 'directory' && THECA.test(entry.name) && !opened.has(entry.path)) {
+      if (needle === '' || entry.name.toLowerCase().includes(needle)) out.push({ path: entry.path, name: entry.name, kind: 'file', depth, expanded: false, icon: icons.theca, type: 'theca' })
+      continue
+    }
     const expanded = entry.kind === 'directory' && (needle !== '' || !collapsed.has(entry.path))
     const children: Row[] = []
     if (entry.kind === 'directory' && entry.children) flatten(entry.children, depth + 1, children, needle)
@@ -407,6 +416,11 @@ function itemsFor(row: Row): MenuItem[] {
     items.push({ label: 'Import file here…', run: () => sendCommand({ type: 'importAsset', dir: row.path }) })
     items.push({ label: 'New folder…', run: () => startCreate(row.path, 'folder') })
     if (row.path === SCRIPTS_DIR) items.push({ label: 'New script…', run: () => startCreate(row.path, 'script') })
+    if (THECA.test(row.name)) items.push({ label: 'Hide contents', run: () => showContents(row.path, false) })
+  } else if (THECA.test(row.name)) {
+    items.push({ label: 'Add to scene', run: () => sendCommand({ type: 'addTheca', path: row.path }) })
+    if (streamable.value?.available) items.push({ label: 'Rebuild…', run: () => sendCommand({ type: 'rebuildTheca', path: row.path }) })
+    items.push({ label: 'Show contents', run: () => showContents(row.path, true) })
   } else {
     if (SCRIPT.test(row.name)) items.push({ label: 'Open in code pane', run: () => sendCommand({ type: 'openFile', path: row.path }) })
     if (MODEL.test(row.name)) items.push({ label: 'Add to scene', run: () => sendCommand({ type: 'addModel', path: row.path }) })
@@ -421,6 +435,12 @@ function itemsFor(row: Row): MenuItem[] {
   items.push({ separator: true })
   items.push({ label: 'Refresh', run: () => sendCommand({ type: 'refreshFiles' }) })
   return items
+}
+
+function showContents(path: string, show: boolean) {
+  if (show) opened.add(path)
+  else opened.delete(path)
+  refresh()
 }
 
 function context(event: MouseEvent, row: Row) {

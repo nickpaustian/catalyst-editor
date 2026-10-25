@@ -6,6 +6,8 @@ const LEGACY_ASSET_TABLE = ".catalyst/assets.json"
 const ASSET_PREFIX = "asset:"
 const ID_PATTERN = /^asset:[0-9a-f-]{36}$/
 const FILE_PATH = /^[^:?#\s][^:?#]*\.[A-Za-z0-9]{1,10}$/
+/** Folders that stand as one asset, named by an extension as a file is. */
+const PACKAGE = /\.theca$/i
 const NOT_REFERENCES = new Set(["name", "type"])
 const SKIPPED_DIRS = new Set(["node_modules", ".git"])
 const HASHED_UP_TO = 32 * 1024 * 1024
@@ -14,7 +16,7 @@ const PREVIOUS_KEPT = 8
 interface AssetEntry {
   path: string
   size: number
-  /** SHA-256 of the contents, for files small enough to read whole; null for larger ones. */
+  /** SHA-256 of the contents, for files small enough to read whole; null for larger ones and for packages. */
   hash: string | null
   /** Where the file was before, newest first, so names saved before a move still load. */
   previous?: string[]
@@ -102,7 +104,13 @@ export class AssetFolder implements ProjectFolder {
   private async resolve(path: string): Promise<string> {
     const now = this.current(path)
     if (now === path || ID_PATTERN.test(path)) return now
-    return (await this.raw.exists(path).catch(() => false)) ? path : now
+    return (await this.present(path)) ? path : now
+  }
+
+  /** Whether a file, or a package folder, is at a path: some folders answer `exists` only for files. */
+  private async present(path: string): Promise<boolean> {
+    if (await this.raw.exists(path).catch(() => false)) return true
+    return PACKAGE.test(path) && (await this.raw.list(path).then(() => true, () => false))
   }
 
   /** Every id in a JSON value turned into its path, and every old path into the new one. */
@@ -115,7 +123,7 @@ export class AssetFolder implements ProjectFolder {
     const before = JSON.stringify(this.table)
     const known = new Map<string, boolean>()
     const exists = async (path: string) => {
-      if (!known.has(path)) known.set(path, await this.raw.exists(path).catch(() => false))
+      if (!known.has(path)) known.set(path, await this.present(path))
       return known.get(path)!
     }
     const out = (await mapStrings(value, async (text) => {
@@ -130,9 +138,13 @@ export class AssetFolder implements ProjectFolder {
   }
 
   private async track(path: string): Promise<string> {
-    const file = await this.raw.readFile(path)
     const id = crypto.randomUUID()
-    this.table.assets[id] = { path, size: file.size, hash: file.size <= HASHED_UP_TO ? await hashOf(file) : null }
+    if (PACKAGE.test(path) && (await this.raw.list(path).then(() => true, () => false))) {
+      this.table.assets[id] = { path, size: 0, hash: null }
+    } else {
+      const file = await this.raw.readFile(path)
+      this.table.assets[id] = { path, size: file.size, hash: file.size <= HASHED_UP_TO ? await hashOf(file) : null }
+    }
     for (const entry of Object.values(this.table.assets)) if (entry.previous?.includes(path)) entry.previous = entry.previous.filter((p) => p !== path)
     this.index()
     return id
@@ -157,7 +169,7 @@ export class AssetFolder implements ProjectFolder {
    */
   async relink(): Promise<Relinked[]> {
     const missing: AssetEntry[] = []
-    for (const entry of Object.values(this.table.assets)) if (!(await this.raw.exists(entry.path).catch(() => false))) missing.push(entry)
+    for (const entry of Object.values(this.table.assets)) if (!PACKAGE.test(entry.path) && !(await this.present(entry.path))) missing.push(entry)
     if (!missing.length) return []
     const extensions = new Set(missing.map((entry) => extensionOf(entry.path)))
     const candidates: { path: string; size: number }[] = []
@@ -195,7 +207,7 @@ export class AssetFolder implements ProjectFolder {
   /** The table's paths that no file answers to now. */
   async missing(): Promise<string[]> {
     const out: string[] = []
-    for (const entry of Object.values(this.table.assets)) if (!(await this.raw.exists(entry.path).catch(() => false))) out.push(entry.path)
+    for (const entry of Object.values(this.table.assets)) if (!(await this.present(entry.path))) out.push(entry.path)
     return out
   }
 

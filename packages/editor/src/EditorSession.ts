@@ -200,6 +200,8 @@ export type EditorCommand =
   | { type: "addModel"; path: string }
   | { type: "useEnvironment"; path: string }
   | { type: "streamable"; path: string }
+  | { type: "addTheca"; path: string }
+  | { type: "rebuildTheca"; path: string }
   | { type: "streamableStart"; out: string; addToScene: boolean; options: StreamableOptions }
   | { type: "streamableCancel" }
   | { type: "streamableClose" }
@@ -215,6 +217,25 @@ const round = (n: number, places = 4) => Number(n.toFixed(places))
 const toStrings = (value: unknown): string[] => (Array.isArray(value) ? value.map(String) : String(value ?? "").split(","))
 const LIST_TYPES: ExposedProperty["type"][] = ["tags", "layers"]
 export const PREFABS_DIR = "prefabs"
+/** A streamed surface's package, as Iapetus writes it: a folder that stands as one asset. */
+const THECA = /\.theca$/i
+/** The manifest at the top of a theca. */
+const THECA_MANIFEST = "theca.json"
+
+/** What the editor reads of a theca's manifest. */
+interface ThecaManifest {
+  name?: string
+  source?: { path?: string; mesh?: number; meshName?: string | null }
+  builder?: string
+  options?: { permissive?: boolean; partition?: boolean; maxTexture?: number; quality?: number }
+  triangles?: number
+  clusters?: string | null
+  hierarchy?: { clusters?: number; pages?: number; levels?: number; bytes?: number }
+  tiles?: string | null
+  maps?: { role: string; size: number; bytes?: number }[]
+  warnings?: string[]
+}
+
 /** The assets folder, where imported files go. */
 export const ASSETS_DIR = "assets"
 
@@ -1067,6 +1088,12 @@ export class EditorSession {
       case "streamable":
         await this.openStreamable(command.path)
         break
+      case "addTheca":
+        await this.addTheca(command.path)
+        break
+      case "rebuildTheca":
+        await this.rebuildTheca(command.path)
+        break
       case "streamableStart":
         await this.startStreamable(command.out, command.addToScene, command.options)
         break
@@ -1523,6 +1550,7 @@ export class EditorSession {
   private async publishFileInfo(path: string | null): Promise<void> {
     const folder = this.folder
     if (!folder || !path) return this.set("editor:fileInfo", null)
+    if (THECA.test(path)) return this.publishThecaInfo(path)
     try {
       const info = await folder.stat(path)
       let preview: string | null = null
@@ -1539,6 +1567,19 @@ export class EditorSession {
     } catch {
       this.set("editor:fileInfo", null)
     }
+  }
+
+  /** A theca's facts from its manifest: what it holds and what made it. */
+  private async publishThecaInfo(path: string): Promise<void> {
+    const m = await this.readTheca(path)
+    if (!m) return this.set("editor:fileInfo", { path, size: 0, modified: 0, preview: null, facts: `no ${THECA_MANIFEST}: not a built theca` })
+    const bytes = (m.hierarchy?.bytes ?? 0) + (m.maps ?? []).reduce((n, map) => n + (map.bytes ?? 0), 0)
+    const megabytes = bytes ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : ""
+    const geometry = m.triangles ? `${m.triangles.toLocaleString()} triangles${m.hierarchy?.levels ? ` in ${m.hierarchy.levels} levels` : ""}` : "no geometry"
+    const maps = m.maps?.length ? m.maps.map((map) => `${MAP_NAMES[map.role] ?? map.role} ${map.size}`).join(", ") : "no maps"
+    const source = m.source?.path ? `from ${m.source.path.replace(/^.*\//, "")}${m.source.meshName ? ` (${m.source.meshName})` : ""}` : ""
+    const facts = [geometry, maps, megabytes, source, ...(m.warnings ?? [])].filter(Boolean).join(" · ")
+    this.set("editor:fileInfo", { path, size: bytes, modified: 0, preview: null, facts })
   }
 
   private async newScript(name: string, attach = true): Promise<void> {
@@ -1570,7 +1611,7 @@ export class EditorSession {
     this.set("editor:files", tree)
     const files: string[] = []
     const gather = (entries: FileTree[]) => {
-      for (const entry of entries) entry.kind === "directory" ? gather(entry.children ?? []) : files.push(entry.path)
+      for (const entry of entries) entry.kind === "directory" && !THECA.test(entry.name) ? gather(entry.children ?? []) : files.push(entry.path)
     }
     gather(tree)
     if (files.join("\n") === this.projectFiles.join("\n")) return
@@ -2211,7 +2252,7 @@ export class EditorSession {
     if (!absolute) return this.publishProject("making a model streamable needs a project folder on disk")
     const stem = path.replace(/^.*\//, "").replace(/\.[^.]+$/, "")
     const dir = path.includes("/") ? path.replace(/\/[^/]*$/, "") : ""
-    this.set("editor:streamable", { ...STREAMABLE_DEFAULT, available: true, open: true, phase: "reading", source: path, out: dir ? `${dir}/${stem}` : stem })
+    this.set("editor:streamable", { ...STREAMABLE_DEFAULT, available: true, open: true, phase: "reading", source: path, out: dir ? `${dir}/${stem}.theca` : `${stem}.theca` })
     try {
       const meshes = await this.converter.describe(absolute)
       const first = meshes.find((mesh) => mesh.buildable)
@@ -2229,7 +2270,8 @@ export class EditorSession {
     if (!target || target.split("/").some((part) => part === ".." || part === "." || part === "")) return this.setStreamable({ error: "The output folder must be a path inside the project." })
     // A folder already there is replaced only when it is an earlier build, never anything else.
     const there = await folder.raw.list(target).catch(() => [])
-    if (there.length > 0 && !(await folder.raw.exists(`${target}/clusters/manifest.json`).catch(() => false))) {
+    const earlier = async () => (await folder.raw.exists(`${target}/${THECA_MANIFEST}`).catch(() => false)) || (await folder.raw.exists(`${target}/clusters/manifest.json`).catch(() => false))
+    if (there.length > 0 && !(await earlier())) {
       return this.setStreamable({ error: `${target} is already a folder that is not a streamable build; choose another name.` })
     }
     const input = this.absolutePath(state.source)
@@ -2246,18 +2288,52 @@ export class EditorSession {
       this.streamJob = null
       await this.publishFiles()
       const name = state.source.replace(/^.*\//, "").replace(/\.[^.]+$/, "")
-      if (addToScene) await this.addNode("StreamedSurface", { name, clusters: `${target}/${result.clusters}`, tiles: result.tiles ? `${target}/${result.tiles}` : "" })
+      if (addToScene) {
+        if (THECA.test(target)) await this.addNode("StreamedSurface", { name, theca: target })
+        else await this.addNode("StreamedSurface", { name, clusters: `${target}/${result.clusters}`, tiles: result.tiles ? `${target}/${result.tiles}` : "" })
+      }
       const maps = result.maps.map((map) => MAP_NAMES[map.role] ?? map.role).join(", ")
       this.setStreamable({
         phase: "done",
         warnings: result.warnings,
-        summary: `${result.triangles.toLocaleString()} triangles into ${target}/${result.clusters}${maps ? `, with tile pyramids for ${maps}` : ", geometry only"}${addToScene ? "; added to the scene" : ""}.`,
+        summary: `${result.triangles.toLocaleString()} triangles into ${THECA.test(target) ? target : `${target}/${result.clusters}`}${maps ? `, with tile pyramids for ${maps}` : ", geometry only"}${addToScene ? "; added to the scene" : ""}.`,
       })
     } catch (error) {
       this.streamJob = null
       if (this.streamCancelled) this.setStreamable({ phase: "choose", message: "", error: "Stopped; nothing was written." })
       else this.setStreamable({ phase: "failed", error: error instanceof Error ? error.message : String(error) })
     }
+  }
+
+  private async readTheca(path: string): Promise<ThecaManifest | null> {
+    return (await this.folder?.raw.readJSON<ThecaManifest>(`${path}/${THECA_MANIFEST}`).catch(() => null)) ?? null
+  }
+
+  /** A streamed surface showing a theca, named after it. */
+  private async addTheca(path: string, at?: Vector3): Promise<void> {
+    const manifest = await this.readTheca(path)
+    if (!manifest) return this.publishProject(`${path} has no ${THECA_MANIFEST}; build it again with Make streamable`)
+    await this.addNode("StreamedSurface", { name: manifest.name ?? path.replace(/^.*\//, "").replace(THECA, ""), theca: path }, at)
+  }
+
+  /** The dialog again for a theca's source, with the options it was built with. */
+  private async rebuildTheca(path: string): Promise<void> {
+    const manifest = await this.readTheca(path)
+    const from = manifest?.source?.path
+    if (!manifest || !from) return this.publishProject(`${path} does not say what it was built from`)
+    const parts = [...(path.includes("/") ? path.replace(/\/[^/]*$/, "").split("/") : []), ...from.split("/")]
+    const resolved: string[] = []
+    for (const part of parts) {
+      if (part === "..") {
+        if (!resolved.length) return this.publishProject(`${path} was built from ${from}, outside the project`)
+        resolved.pop()
+      } else if (part && part !== ".") resolved.push(part)
+    }
+    const source = resolved.join("/")
+    if (!(await this.folder?.exists(source).catch(() => false))) return this.publishProject(`${path} was built from ${source}, which is not in the project now`)
+    await this.openStreamable(source)
+    const options = manifest.options ?? {}
+    this.setStreamable({ out: path, mesh: manifest.source?.mesh ?? 0, rebuild: { permissive: Boolean(options.permissive), partition: Boolean(options.partition), maxTexture: options.maxTexture ?? 16384 } })
   }
 
   private cancelStreamable(): void {

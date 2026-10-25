@@ -97,7 +97,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("recipe-sections")!.appendChild(host)
     await app.mount(id, host)
   }
-  // Files dragged from the files pane land in the scene: a model is placed, an hdr becomes the environment; files from outside are imported.
+  // Files dragged from the files pane land in the scene: a model or a theca is placed, an hdr becomes the environment; files from outside are imported.
   const viewport = document.getElementById("app")!
   const command = (c: Record<string, unknown>) => app.shared("editor:command").set({ ...c, seq: Math.random() })
   viewport.addEventListener("dragover", (event) => {
@@ -114,6 +114,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (path) {
       event.preventDefault()
       if (/\.(glb|gltf)$/i.test(path)) command({ type: "addModel", path })
+      else if (/\.theca$/i.test(path)) command({ type: "addTheca", path })
       else if (/\.hdr$/i.test(path)) command({ type: "useEnvironment", path })
       return
     }

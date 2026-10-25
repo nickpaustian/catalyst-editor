@@ -22,6 +22,8 @@ export const STREAMABLE_DEFAULT = {
   error: "",
   warnings: [] as string[],
   summary: "",
+  /** A rebuild's options, as the theca recorded them; null for a new build. */
+  rebuild: null as { permissive: boolean; partition: boolean; maxTexture: number } | null,
 }
 
 export const PROJECT_DIALOG_DEFAULT = { mode: null as "create" | "edit" | null, name: "untitled", recipe: "scene", description: "", image: null as string | null, location: null as string | null, locations: false, git: false, canGit: false, error: "", taken: "" }

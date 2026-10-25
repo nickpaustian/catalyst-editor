@@ -69,6 +69,21 @@
         "description": "A Catalyst project",
         "role": "Editor",
         "mimeType": "application/x-catalyst-project"
+      },
+      {
+        "ext": [
+          "theca"
+        ],
+        "name": "Theca",
+        "description": "A streamed surface: a cluster hierarchy and its tile pyramids",
+        "role": "None",
+        "exportedType": {
+          "identifier": "au.nickpaustian.theca",
+          "conformsTo": [
+            "com.apple.package",
+            "public.composite-content"
+          ]
+        }
       }
     ]
   },

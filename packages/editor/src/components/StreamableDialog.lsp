@@ -1,7 +1,7 @@
 <view>
 <div class="scrim" $if="state.open" @pointerdown="close()">
   <form class="dialog" role="dialog" aria-modal="true" aria-labelledby="streamable-title" @pointerdown="$event.stopPropagation()" @submit="start($event)">
-    <h2 class="dialog-title" id="streamable-title">Make streamable</h2>
+    <h2 class="dialog-title" id="streamable-title">{{ state.rebuilding ? 'Rebuild' : 'Make streamable' }}</h2>
     <p class="lead">Cuts <span class="mono">{{ state.source }}</span> into a cluster hierarchy and its maps into tile pyramids, for a streamed surface that loads only the detail the view needs.</p>
 
     <p class="hint" $if="state.phase === 'reading'">Reading the file…</p>
@@ -24,7 +24,7 @@
       <label class="dialog-field">Output folder
         <input class="well large mono" type="text" spellcheck="false" $model="state.out" />
       </label>
-      <p class="hint">Holds <span class="mono">clusters/</span> and the <span class="mono">tiles</span> folders. An earlier build there is replaced.</p>
+      <p class="hint">A <span class="mono">.theca</span> package: the editor shows it as one asset, and it is an ordinary folder on disk. An earlier build there is replaced.</p>
       <label class="check" title="For scans whose UV layout is many small islands: simplification may then cross seams, stretching the texture a little over them, so the coarse levels can shrink.">
         <input class="checkbox" type="checkbox" $model="state.permissive" /> Simplify across UV seams
       </label>
@@ -70,7 +70,7 @@
       <template $else-if="state.phase === 'choose'">
         <span class="dialog-keys">↵ build · Esc cancel</span>
         <button class="button large" type="button" @click="close()">Cancel</button>
-        <button class="button large primary" type="submit" $disabled="!state.chosen || !state.chosen.buildable || !state.out.trim()">Build</button>
+        <button class="button large primary" type="submit" $disabled="!state.chosen || !state.chosen.buildable || !state.out.trim()">{{ state.rebuilding ? 'Rebuild' : 'Build' }}</button>
       </template>
       <template $else>
         <button class="button large primary" type="button" @click="close()">Close</button>
@@ -111,6 +111,7 @@ const state = reactive({
   error: '',
   warnings: [] as string[],
   summary: '',
+  rebuilding: false,
 })
 
 const row = (mesh: StreamableMesh): MeshRow => {
@@ -130,6 +131,7 @@ function picked() {
 }
 
 let shownSource = ''
+let shownRebuild: unknown = null
 cell.subscribe((next: typeof STREAMABLE_DEFAULT | undefined) => {
   if (!next || !next.open) {
     state.open = false
@@ -142,8 +144,22 @@ cell.subscribe((next: typeof STREAMABLE_DEFAULT | undefined) => {
     state.out = next.out
     state.meshes = next.meshes.map(row)
     state.mesh = String(next.mesh)
+    state.permissive = false
+    state.partition = false
+    state.maxTexture = '16384'
     picked()
   }
+  // A rebuild arrives after the file is read: its folder, mesh and options as the theca recorded them.
+  if (next.rebuild && next.rebuild !== shownRebuild) {
+    shownRebuild = next.rebuild
+    state.out = next.out
+    state.mesh = String(next.mesh)
+    state.permissive = next.rebuild.permissive
+    state.partition = next.rebuild.partition
+    state.maxTexture = String(next.rebuild.maxTexture)
+    picked()
+  }
+  state.rebuilding = Boolean(next.rebuild)
   state.open = true
   state.phase = next.phase
   state.source = next.source

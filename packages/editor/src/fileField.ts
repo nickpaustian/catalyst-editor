@@ -3,6 +3,7 @@ const svg = (paths: string) => `<svg viewBox="0 0 16 16" fill="none" stroke="cur
 /** The kinds of file a picker groups its list by, in the order the groups appear. */
 const KINDS: { group: string; pattern: RegExp; icon: string }[] = [
   { group: "Environments", pattern: /\.(hdr|exr)$/i, icon: svg('<circle cx="8" cy="8" r="3"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>') },
+  { group: "Streamed surfaces", pattern: /\.theca$/i, icon: svg('<path d="M2 11.5 8 14.5l6-3V5L8 2 2 5z"/><path d="M2 5l6 3 6-3M8 8v6.5"/><path d="M4.5 9.5h7M4.5 11.5h7" stroke-dasharray="1 1"/>') },
   { group: "Models", pattern: /\.(glb|gltf)$/i, icon: svg('<path d="M2 11.5 8 14.5l6-3V5L8 2 2 5z"/><path d="M2 5l6 3 6-3M8 8v6.5"/>') },
   { group: "Splats", pattern: /\.(ply|sog|spz|splat)$/i, icon: svg('<circle cx="4" cy="5" r="1.4"/><circle cx="9" cy="3.5" r="1.1"/><circle cx="12" cy="7" r="1.6"/><circle cx="6" cy="10" r="1.8"/><circle cx="11" cy="12" r="1.2"/>') },
   { group: "Images", pattern: /\.(png|jpe?g|webp|gif|avif|svg|ktx2)$/i, icon: svg('<rect x="2" y="3" width="12" height="10" rx="1"/><path d="m2.5 11 3.5-3.5 2.5 2.5 2-2 3 3"/><circle cx="10.5" cy="6" r="1"/>') },
