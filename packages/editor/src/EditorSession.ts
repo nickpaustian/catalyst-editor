@@ -829,7 +829,7 @@ export class EditorSession {
       position: { x: round(p.x), y: round(p.y), z: round(p.z) },
       rotation: { x: round(degrees(e.x), 2), y: round(degrees(e.y), 2), z: round(degrees(e.z), 2) },
       properties: exposedProperties(node)
-        .filter((property) => !property.hidden)
+        .filter((property) => !property.hidden && (!property.shownWhen || property.shownWhen(node)))
         .map((property) => this.field(property, readExposed(node, property)))
         .sort((a, b) => Number(LIST_TYPES.includes(a.type)) - Number(LIST_TYPES.includes(b.type))),
     })
