@@ -1755,8 +1755,13 @@ export class EditorSession {
     if (JSON.stringify(before) === JSON.stringify(next)) return
     const after = Array.isArray(next) ? [...next] : next
     const previous = Array.isArray(before) ? [...before] : before
-    writeExposed(node, property, after)
-    this.record(property.label ?? key, () => writeExposed(node, property, previous), () => writeExposed(node, property, after), `property:${this.idOf(node)}:${key}`)
+    const write = (value: unknown) => {
+      const wasSpatial = isSpatial(node)
+      writeExposed(node, property, value)
+      if (isSpatial(node) !== wasSpatial && this.selected === node) this.attachGizmo(node)
+    }
+    write(after)
+    this.record(property.label ?? key, () => write(previous), () => write(after), `property:${this.idOf(node)}:${key}`)
     this.publishSelection()
     if (key === "active" || key === "visible") this.publishTree()
   }
@@ -2001,8 +2006,10 @@ export class EditorSession {
         target = this._root!
       }
     }
+    if (added instanceof Slate && target !== this._root && isSpatial(target)) added.space = "world"
     target.addNode(added)
-    if (isSpatial(added)) added.transform.setWorldPosition(at ?? (this.camera.isActive ? this.camera.orbitTarget : new Vector3(0, 1, 0)))
+    if (added instanceof Slate && added.space === "world" && !at) added.transform.position.set(0, 0, 0)
+    else if (isSpatial(added)) added.transform.setWorldPosition(at ?? (this.camera.isActive ? this.camera.orbitTarget : new Vector3(0, 1, 0)))
     if (this.visualised) node.visualised = true
     this.collapsed.delete(target)
     this.collapsed.delete(added)
@@ -2165,7 +2172,7 @@ const degrees = (radians: number): number => (radians * 180) / Math.PI
 const radians = (degrees: number): number => (degrees * Math.PI) / 180
 
 /** A box's dimensions, for undo; null for a node without them. */
-const isSpatial = (node: Node3D): boolean => !(node instanceof Slate || node instanceof UIElement)
+const isSpatial = (node: Node3D): boolean => (node instanceof Slate ? node.space === "world" : !(node instanceof UIElement))
 
 const sizeOf = (node: Node3D): Vector3 | null => (isSized(node) ? new Vector3(node.width, node.height, node.depth) : null)
 
