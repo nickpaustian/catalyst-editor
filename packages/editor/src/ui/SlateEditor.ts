@@ -19,6 +19,8 @@ export interface SlateEditorOptions {
   commit: (node: UIElement, before: UILayout, after: UILayout) => void
   /** The slate left the tree or the editor was closed from inside. */
   closed: () => void
+  /** Whether scripts run, and a switch for them: a slate that scripts fill shows nothing without them. */
+  scripts: { running: () => boolean; toggle: () => void }
 }
 
 type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw"
@@ -54,6 +56,8 @@ const applyLayout = (node: UIElement, layout: UILayout): void => {
 
 /** A press this short is a click: it selects without moving. */
 const CLICK_SLOP = 3
+/** Elements that draw something even with no background, border or text of their own. */
+const DRAWN_TAGS = new Set(["IMG", "svg", "CANVAS", "VIDEO", "PICTURE", "BUTTON", "INPUT", "TEXTAREA", "SELECT"])
 
 /**
  * One slate on its own over the viewport: the other slates are hidden and
@@ -61,6 +65,11 @@ const CLICK_SLOP = 3
  * it, a drag moves an anchored node, and the handles resize; a drag is
  * written back as the anchor's offsets and the node's size, so the layout
  * stays relative to the anchored edge.
+ *
+ * Every UI node on the slate is outlined with its name. A node that fills
+ * the slate is outlined around what it draws instead (its painted
+ * elements, as a component laid out by its own CSS has them), and picked
+ * there; it can be selected but not dragged, since its place is the CSS's.
  */
 export class SlateEditor {
   private readonly options: SlateEditorOptions
@@ -70,6 +79,10 @@ export class SlateEditor {
   private frame: HTMLElement | null = null
   private hoverBox: HTMLElement | null = null
   private selectionBox: HTMLElement | null = null
+  private outlines: HTMLElement | null = null
+  private scriptsButton: HTMLButtonElement | null = null
+  /** Where each visible node draws, measured once a frame. */
+  private boxes = new Map<UIElement, DOMRect[]>()
   private drag: Drag | null = null
   private hovered: UIElement | null = null
   private loop = 0
@@ -96,6 +109,7 @@ export class SlateEditor {
     this.overlay = el("div", "slate-editor")
     this.frame = el("div", "slate-editor-frame")
     this.hoverBox = el("div", "slate-editor-hover")
+    this.outlines = el("div", "slate-editor-outlines")
     this.selectionBox = el("div", "slate-editor-selection")
     for (const handle of HANDLES) {
       const knob = el("div", `slate-editor-handle ${handle}`)
@@ -110,8 +124,13 @@ export class SlateEditor {
     done.textContent = "Done"
     done.title = "Back to the scene (Esc)"
     done.addEventListener("click", () => this.closeFromInside())
-    bar.append(title, done)
-    this.overlay.append(this.frame, this.hoverBox, this.selectionBox, bar)
+    const scripts = el("button", "slate-editor-scripts") as HTMLButtonElement
+    scripts.type = "button"
+    scripts.title = "Run scripts, for UI that scripts fill in"
+    scripts.addEventListener("click", () => this.options.scripts.toggle())
+    this.scriptsButton = scripts
+    bar.append(title, scripts, done)
+    this.overlay.append(this.frame, this.outlines, this.hoverBox, this.selectionBox, bar)
     container.append(this.overlay)
     this.overlay.addEventListener("pointerdown", this.onDown)
     this.overlay.addEventListener("pointermove", this.onHover)
@@ -133,7 +152,8 @@ export class SlateEditor {
     delete slate.host.dataset.edited
     this.dim?.remove()
     this.overlay?.remove()
-    this.dim = this.overlay = this.frame = this.hoverBox = this.selectionBox = null
+    this.dim = this.overlay = this.frame = this.hoverBox = this.selectionBox = this.outlines = this.scriptsButton = null
+    this.boxes.clear()
     this.hovered = null
     this._slate = null
   }
@@ -146,13 +166,23 @@ export class SlateEditor {
   /** The UI nodes on the slate under a page point, topmost first: later in the tree draws over earlier, and a child over its parent. */
   private nodesAt(x: number, y: number): UIElement[] {
     const found: UIElement[] = []
-    this._slate?.walk((node) => {
+    for (const [node, rects] of this.boxes) {
+      if (rects.some((r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)) found.push(node)
+    }
+    return found.reverse()
+  }
+
+  /** Where each visible UI node on the slate draws, in tree order: its own box, or for a fill node the elements it paints. */
+  private measure(slate: Slate): Map<UIElement, DOMRect[]> {
+    const boxes = new Map<UIElement, DOMRect[]>()
+    slate.walk((node) => {
       if (!(node instanceof UIElement)) return
       if (!node.isVisible) return false
-      const r = node.element.getBoundingClientRect()
-      if (r.width > 0 && r.height > 0 && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) found.push(node)
+      const rects = node.anchor === "fill" ? paintedWithin(node.element) : [node.element.getBoundingClientRect()]
+      const shown = rects.filter((r) => r.width > 0 && r.height > 0)
+      if (shown.length) boxes.set(node, shown)
     })
-    return found.reverse()
+    return boxes
   }
 
   private selectedElement(): UIElement | null {
@@ -288,13 +318,96 @@ export class SlateEditor {
     place(this.frame, slate.size === "design" && slate.space === "screen" ? slate.content.getBoundingClientRect() : null, origin)
     const selected = this.selectedElement()
     const hovered = this.hovered && this.hovered !== selected && this.hovered.isInTree ? this.hovered : null
-    place(this.hoverBox, hovered ? hovered.element.getBoundingClientRect() : null, origin)
-    place(this.selectionBox, selected?.isVisible ? selected.element.getBoundingClientRect() : null, origin)
+    this.boxes = this.measure(slate)
+    this.drawOutlines(selected, origin)
+    place(this.hoverBox, hovered ? this.boundsOf(hovered) : null, origin)
+    place(this.selectionBox, selected?.isVisible ? this.boundsOf(selected) : null, origin)
+    if (this.scriptsButton) {
+      const running = this.options.scripts.running()
+      this.scriptsButton.textContent = running ? "Scripts on" : "Scripts off"
+      this.scriptsButton.setAttribute("aria-pressed", String(running))
+    }
     if (this.selectionBox) {
       this.selectionBox.dataset.anchor = selected?.anchor ?? ""
       this.selectionBox.classList.toggle("dragging", this.drag !== null)
     }
   }
+
+  /** All of a node's drawing as one box; a node that draws nothing has none. */
+  private boundsOf(node: UIElement): DOMRect | null {
+    const rects = this.boxes.get(node)
+    if (!rects) return node.anchor === "fill" ? null : node.element.getBoundingClientRect()
+    return union(rects)
+  }
+
+  /** A named outline for each node but the selected one, reusing the outlines from the last frame. */
+  private drawOutlines(selected: UIElement | null, origin: DOMRect): void {
+    const outlines = this.outlines
+    if (!outlines) return
+    let used = 0
+    for (const [node, rects] of this.boxes) {
+      if (node === selected) continue
+      let outline = outlines.children[used] as HTMLElement | undefined
+      if (!outline) {
+        outline = el("div", "slate-editor-outline")
+        outline.append(el("span", "slate-editor-name"))
+        outlines.append(outline)
+      }
+      outline.firstElementChild!.textContent = node.name
+      place(outline, union(rects), origin)
+      used++
+    }
+    while (outlines.children.length > used) outlines.lastElementChild!.remove()
+  }
+}
+
+/**
+ * The elements a fill node paints, outermost first: an element with a
+ * background, border, shadow, text of its own or a drawn tag counts, with
+ * whatever its insides draw past its edges; another node's element is left
+ * to that node.
+ */
+const paintedWithin = (element: HTMLElement): DOMRect[] => {
+  const found: DOMRect[] = []
+  const visit = (parent: Element) => {
+    for (const child of parent.children) {
+      if (child instanceof HTMLElement && child.dataset.node !== undefined) continue
+      const style = getComputedStyle(child)
+      if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") continue
+      const rect = child.getBoundingClientRect()
+      if (rect.width > 0 && rect.height > 0 && paints(child, style)) found.push(withOverflow(child, rect))
+      else visit(child)
+    }
+  }
+  visit(element)
+  return found
+}
+
+/** An element's box grown to take in its descendants, as a label set outside its parent is still drawn by it. */
+const withOverflow = (element: Element, rect: DOMRect): DOMRect => {
+  const inner = [...element.querySelectorAll("*")].map((child) => child.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0)
+  return inner.length ? union([rect, ...inner]) : rect
+}
+
+const paints = (element: Element, style: CSSStyleDeclaration): boolean =>
+  DRAWN_TAGS.has(element.tagName) ||
+  !isClear(style.backgroundColor) ||
+  style.backgroundImage !== "none" ||
+  style.boxShadow !== "none" ||
+  hasBorder(style) ||
+  [...element.childNodes].some((n) => n.nodeType === Node.TEXT_NODE && n.textContent!.trim() !== "")
+
+const isClear = (colour: string): boolean => colour === "transparent" || /(,\s*0|\/\s*0)\)$/.test(colour)
+
+const hasBorder = (style: CSSStyleDeclaration): boolean =>
+  (["Top", "Right", "Bottom", "Left"] as const).some((side) => parseFloat(style[`border${side}Width`]) > 0 && style[`border${side}Style`] !== "none" && !isClear(style[`border${side}Color`]))
+
+const union = (rects: DOMRect[]): DOMRect => {
+  const left = Math.min(...rects.map((r) => r.left))
+  const top = Math.min(...rects.map((r) => r.top))
+  const right = Math.max(...rects.map((r) => r.right))
+  const bottom = Math.max(...rects.map((r) => r.bottom))
+  return new DOMRect(left, top, right - left, bottom - top)
 }
 
 const el = (tag: string, className: string): HTMLElement => {

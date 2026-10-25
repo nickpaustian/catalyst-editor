@@ -69,6 +69,30 @@ html.shell-macos #menu-bar .bar {
   outline: 1px dashed var(--cat-border-strong);
 }
 
+#app .slate-editor-outlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+#app .slate-editor-outline {
+  position: absolute;
+  outline: 1px dashed var(--cat-border-strong);
+}
+
+#app .slate-editor-name {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  padding: 1px 4px;
+  font-size: var(--cat-text-xs);
+  line-height: 1.3;
+  white-space: nowrap;
+  color: var(--cat-text-secondary);
+  background: var(--cat-viewport-chrome);
+  border-radius: var(--cat-radius-sm) var(--cat-radius-sm) 0 0;
+}
+
 #app .slate-editor-hover {
   position: absolute;
   pointer-events: none;
@@ -112,8 +136,7 @@ html.shell-macos #menu-bar .bar {
 #app .slate-editor-bar {
   position: absolute;
   top: 10px;
-  left: 50%;
-  translate: -50% 0;
+  right: 10px;
   display: flex;
   align-items: center;
   gap: var(--cat-space-2);
@@ -126,7 +149,12 @@ html.shell-macos #menu-bar .bar {
   box-shadow: var(--cat-shadow-e1);
 }
 
-#app .slate-editor-done {
+#app .slate-editor-scripts[aria-pressed="true"] {
+  color: var(--cat-accent);
+}
+
+#app .slate-editor-done,
+#app .slate-editor-scripts {
   font: inherit;
   padding: 3px 10px;
   color: var(--cat-text-primary);

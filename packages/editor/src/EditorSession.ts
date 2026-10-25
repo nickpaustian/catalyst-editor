@@ -364,6 +364,10 @@ export class EditorSession {
       },
       commit: (node, before, after) => this.record(`move ${node.name}`, () => this.writeLayout(node, before), () => this.writeLayout(node, after)),
       closed: () => this.publishView(),
+      scripts: {
+        running: () => this.engine.scripts.running,
+        toggle: () => this.toggleScripts(),
+      },
     })
     for (const { kind, cls } of this.recipe.kinds) if (!this.engine.registry.has(kind) && typeof cls === "function") this.engine.register({ [kind]: cls as NodeClass })
     const input = this.engine.find(Input)
@@ -836,8 +840,7 @@ export class EditorSession {
         break
       }
       case "toggleScripts":
-        this.engine.scripts.setRunning(!this.engine.scripts.running, this.engine.root, this.engine)
-        this.publishView()
+        this.toggleScripts()
         break
       case "setTool":
         this.setTool(command.tool)
@@ -1908,6 +1911,11 @@ export class EditorSession {
     if (property.type === "file") return value === null || value === "" ? (typeof current === "string" ? "" : null) : String(value)
     if (property.type === "layers") return [...new Set(toStrings(value).map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n < 32))].sort((a, b) => a - b)
     return String(value)
+  }
+
+  private toggleScripts(): void {
+    this.engine.scripts.setRunning(!this.engine.scripts.running, this.engine.root, this.engine)
+    this.publishView()
   }
 
   /** New nodes go under the selected node (or the root), at the orbit target in world space. A kind that needs a file asks for it first. */
