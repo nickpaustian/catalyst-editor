@@ -26,4 +26,13 @@ export const STREAMABLE_DEFAULT = {
   rebuild: null as { permissive: boolean; partition: boolean; maxTexture: number; maps: { role: string; path: string }[] } | null,
 }
 
+/** The preview window: closed when `open` is false; `url` is the file's object url while it shows. */
+export const PREVIEW_DEFAULT = {
+  open: false,
+  path: "",
+  kind: "image" as "image",
+  url: "",
+  error: "",
+}
+
 export const PROJECT_DIALOG_DEFAULT = { mode: null as "create" | "edit" | null, name: "untitled", recipe: "scene", description: "", image: null as string | null, location: null as string | null, locations: false, git: false, canGit: false, error: "", taken: "" }

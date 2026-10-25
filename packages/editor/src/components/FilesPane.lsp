@@ -79,7 +79,7 @@ import { reactive, shared, defineRefs, onUnmounted } from '@lightspeed-js/core'
 import { DRAGGING_FILE_CELL } from '../fileField.ts'
 import { sendCommand } from '../commands.ts'
 import { openContextMenu, type MenuItem } from '../contextMenu.ts'
-import { PROJECT_DEFAULT, STREAMABLE_DEFAULT } from '../cells.ts'
+import { PREVIEW_DEFAULT, PROJECT_DEFAULT, STREAMABLE_DEFAULT } from '../cells.ts'
 import { RowWindow } from '../rowWindow.ts'
 
 interface Entry { path: string; name: string; kind: 'file' | 'directory'; children?: Entry[] }
@@ -90,6 +90,7 @@ const files = shared('editor:files', [])
 shared('editor:project', PROJECT_DEFAULT)
 shared('editor:fileInfo', null)
 const streamable = shared('editor:streamable', STREAMABLE_DEFAULT)
+const preview = shared('editor:preview', PREVIEW_DEFAULT)
 const state = reactive({ shown: [] as Row[], count: 0, before: 0, height: 0, selected: null as string | null, filter: '', renaming: null as string | null, creating: null as Creating | null, dropTarget: null as string | null })
 // Folders closed by hand; every folder starts open
 const collapsed = new Set<string>()
@@ -316,7 +317,12 @@ function keyDown(event: KeyboardEvent) {
   if ((event.target as HTMLElement).tagName === 'INPUT' || state.renaming || state.creating) return
   const row = rows.find((r) => r.path === state.selected)
   if (!row) return
-  if (event.key === 'Enter' || event.key === 'F2') {
+  if (event.key === ' ') {
+    // Space shows the chosen file in the preview window, or puts it away, as Quick Look does.
+    event.preventDefault()
+    if (preview.value?.open) sendCommand({ type: 'closePreview' })
+    else if (row.kind === 'file' && IMAGE.test(row.name)) sendCommand({ type: 'preview', path: row.path })
+  } else if (event.key === 'Enter' || event.key === 'F2') {
     event.preventDefault()
     startRename(row)
   } else if (event.key === 'Backspace' || event.key === 'Delete') {
@@ -343,6 +349,8 @@ function step(from: Row, by: number) {
   const steps = rows.filter((r) => r.kind !== 'creating')
   const next = steps[steps.indexOf(from) + by]
   if (next) choose(next)
+  // An open preview follows the chosen file while it is one the window can show.
+  if (next && preview.value?.open && next.kind === 'file' && IMAGE.test(next.name)) sendCommand({ type: 'preview', path: next.path })
 }
 
 function choose(row: Row) {
@@ -423,6 +431,7 @@ function itemsFor(row: Row): MenuItem[] {
     items.push({ label: 'Show contents', run: () => showContents(row.path, true) })
   } else {
     if (SCRIPT.test(row.name)) items.push({ label: 'Open in code pane', run: () => sendCommand({ type: 'openFile', path: row.path }) })
+    if (IMAGE.test(row.name)) items.push({ label: 'Preview', kbd: 'Space', run: () => sendCommand({ type: 'preview', path: row.path }) })
     if (MODEL.test(row.name)) items.push({ label: 'Add to scene', run: () => sendCommand({ type: 'addModel', path: row.path }) })
     if (GLB.test(row.name) && streamable.value?.available) items.push({ label: 'Make streamable…', run: () => sendCommand({ type: 'streamable', path: row.path }) })
     if (HDR.test(row.name)) items.push({ label: 'Use as environment', run: () => sendCommand({ type: 'useEnvironment', path: row.path }) })

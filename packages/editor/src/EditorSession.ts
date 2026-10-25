@@ -15,7 +15,7 @@ import { SCRIPTS_DIR, ScriptCompiler, scriptTemplate } from "./ScriptCompiler"
 import { LEGACY_PROJECT_FILE, PROJECT_EXTENSION, createProject, readProjectImage, readProjectSettings, writeProjectImage, writeProjectSettings, type NewProject, type ProjectSettings } from "./project"
 import { openConfirm } from "./confirm"
 import { publish, ZipTarget, type PublishTarget } from "./publish"
-import { PROJECT_DIALOG_DEFAULT, STREAMABLE_DEFAULT } from "./cells"
+import { PREVIEW_DEFAULT, PROJECT_DIALOG_DEFAULT, STREAMABLE_DEFAULT } from "./cells"
 import { MAP_NAMES, type AssetConverter, type StreamableJob, type StreamableOptions } from "./converter"
 import { Previews } from "./previews"
 import type { NodeKind, Recipe } from "./recipe"
@@ -86,6 +86,8 @@ export interface EditorCells {
   "editor:startMode": "overlay" | "window" | "off"
   /** The new-project or project-settings dialog: closed when `mode` is null. */
   "editor:projectDialog": typeof PROJECT_DIALOG_DEFAULT
+  /** The file shown in the floating preview window. */
+  "editor:preview": typeof PREVIEW_DEFAULT
   /** Making a model streamable: the dialog's choices, the build's progress and its outcome. */
   "editor:streamable": typeof STREAMABLE_DEFAULT
   /** The recipes a project may use. */
@@ -200,6 +202,8 @@ export type EditorCommand =
   | { type: "openFile"; path: string }
   | { type: "addModel"; path: string }
   | { type: "useEnvironment"; path: string }
+  | { type: "preview"; path: string }
+  | { type: "closePreview" }
   | { type: "streamable"; path: string }
   | { type: "addTheca"; path: string }
   | { type: "rebuildTheca"; path: string }
@@ -218,6 +222,9 @@ const round = (n: number, places = 4) => Number(n.toFixed(places))
 const toStrings = (value: unknown): string[] => (Array.isArray(value) ? value.map(String) : String(value ?? "").split(","))
 const LIST_TYPES: ExposedProperty["type"][] = ["tags", "layers"]
 export const PREFABS_DIR = "prefabs"
+/** Files the preview window can show. */
+const PREVIEWED = /\.(png|jpe?g|webp|gif|avif|svg)$/i
+
 /** A streamed surface's package, as Iapetus writes it: a folder that stands as one asset. */
 const THECA = /\.theca$/i
 /** The manifest at the top of a theca. */
@@ -473,6 +480,7 @@ export class EditorSession {
     this.set("editor:saveRequest", 0)
     this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
     this.set("editor:streamable", { ...STREAMABLE_DEFAULT, available: this.converter !== null })
+    this.set("editor:preview", PREVIEW_DEFAULT)
     this.set("editor:recipes", [this.recipe.name])
     this.setView("orbit")
     void this.publishRecent()
@@ -1090,6 +1098,12 @@ export class EditorSession {
         break
       case "useEnvironment":
         this.writeSetting("environment", command.path)
+        break
+      case "preview":
+        await this.openPreview(command.path)
+        break
+      case "closePreview":
+        this.closePreview()
         break
       case "streamable":
         await this.openStreamable(command.path)
@@ -2252,6 +2266,29 @@ export class EditorSession {
     const index = node.indexOf(collider)
     this.record("add mesh collider", () => collider.remove(), () => node.insertNode(collider, index, collider.name))
     this.select(collider)
+  }
+
+  /** Show a file in the preview window; only images so far. */
+  private async openPreview(path: string): Promise<void> {
+    const folder = this.folder
+    if (!folder || !PREVIEWED.test(path)) return
+    try {
+      const url = URL.createObjectURL(await folder.readFile(path))
+      this.releasePreview()
+      this.set("editor:preview", { open: true, path, kind: "image", url, error: "" })
+    } catch (error) {
+      this.set("editor:preview", { ...PREVIEW_DEFAULT, open: true, path, error: `${path} could not be read: ${error instanceof Error ? error.message : error}` })
+    }
+  }
+
+  private closePreview(): void {
+    this.releasePreview()
+    this.set("editor:preview", PREVIEW_DEFAULT)
+  }
+
+  private releasePreview(): void {
+    const url = (this.app.shared("editor:preview").value as EditorCells["editor:preview"] | undefined)?.url
+    if (url) URL.revokeObjectURL(url)
   }
 
   private setStreamable(change: Partial<typeof STREAMABLE_DEFAULT>): void {

@@ -55,6 +55,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!(await app.mount("contextmenu", "#context-menu"))) throw new Error("ContextMenu did not mount")
   if (!(await app.mount("confirmdialog", "#confirm-dialog"))) throw new Error("ConfirmDialog did not mount")
   if (!(await app.mount("streamabledialog", "#streamable-dialog"))) throw new Error("StreamableDialog did not mount")
+  if (!(await app.mount("previewwindow", "#preview-window"))) throw new Error("PreviewWindow did not mount")
   if (!(await app.mount("filepicker", "#file-picker"))) throw new Error("FilePicker did not mount")
   if (!(await app.mount("viewporttools", "#viewport-tools"))) throw new Error("ViewportTools did not mount")
   app.shared("editor:code").subscribe((code: { path: string | null } | undefined) => {
