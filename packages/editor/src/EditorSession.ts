@@ -6,7 +6,7 @@ import type { LightspeedRuntime } from "@lightspeed-js/core"
 import { EditorCamera, groupTarget, type GizmoMode, isSized, type DrawTool, type DrawnBox, type EditMode } from "./EditorCamera"
 import { EditorInput } from "./EditorInput"
 import { History } from "./History"
-import { preferences, type SnapSettings, streamingQualityOf, type StreamingPreset } from "./preferences"
+import { preferences, storage, type SnapSettings, streamingQualityOf, type StreamingPreset } from "./preferences"
 import { browserFolders, folderLoader, pickFile, type FolderSource, type ProjectFolder, type ProjectStorage, type RecentProject } from "./ProjectFolder"
 import { windowRunnerLink, type RunnerLink } from "./RunnerLink"
 import { AssetFolder } from "./AssetFolder"
@@ -165,6 +165,7 @@ export type EditorCommand =
   | { type: "select"; id: number; mode?: SelectMode }
   | { type: "add"; kind: string; options?: Record<string, unknown> }
   | { type: "toggleExpand"; id: number }
+  | { type: "toggleHiddenInEditor"; id: number }
   | { type: "move"; ids: number[]; targetId: number; place: DropPlace }
   | { type: "delete" }
   | { type: "duplicate" }
@@ -281,6 +282,7 @@ export class EditorSession {
   private nodesById = new Map<number, Node3D>()
   private nextId = 1
   private collapsed = new Set<Node3D>()
+  private hidden: { key: string; saved: string } | null = null
   private prefabs: { path: string; name: string }[] = []
   private scriptFiles: { path: string; name: string }[] = []
   private compiler: ScriptCompiler | null = null
@@ -454,6 +456,7 @@ export class EditorSession {
     this.publishSettings()
     this.publishProject(folder ? "" : "unsaved")
     if (folder) await this.relinkAssets(folder)
+    this.restoreHidden()
     this.publishTree()
     this.select(null)
     this.camera.focusPoint(new Vector3(0, 0.5, 0), 8)
@@ -497,6 +500,7 @@ export class EditorSession {
     this.ids.clear()
     this.nodesById.clear()
     this.collapsed.clear()
+    this.hidden = null
   }
 
   dispose(): void {
@@ -681,6 +685,7 @@ export class EditorSession {
   }
 
   private publishTree(): void {
+    this.rememberHidden()
     this.set(
       "editor:tree",
       this.visibleNodes().map(({ node, depth }) => ({
@@ -694,8 +699,52 @@ export class EditorSession {
         selected: this.selection.has(node),
         active: node === this.selected,
         isRoot: node === this._root,
+        hiddenInEditor: node.hiddenInEditor,
+        hiddenAbove: this.hiddenAbove(node),
       })),
     )
+  }
+
+  private hiddenAbove(node: Node3D): boolean {
+    for (let parent = node.parent; parent; parent = parent.parent) if (parent instanceof Node3D && parent.hiddenInEditor) return true
+    return false
+  }
+
+  /** A node's place in the scene as its names from the root down, which is how the nodes hidden in the editor are remembered. */
+  private pathOf(node: Node3D): string {
+    const names: string[] = []
+    for (let at: Node3D | null = node; at && at !== this._root; at = at.parent instanceof Node3D ? at.parent : null) names.unshift(at.name)
+    return names.join("/")
+  }
+
+  /**
+   * The nodes hidden in the editor are this editor's view, not the scene:
+   * kept in this browser's storage under the project, by path, and written
+   * again whenever the tree changes, so a rename or move carries them along.
+   */
+  private restoreHidden(): void {
+    const settings = this.settings
+    if (!this._root || !this.folder || !settings) return
+    const key = `hidden:${settings.name}:${settings.created ?? ""}`
+    const paths = new Set(storage.get<string[]>(key, []))
+    this._root.walk((node) => {
+      if (node instanceof Node3D && paths.has(this.pathOf(node))) node.hiddenInEditor = true
+    })
+    this.hidden = { key, saved: [...paths].sort().join("\n") }
+  }
+
+  private rememberHidden(): void {
+    const hidden = this.hidden
+    if (!hidden || !this._root) return
+    const paths: string[] = []
+    this._root.walk((node) => {
+      if (node instanceof Node3D && node.hiddenInEditor) paths.push(this.pathOf(node))
+    })
+    const saved = paths.sort().join("\n")
+    if (saved === hidden.saved) return
+    hidden.saved = saved
+    if (paths.length) storage.set(hidden.key, paths)
+    else storage.remove(hidden.key)
   }
 
   private publishSelection(): void {
@@ -890,6 +939,13 @@ export class EditorSession {
       case "add":
         await this.addNode(command.kind, command.options)
         break
+      case "toggleHiddenInEditor": {
+        const node = this.nodesById.get(command.id)
+        if (!node || node === this._root) return
+        node.hiddenInEditor = !node.hiddenInEditor
+        this.publishTree()
+        break
+      }
       case "toggleExpand": {
         const node = this.nodesById.get(command.id)
         if (!node) return

@@ -5,7 +5,7 @@
     role="treeitem"
     $for="row in shared['editor:tree']"
     $key="row.id"
-    $class="{ selected: row.selected, active: row.active, root: row.isRoot }"
+    $class="{ selected: row.selected, active: row.active, root: row.isRoot, concealed: row.hiddenInEditor || row.hiddenAbove }"
     $style="'--depth: ' + row.depth"
     $aria-selected="row.selected"
     $aria-expanded="row.hasChildren ? row.expanded : null"
@@ -32,6 +32,21 @@
     />
     <span $else class="name" @dblclick="startRename($event, row)">{{ row.name }}</span>
     <span class="type">{{ row.type }}</span>
+    <button
+      $if="!row.isRoot"
+      class="eye"
+      type="button"
+      $class="{ shut: row.hiddenInEditor }"
+      $title="row.hiddenInEditor ? 'Show in the editor' : 'Hide in the editor; it still shows when the scene plays'"
+      $aria-label="row.hiddenInEditor ? 'Show in the editor' : 'Hide in the editor'"
+      $aria-pressed="row.hiddenInEditor"
+      @pointerdown="$event.stopPropagation()"
+      @click="hideInEditor($event, row)"
+    >
+      <svg $if="row.hiddenInEditor" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 8.5c1.6 2 3.6 3 6 3s4.4-1 6-3"/><path d="M4 10.6 3 12M8 11.5V13M12 10.6l1 1.4"/></svg>
+      <svg $else viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg>
+    </button>
+    <span $else class="eye"></span>
   </div>
 </div>
 </view>
@@ -41,7 +56,7 @@ import { reactive, shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { openContextMenu, type MenuItem } from '../contextMenu.ts'
 
-interface Row { id: number; name: string; type: string; icon: string; depth: number; hasChildren: boolean; expanded: boolean; selected: boolean; active: boolean; isRoot: boolean }
+interface Row { id: number; name: string; type: string; icon: string; depth: number; hasChildren: boolean; expanded: boolean; selected: boolean; active: boolean; isRoot: boolean; hiddenInEditor: boolean; hiddenAbove: boolean }
 type Place = 'before' | 'after' | 'inside'
 
 shared('editor:tree', [])
@@ -184,6 +199,11 @@ function select(event: MouseEvent, row: Row) {
 function draggedIds(row: Row): number[] {
   const rows = shared('editor:tree').value as Row[]
   return row.selected ? rows.filter((r) => r.selected && !r.isRoot).map((r) => r.id) : [row.id]
+}
+
+function hideInEditor(event: Event, row: Row) {
+  event.stopPropagation()
+  sendCommand({ type: 'toggleHiddenInEditor', id: row.id })
 }
 
 function toggle(event: Event, row: Row) {
@@ -366,6 +386,41 @@ function release() {
   flex: 0 0 auto;
   color: var(--cat-text-tertiary);
   font: var(--cat-text-xs) / var(--cat-leading-tight) var(--cat-font-mono);
+}
+
+.eye {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--cat-radius-sm);
+  background: none;
+  color: var(--cat-text-tertiary);
+  opacity: 0;
+  cursor: pointer;
+}
+
+.eye svg {
+  width: 14px;
+  height: 14px;
+}
+
+button.eye:hover {
+  color: var(--cat-text-primary);
+  background: var(--cat-bg-raised);
+}
+
+.row:hover > .eye,
+.eye.shut,
+.eye:focus-visible {
+  opacity: 1;
+}
+
+.row.concealed > :is(.icon, .name, .type) {
+  opacity: 0.45;
 }
 
 .row.drop-before::after,
