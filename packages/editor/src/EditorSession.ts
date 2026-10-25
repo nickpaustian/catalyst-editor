@@ -17,6 +17,7 @@ import { openConfirm } from "./confirm"
 import { publish, ZipTarget, type PublishTarget } from "./publish"
 import { PROJECT_DIALOG_DEFAULT, STREAMABLE_DEFAULT } from "./cells"
 import { MAP_NAMES, type AssetConverter, type StreamableJob, type StreamableOptions } from "./converter"
+import { Previews } from "./previews"
 import type { NodeKind, Recipe } from "./recipe"
 import { SlateEditor, type UILayout } from "./ui/SlateEditor"
 
@@ -333,6 +334,7 @@ export class EditorSession {
   private readonly converter: AssetConverter | null
   private streamJob: StreamableJob | null = null
   private streamCancelled = false
+  private readonly previews = new Previews()
   private runnerReady = false
   private readonly unsubscribeRunner: () => void
   private readonly onKeyUp = (event: KeyboardEvent): void => {
@@ -549,6 +551,7 @@ export class EditorSession {
   }
 
   dispose(): void {
+    this.previews.dispose()
     this.unsubscribeGhosts?.()
     for (const ghost of this.ghosts.values()) {
       this.engine.scene.remove(ghost.visual)
@@ -1558,7 +1561,17 @@ export class EditorSession {
       const info = await folder.stat(path)
       let preview: string | null = null
       if (/\.(png|jpe?g|webp|gif|avif|svg)$/i.test(path) && info.size <= PREVIEW_BYTES) preview = await this.dataUrl(path)
-      this.set("editor:fileInfo", { path, size: info.size, modified: info.modified, preview, facts: fileFacts(info.size, info.modified) })
+      const facts = fileFacts(info.size, info.modified)
+      this.set("editor:fileInfo", { path, size: info.size, modified: info.modified, preview, facts })
+      // A model or an environment is drawn while its facts already show; the picture lands if the file is still the one chosen.
+      const still = () => (this.app.shared("editor:fileInfo").value as EditorCells["editor:fileInfo"])?.path === path && this.folder === folder
+      if (/\.(glb|gltf)$/i.test(path)) {
+        const drawn = await this.previews.model(folderLoader(folder), path, info.modified)
+        if (drawn && still()) this.set("editor:fileInfo", { path, size: info.size, modified: info.modified, preview: drawn.image, facts: `${drawn.meshes === 1 ? "1 mesh" : `${drawn.meshes} meshes`} · ${drawn.triangles.toLocaleString()} triangles · ${facts}` })
+      } else if (/\.hdr$/i.test(path)) {
+        const drawn = await this.previews.environment(folderLoader(folder), path, info.modified)
+        if (drawn && still()) this.set("editor:fileInfo", { path, size: info.size, modified: info.modified, preview: drawn, facts })
+      }
     } catch {
       this.set("editor:fileInfo", null)
     }
