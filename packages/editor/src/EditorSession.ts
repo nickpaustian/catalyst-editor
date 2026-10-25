@@ -233,6 +233,7 @@ interface ThecaManifest {
   hierarchy?: { clusters?: number; pages?: number; levels?: number; bytes?: number }
   tiles?: string | null
   maps?: { role: string; size: number; bytes?: number }[]
+  thumbnail?: string | null
   warnings?: string[]
 }
 
@@ -1554,22 +1555,24 @@ export class EditorSession {
     try {
       const info = await folder.stat(path)
       let preview: string | null = null
-      if (/\.(png|jpe?g|webp|gif|avif|svg)$/i.test(path) && info.size <= PREVIEW_BYTES) {
-        const file = await folder.readFile(path)
-        preview = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onload = () => resolve(String(reader.result))
-          reader.onerror = () => reject(reader.error)
-          reader.readAsDataURL(file)
-        })
-      }
+      if (/\.(png|jpe?g|webp|gif|avif|svg)$/i.test(path) && info.size <= PREVIEW_BYTES) preview = await this.dataUrl(path)
       this.set("editor:fileInfo", { path, size: info.size, modified: info.modified, preview, facts: fileFacts(info.size, info.modified) })
     } catch {
       this.set("editor:fileInfo", null)
     }
   }
 
-  /** A theca's facts from its manifest: what it holds and what made it. */
+  private async dataUrl(path: string): Promise<string> {
+    const file = await this.folder!.readFile(path)
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result))
+      reader.onerror = () => reject(reader.error)
+      reader.readAsDataURL(file)
+    })
+  }
+
+  /** A theca's facts from its manifest: what it holds and what made it, and its thumbnail. */
   private async publishThecaInfo(path: string): Promise<void> {
     const m = await this.readTheca(path)
     if (!m) return this.set("editor:fileInfo", { path, size: 0, modified: 0, preview: null, facts: `no ${THECA_MANIFEST}: not a built theca` })
@@ -1579,7 +1582,8 @@ export class EditorSession {
     const maps = m.maps?.length ? m.maps.map((map) => `${MAP_NAMES[map.role] ?? map.role} ${map.size}`).join(", ") : "no maps"
     const source = m.source?.path ? `from ${m.source.path.replace(/^.*\//, "")}${m.source.meshName ? ` (${m.source.meshName})` : ""}` : ""
     const facts = [geometry, maps, megabytes, source, ...(m.warnings ?? [])].filter(Boolean).join(" · ")
-    this.set("editor:fileInfo", { path, size: bytes, modified: 0, preview: null, facts })
+    const preview = m.thumbnail ? await this.dataUrl(`${path}/${m.thumbnail}`).catch(() => null) : null
+    this.set("editor:fileInfo", { path, size: bytes, modified: 0, preview, facts })
   }
 
   private async newScript(name: string, attach = true): Promise<void> {
