@@ -14,6 +14,13 @@ body {
   overflow: hidden;
   color-scheme: dark;
   accent-color: var(--cat-text-primary);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+:where(input, textarea, [contenteditable]:not([contenteditable="false"]), [data-selectable]) {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 // In the macOS shell the title bar is hidden and the traffic lights sit over the menu bar's left end
