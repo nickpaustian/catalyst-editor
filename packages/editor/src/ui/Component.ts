@@ -19,6 +19,9 @@ let compiled = 0
  * apart from the editor's own, so a project's cells never meet the editor's.
  * Scripts and components talk through its cells: `componentRuntime(engine).shared("score")`.
  */
+/** The rule Lightspeed adds to the document for `$show`, which hides by an attribute; a slate needs its own copy. */
+const LIGHTSPEED_RULES = "[data-lsp-hidden]{display:none!important}"
+
 export const componentRuntime = (engine: Catalyst): LightspeedRuntime => {
   let runtime = runtimes.get(engine)
   if (!runtime) runtimes.set(engine, (runtime = createLightspeedApp()))
@@ -36,8 +39,9 @@ const load = async (specifier: string): Promise<Record<string, unknown>> => {
 /**
  * A Lightspeed component from the project, drawn on a slate: the `.lsp`
  * file is compiled where the scene runs and mounted in its own runtime
- * (`componentRuntime`). Its styles are copied into the slate, as the
- * document's styles do not reach a slate's shadow root.
+ * (`componentRuntime`). Its styles, and the rule `$show` needs, are copied
+ * into the slate, as the document's styles do not reach a slate's shadow
+ * root.
  */
 export class Component extends UIElement {
   static icon = svgIcon('<path d="M8 1.5 14 5v6l-6 3.5L2 11V5z"/><path d="M2 5l6 3.5L14 5M8 8.5V14.5"/>')
@@ -115,7 +119,7 @@ export class Component extends UIElement {
       const definition = definitions[id]
       const runtime = componentRuntime(engine)
       runtime.useComponents({ [id]: async () => definition })
-      this.style.textContent = [definition.style, definition.styleDeferred].filter(Boolean).join("\n")
+      this.style.textContent = [LIGHTSPEED_RULES, definition.style, definition.styleDeferred].filter(Boolean).join("\n")
       const mount = await runtime.mount(id, this.mountPoint, { node: this.name })
       if (!mount) throw new Error("it did not mount")
       if (generation !== this.generation) return runtime.unmount(mount)
