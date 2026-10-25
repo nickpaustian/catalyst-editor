@@ -6,11 +6,12 @@
       <input type="search" placeholder="Filter" aria-label="Filter files" $model="state.filter" @input="refresh()" />
     </label>
   </div>
-  <div class="rows" role="tree" aria-label="Project files" tabindex="0" $if="state.rows.length || state.creating" @contextmenu="contextEmpty($event)" @keydown="keyDown($event)">
+  <div class="rows" role="tree" aria-label="Project files" tabindex="0" $ref="list" $if="state.count || state.creating" @contextmenu="contextEmpty($event)" @keydown="keyDown($event)" @scroll="slide()">
+    <div class="window" $style="'height: ' + state.height + 'px; padding-top: ' + state.before + 'px'">
     <div
       class="row"
       role="treeitem"
-      $for="row in state.rows"
+      $for="row in state.shown"
       $key="row.path"
       $class="{ selected: row.path === state.selected, dir: row.kind === 'directory', creating: row.kind === 'creating', drop: row.kind === 'directory' && row.path === state.dropTarget }"
       $style="'--depth: ' + row.depth"
@@ -52,7 +53,8 @@
       <span $else class="name">{{ row.name }}</span>
       <span class="type" $if="row.kind !== 'creating'">{{ row.type }}</span>
     </div>
-    <p class="no-match" $if="state.filter && !state.rows.length">Nothing matches “{{ state.filter }}”.</p>
+    </div>
+    <p class="no-match" $if="state.filter && !state.count">Nothing matches “{{ state.filter }}”.</p>
   </div>
   <div class="empty-state" $else-if="shared['editor:project'].open">
     <span class="what">No files yet</span>
@@ -73,7 +75,7 @@
 </view>
 
 <logic lang="ts">
-import { reactive, shared } from '@lightspeed-js/core'
+import { reactive, shared, defineRefs, onUnmounted } from '@lightspeed-js/core'
 import { DRAGGING_FILE_CELL } from '../fileField.ts'
 import { sendCommand } from '../commands.ts'
 import { openContextMenu, type MenuItem } from '../contextMenu.ts'
@@ -86,10 +88,13 @@ interface Creating { dir: string; kind: 'folder' | 'script' }
 const files = shared('editor:files', [])
 shared('editor:project', PROJECT_DEFAULT)
 shared('editor:fileInfo', null)
-const state = reactive({ rows: [] as Row[], selected: null as string | null, filter: '', renaming: null as string | null, creating: null as Creating | null, dropTarget: null as string | null })
+const state = reactive({ shown: [] as Row[], count: 0, before: 0, height: 0, selected: null as string | null, filter: '', renaming: null as string | null, creating: null as Creating | null, dropTarget: null as string | null })
 // Folders closed by hand; every folder starts open
 const collapsed = new Set<string>()
 let tree: Entry[] = []
+// Every row, open folders flattened; only the rows in view (state.shown) are rendered
+let rows: Row[] = []
+const refs = defineRefs<{ list: HTMLElement }>()
 
 const svg = (paths: string) => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`
 const icons = {
@@ -151,14 +156,87 @@ function creatingRow(creating: Creating, depth: number): Row {
 }
 
 function refresh() {
-  const rows: Row[] = []
-  if (state.creating && state.creating.dir === '') rows.push(creatingRow(state.creating, 0))
-  flatten(tree, 0, rows, state.filter.trim().toLowerCase())
-  state.rows = rows
+  const next: Row[] = []
+  if (state.creating && state.creating.dir === '') next.push(creatingRow(state.creating, 0))
+  flatten(tree, 0, next, state.filter.trim().toLowerCase())
+  rows = next
+  state.count = rows.length
+  slide(true)
   if (state.selected && !rows.some((r) => r.path === state.selected)) {
     state.selected = null
     sendCommand({ type: 'fileInfo', path: null })
   }
+}
+
+// ---- the rows in view ----
+
+const OVERSCAN = 8
+const FALLBACK_VIEW = 800
+let rowHeight = 24
+let shownFrom = -1
+let shownTo = -1
+let observed: HTMLElement | null = null
+let viewHeight = 0
+const resized = new ResizeObserver(() => {
+  keepSelectedInView()
+  slide(true)
+})
+onUnmounted(() => resized.disconnect())
+
+function listElement(): HTMLElement | null {
+  const list = refs.list
+  if (!list?.isConnected) return null
+  if (list !== observed) {
+    if (observed) resized.unobserve(observed)
+    observed = list
+    resized.observe(list)
+  }
+  return list
+}
+
+function topPadding(list: HTMLElement): number {
+  return parseFloat(getComputedStyle(list).paddingTop) || 0
+}
+
+// Before the list has rendered there is nothing to measure, so a screenful goes out and the next frame measures again
+function slide(force = false) {
+  const list = listElement()
+  const measured = list?.querySelector<HTMLElement>('.row')?.offsetHeight
+  if (measured) rowHeight = measured
+  const view = list ? list.clientHeight : FALLBACK_VIEW
+  const top = list ? Math.min(list.scrollTop - topPadding(list), Math.max(0, rows.length * rowHeight - view)) : 0
+  const from = Math.max(0, Math.floor(top / rowHeight) - OVERSCAN)
+  const to = Math.min(rows.length, Math.ceil((top + view) / rowHeight) + OVERSCAN)
+  if (!force && from === shownFrom && to === shownTo) return
+  shownFrom = from
+  shownTo = to
+  state.shown = rows.slice(from, to)
+  state.before = from * rowHeight
+  state.height = rows.length * rowHeight
+  if (!list || !measured) requestAnimationFrame(() => listElement() && slide(true))
+}
+
+// The list shrinks when the details below it open for a file, which would hide the row just chosen
+function keepSelectedInView() {
+  const list = listElement()
+  if (!list) return
+  const before = viewHeight
+  viewHeight = list.clientHeight
+  const index = rows.findIndex((r) => r.path === state.selected)
+  if (index < 0 || !before) return
+  const top = topPadding(list) + index * rowHeight
+  if (top >= list.scrollTop && top + rowHeight <= list.scrollTop + before) reveal(rows[index].path)
+}
+
+// Scrolls a row into view so it is rendered, for the keys and for inputs that open on a row
+function reveal(path: string) {
+  const list = listElement()
+  const index = rows.findIndex((r) => r.path === path)
+  if (!list || index < 0) return
+  const top = topPadding(list) + index * rowHeight
+  if (top < list.scrollTop) list.scrollTop = top
+  else if (top + rowHeight > list.scrollTop + list.clientHeight) list.scrollTop = top + rowHeight - list.clientHeight
+  slide()
 }
 
 files.subscribe((next: Entry[] | undefined) => {
@@ -198,6 +276,7 @@ function activate(row: Row) {
 
 function startRename(row: Row) {
   state.renaming = row.path
+  reveal(row.path)
   setTimeout(() => {
     const input = document.querySelector<HTMLInputElement>('#files-panel .rename')
     if (!input) return
@@ -234,6 +313,7 @@ function startCreate(dir: string, kind: Creating['kind']) {
   if (dir && collapsed.has(dir)) collapsed.delete(dir)
   state.creating = { dir, kind }
   refresh()
+  reveal('\0creating')
   focusWhenRendered('#files-panel .creating .rename')
 }
 
@@ -276,7 +356,7 @@ function remove(row: Row) {
 // The list's own keys: Enter renames, Backspace deletes; keys typed into a rename or create input are the input's
 function keyDown(event: KeyboardEvent) {
   if ((event.target as HTMLElement).tagName === 'INPUT' || state.renaming || state.creating) return
-  const row = state.rows.find((r) => r.path === state.selected)
+  const row = rows.find((r) => r.path === state.selected)
   if (!row) return
   if (event.key === 'Enter' || event.key === 'F2') {
     event.preventDefault()
@@ -295,20 +375,21 @@ function keyDown(event: KeyboardEvent) {
     event.preventDefault()
     if (row.kind === 'directory' && row.expanded) toggle(event, row)
     else {
-      const parent = state.rows.find((r) => r.path === parentOf(row.path))
+      const parent = rows.find((r) => r.path === parentOf(row.path))
       if (parent) choose(parent)
     }
   }
 }
 
 function step(from: Row, by: number) {
-  const rows = state.rows.filter((r) => r.kind !== 'creating')
-  const next = rows[rows.indexOf(from) + by]
+  const steps = rows.filter((r) => r.kind !== 'creating')
+  const next = steps[steps.indexOf(from) + by]
   if (next) choose(next)
 }
 
 function choose(row: Row) {
   state.selected = row.path
+  reveal(row.path)
   sendCommand({ type: 'fileInfo', path: row.kind === 'file' ? row.path : null })
 }
 
@@ -467,6 +548,14 @@ function contextEmpty(event: MouseEvent) {
   padding: var(--cat-space-1);
   box-sizing: border-box;
   outline: none;
+  overflow-anchor: none;
+}
+
+.window {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
 }
 
 .empty-state {
