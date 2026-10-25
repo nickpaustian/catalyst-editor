@@ -38,6 +38,8 @@ export interface ProjectFolder {
   ensurePermission(): Promise<boolean>
   exists(path: string): Promise<boolean>
   readFile(path: string): Promise<File>
+  /** Bytes `start` to `end` (exclusive) of a file, where reading only those is cheaper than `readFile`. */
+  readRange?(path: string, start: number, end: number): Promise<Blob>
   readText(path: string): Promise<string>
   readJSON<T = unknown>(path: string): Promise<T>
   writeText(path: string, text: string): Promise<void>
@@ -435,6 +437,8 @@ export interface NativeFs {
   exists(path: string): Promise<boolean>
   readText(path: string): Promise<string>
   readBinary(path: string): Promise<Uint8Array>
+  /** Bytes `start` to `end` (exclusive) of a file; without it the whole file is read. */
+  readRange?(path: string, start: number, end: number): Promise<Uint8Array>
   writeText(path: string, text: string): Promise<void>
   writeBinary(path: string, data: Uint8Array): Promise<void>
   readDir(path: string): Promise<{ name: string; isDirectory: boolean }[]>
@@ -537,6 +541,11 @@ export class NativeFolder implements ProjectFolder {
   async readFile(path: string): Promise<File> {
     const bytes = await this.fs.readBinary(this.at(path))
     return new File([bytes as BlobPart], basename(path))
+  }
+
+  async readRange(path: string, start: number, end: number): Promise<Blob> {
+    if (!this.fs.readRange) return (await this.readFile(path)).slice(start, end)
+    return new Blob([(await this.fs.readRange(this.at(path), start, end)) as BlobPart])
   }
 
   readText(path: string): Promise<string> {
@@ -747,6 +756,7 @@ const isAbsolute = (url: string): boolean => /^(?:[a-z]+:)?\/\//i.test(url) || u
  * names load from disk exactly as they would from a server.
  */
 export const folderLoader = (folder: ProjectFolder, fallback: Loader = fetchLoader()): Loader => ({
+  fetch: (url, init) => (isAbsolute(url) ? (fallback.fetch ?? fetch)(url, init) : folderResponse(folder, url, init)),
   json: (url) => (isAbsolute(url) ? fallback.json(url) : folder.readJSON(url)),
   text: (url) => (isAbsolute(url) ? fallback.text(url) : folder.readText(url)),
   arrayBuffer: async (url) => (isAbsolute(url) ? fallback.arrayBuffer(url) : (await folder.readFile(url)).arrayBuffer()),
@@ -757,3 +767,24 @@ export const folderLoader = (folder: ProjectFolder, fallback: Loader = fetchLoad
     return buffer
   },
 })
+
+const CONTENT_TYPES: Record<string, string> = { json: "application/json", bin: "application/octet-stream", webp: "image/webp", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", ktx2: "image/ktx2", avif: "image/avif" }
+
+/** A file in the folder answered as a server would: HEAD, a single `bytes=` Range as a 206, a missing file as a 404. */
+const folderResponse = async (folder: ProjectFolder, url: string, init?: RequestInit): Promise<Response> => {
+  const path = url.replace(/[?#].*$/, "")
+  const type = CONTENT_TYPES[path.slice(path.lastIndexOf(".") + 1).toLowerCase()] ?? "application/octet-stream"
+  if ((init?.method ?? "GET").toUpperCase() === "HEAD") return new Response(null, { status: (await folder.exists(path).catch(() => false)) ? 200 : 404, headers: { "Content-Type": type } })
+  const range = /^bytes=(\d+)-(\d*)$/.exec(new Headers(init?.headers).get("Range") ?? "")
+  try {
+    if (range) {
+      const start = Number(range[1])
+      const end = range[2] ? Number(range[2]) + 1 : Infinity
+      const body = folder.readRange && Number.isFinite(end) ? await folder.readRange(path, start, end) : (await folder.readFile(path)).slice(start, end)
+      return new Response(body, { status: 206, headers: { "Content-Type": type, "Content-Range": `bytes ${start}-${start + body.size - 1}/*` } })
+    }
+    return new Response(await folder.readFile(path), { status: 200, headers: { "Content-Type": type } })
+  } catch {
+    return new Response(null, { status: 404 })
+  }
+}

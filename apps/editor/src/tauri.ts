@@ -1,6 +1,6 @@
 import { nativeFolders, type FolderTransfer, type NativeFs, type RunMessage, type RunnerLink, type RunnerPageLink } from "@nickpaustian/catalyst-editor"
 import { open } from "@tauri-apps/plugin-dialog"
-import { exists, mkdir, readDir, readFile, readTextFile, remove, rename, stat, watch, writeFile, writeTextFile } from "@tauri-apps/plugin-fs"
+import { SeekMode, exists, mkdir, open as openFile, readDir, readFile, readTextFile, remove, rename, stat, watch, writeFile, writeTextFile } from "@tauri-apps/plugin-fs"
 import { invoke } from "@tauri-apps/api/core"
 import { documentDir, homeDir } from "@tauri-apps/api/path"
 import { emitTo, listen } from "@tauri-apps/api/event"
@@ -36,6 +36,22 @@ const fs: NativeFs = {
   exists: (path) => exists(path),
   readText: (path) => readTextFile(path),
   readBinary: (path) => readFile(path),
+  readRange: async (path, start, end) => {
+    const file = await openFile(path, { read: true })
+    try {
+      await file.seek(start, SeekMode.Start)
+      const out = new Uint8Array(end - start)
+      let filled = 0
+      while (filled < out.length) {
+        const read = await file.read(out.subarray(filled))
+        if (!read) break
+        filled += read
+      }
+      return out.subarray(0, filled)
+    } finally {
+      await file.close()
+    }
+  },
   writeText: (path, text) => writeTextFile(path, text),
   writeBinary: (path, data) => writeFile(path, data),
   readDir: async (path) => (await readDir(path)).map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory })),

@@ -43,6 +43,16 @@
       ]
     },
     {
+      "identifier": "fs:allow-open",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
+    },
+    "fs:allow-seek",
+    "fs:allow-read",
+    {
       "identifier": "fs:allow-read-file",
       "allow": [
         {

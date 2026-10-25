@@ -240,6 +240,11 @@ export class AssetFolder implements ProjectFolder {
     return this.raw.readFile(await this.resolve(path))
   }
 
+  async readRange(path: string, start: number, end: number): Promise<Blob> {
+    const resolved = await this.resolve(path)
+    return this.raw.readRange ? this.raw.readRange(resolved, start, end) : (await this.raw.readFile(resolved)).slice(start, end)
+  }
+
   async readText(path: string): Promise<string> {
     return this.raw.readText(await this.resolve(path))
   }
