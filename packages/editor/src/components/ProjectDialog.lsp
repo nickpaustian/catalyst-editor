@@ -50,7 +50,7 @@
         </span>
       </span>
     </div>
-    <label class="check" title="git init, with a .gitignore for node_modules and .DS_Store" $if="state.mode === 'create' && shared['editor:projectDialog'].canGit">
+    <label class="check" title="git init, with a .gitignore for node_modules, .DS_Store and built .theca packages" $if="state.mode === 'create' && shared['editor:projectDialog'].canGit">
       <input class="checkbox" type="checkbox" $model="state.git" /> Start a git repository
     </label>
     <p class="error" $if="state.error">{{ state.error }}</p>

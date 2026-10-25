@@ -35,6 +35,8 @@ export interface NewProject {
 
 export const GITIGNORE = `node_modules/
 .DS_Store
+# Streamed surfaces are built from their sources by Iapetus; theca.json records how
+*.theca/
 `
 
 export const slug = (name: string): string => name.trim().toLowerCase().replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "project"
