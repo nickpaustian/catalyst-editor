@@ -161,6 +161,7 @@ const converter = (): AssetConverter => ({
     const args = ["--mesh", String(options.mesh), "--quality", String(options.quality), "--max-texture", String(options.maxTexture)]
     if (options.permissive) args.push("--permissive")
     if (options.partition) args.push("--partition", "--regularize")
+    for (const map of options.maps ?? []) args.push("--map", `${map.role}=${map.path}`)
     const listening = listen<{ id: string; progress: StreamableProgress }>("iapetus:progress", (event) => {
       if (event.payload.id === id) progress(event.payload.progress)
     })

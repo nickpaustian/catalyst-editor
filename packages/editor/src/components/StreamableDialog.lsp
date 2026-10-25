@@ -21,6 +21,9 @@
       <ul class="warnings" $if="state.chosen && state.chosen.warnings.length">
         <li $for="warning in state.chosen.warnings" $key="warning">{{ warning }}</li>
       </ul>
+      <p class="facts" $if="state.mapFiles">
+        <span class="maps">Maps from files: <span class="mono">{{ state.mapFiles }}</span></span>
+      </p>
       <label class="dialog-field">Output folder
         <input class="well large mono" type="text" spellcheck="false" $model="state.out" />
       </label>
@@ -112,6 +115,7 @@ const state = reactive({
   warnings: [] as string[],
   summary: '',
   rebuilding: false,
+  mapFiles: '',
 })
 
 const row = (mesh: StreamableMesh): MeshRow => {
@@ -160,6 +164,7 @@ cell.subscribe((next: typeof STREAMABLE_DEFAULT | undefined) => {
     picked()
   }
   state.rebuilding = Boolean(next.rebuild)
+  state.mapFiles = (next.rebuild?.maps ?? []).map((map) => `${MAP_NAMES[map.role] ?? map.role} ← ${map.path.replace(/^.*\//, '')}`).join(', ')
   state.open = true
   state.phase = next.phase
   state.source = next.source

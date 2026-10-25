@@ -24,6 +24,8 @@ export interface StreamableOptions {
   quality: number
   /** The largest side a map is cut at. */
   maxTexture: number
+  /** Image files to tile as maps over the model's own, by absolute path. */
+  maps?: { role: string; path: string }[]
 }
 
 export interface StreamableProgress {

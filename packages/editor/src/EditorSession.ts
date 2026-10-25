@@ -227,7 +227,9 @@ interface ThecaManifest {
   name?: string
   source?: { path?: string; mesh?: number; meshName?: string | null }
   builder?: string
-  options?: { permissive?: boolean; partition?: boolean; maxTexture?: number; quality?: number }
+  options?: { permissive?: boolean; partition?: boolean; maxTexture?: number; quality?: number; maps?: { role: string; path: string }[] }
+  /** Made by `iapetus pack` from an earlier build, so there are no build options to repeat. */
+  packed?: boolean
   triangles?: number
   clusters?: string | null
   hierarchy?: { clusters?: number; pages?: number; levels?: number; bytes?: number }
@@ -2283,7 +2285,8 @@ export class EditorSession {
     if (!input || !output) return
     this.streamCancelled = false
     this.setStreamable({ phase: "running", out: target, error: "", stage: "", step: 0, steps: 0, fraction: null, message: "Starting" })
-    const job = this.converter.makeStreamable(input, output, options, (progress) =>
+    const maps = (state.rebuild?.maps ?? []).map((map) => ({ role: map.role, path: this.absolutePath(map.path) ?? map.path }))
+    const job = this.converter.makeStreamable(input, output, { ...options, maps }, (progress) =>
       this.setStreamable({ stage: progress.stage, step: progress.step, steps: progress.steps, fraction: progress.fraction, ...(progress.message ? { message: progress.message } : {}) }),
     )
     this.streamJob = job
@@ -2320,24 +2323,36 @@ export class EditorSession {
     await this.addNode("StreamedSurface", { name: manifest.name ?? path.replace(/^.*\//, "").replace(THECA, ""), theca: path }, at)
   }
 
-  /** The dialog again for a theca's source, with the options it was built with. */
-  private async rebuildTheca(path: string): Promise<void> {
-    const manifest = await this.readTheca(path)
-    const from = manifest?.source?.path
-    if (!manifest || !from) return this.publishProject(`${path} does not say what it was built from`)
-    const parts = [...(path.includes("/") ? path.replace(/\/[^/]*$/, "").split("/") : []), ...from.split("/")]
+  /** A path a theca records relative to the folder it sits in, as a project path; null when it climbs out of the project. */
+  private besideTheca(theca: string, relative: string): string | null {
     const resolved: string[] = []
-    for (const part of parts) {
+    for (const part of [...(theca.includes("/") ? theca.replace(/\/[^/]*$/, "").split("/") : []), ...relative.split("/")]) {
       if (part === "..") {
-        if (!resolved.length) return this.publishProject(`${path} was built from ${from}, outside the project`)
+        if (!resolved.length) return null
         resolved.pop()
       } else if (part && part !== ".") resolved.push(part)
     }
-    const source = resolved.join("/")
+    return resolved.join("/")
+  }
+
+  /** The dialog again for a theca's source, with the options and map files it was built with. */
+  private async rebuildTheca(path: string): Promise<void> {
+    const manifest = await this.readTheca(path)
+    if (manifest?.packed) return this.publishProject(`${path} was packed from an earlier build; rebuild it with iapetus pack`)
+    const from = manifest?.source?.path
+    if (!manifest || !from) return this.publishProject(`${path} does not say what it was built from`)
+    const source = this.besideTheca(path, from)
+    if (!source) return this.publishProject(`${path} was built from ${from}, outside the project`)
     if (!(await this.folder?.exists(source).catch(() => false))) return this.publishProject(`${path} was built from ${source}, which is not in the project now`)
+    const maps: { role: string; path: string }[] = []
+    for (const map of manifest.options?.maps ?? []) {
+      const file = this.besideTheca(path, map.path)
+      if (!file || !(await this.folder?.exists(file).catch(() => false))) return this.publishProject(`${path} was built with ${map.path} as its ${MAP_NAMES[map.role] ?? map.role} map, which is not in the project now`)
+      maps.push({ role: map.role, path: file })
+    }
     await this.openStreamable(source)
     const options = manifest.options ?? {}
-    this.setStreamable({ out: path, mesh: manifest.source?.mesh ?? 0, rebuild: { permissive: Boolean(options.permissive), partition: Boolean(options.partition), maxTexture: options.maxTexture ?? 16384 } })
+    this.setStreamable({ out: path, mesh: manifest.source?.mesh ?? 0, rebuild: { permissive: Boolean(options.permissive), partition: Boolean(options.partition), maxTexture: options.maxTexture ?? 16384, maps } })
   }
 
   private cancelStreamable(): void {
