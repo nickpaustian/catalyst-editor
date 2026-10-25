@@ -80,6 +80,7 @@ import { DRAGGING_FILE_CELL } from '../fileField.ts'
 import { sendCommand } from '../commands.ts'
 import { openContextMenu, type MenuItem } from '../contextMenu.ts'
 import { PROJECT_DEFAULT } from '../cells.ts'
+import { RowWindow } from '../rowWindow.ts'
 
 interface Entry { path: string; name: string; kind: 'file' | 'directory'; children?: Entry[] }
 interface Row { path: string; name: string; kind: 'file' | 'directory' | 'creating'; depth: number; expanded: boolean; icon: string; type: string }
@@ -161,7 +162,7 @@ function refresh() {
   flatten(tree, 0, next, state.filter.trim().toLowerCase())
   rows = next
   state.count = rows.length
-  slide(true)
+  rowWindow.set(rows)
   if (state.selected && !rows.some((r) => r.path === state.selected)) {
     state.selected = null
     sendCommand({ type: 'fileInfo', path: null })
@@ -170,78 +171,19 @@ function refresh() {
 
 // ---- the rows in view ----
 
-const MIN_BUFFER = 8
-const FALLBACK_VIEW = 800
-let rowHeight = 24
-let shownFrom = -1
-let shownTo = -1
-let observed: HTMLElement | null = null
-let viewHeight = 0
-const resized = new ResizeObserver(() => {
-  keepSelectedInView()
-  slide(true)
+const rowWindow = new RowWindow<Row>({
+  list: () => refs.list,
+  show: (shown, before, height) => Object.assign(state, { shown, before, height }),
+  chosen: () => rows.findIndex((r) => r.path === state.selected),
 })
-onUnmounted(() => resized.disconnect())
+onUnmounted(() => rowWindow.destroy())
 
-function listElement(): HTMLElement | null {
-  const list = refs.list
-  if (!list?.isConnected) return null
-  if (list !== observed) {
-    if (observed) resized.unobserve(observed)
-    observed = list
-    resized.observe(list)
-  }
-  return list
+function slide() {
+  rowWindow.slide()
 }
 
-function topPadding(list: HTMLElement): number {
-  return parseFloat(getComputedStyle(list).paddingTop) || 0
-}
-
-// Before the list has rendered there is nothing to measure, so a screenful goes out and the next frame measures again
-function slide(force = false) {
-  const list = listElement()
-  const measured = list?.querySelector<HTMLElement>('.row')?.offsetHeight
-  if (measured) rowHeight = measured
-  const view = list ? list.clientHeight : FALLBACK_VIEW
-  const top = list ? Math.min(list.scrollTop - topPadding(list), Math.max(0, rows.length * rowHeight - view)) : 0
-  const first = Math.floor(top / rowHeight)
-  const last = Math.ceil((top + view) / rowHeight)
-  const buffer = Math.max(MIN_BUFFER, last - first)
-  const margin = Math.floor(buffer / 2)
-  const covered = shownFrom <= Math.max(0, first - margin) && shownTo >= Math.min(rows.length, last + margin)
-  if (!force && covered) return
-  const from = Math.max(0, first - buffer)
-  const to = Math.min(rows.length, last + buffer)
-  shownFrom = from
-  shownTo = to
-  state.shown = rows.slice(from, to)
-  state.before = from * rowHeight
-  state.height = rows.length * rowHeight
-  if (!list || !measured) requestAnimationFrame(() => listElement() && slide(true))
-}
-
-// The list shrinks when the details below it open for a file, which would hide the row just chosen
-function keepSelectedInView() {
-  const list = listElement()
-  if (!list) return
-  const before = viewHeight
-  viewHeight = list.clientHeight
-  const index = rows.findIndex((r) => r.path === state.selected)
-  if (index < 0 || !before) return
-  const top = topPadding(list) + index * rowHeight
-  if (top >= list.scrollTop && top + rowHeight <= list.scrollTop + before) reveal(rows[index].path)
-}
-
-// Scrolls a row into view so it is rendered, for the keys and for inputs that open on a row
 function reveal(path: string) {
-  const list = listElement()
-  const index = rows.findIndex((r) => r.path === path)
-  if (!list || index < 0) return
-  const top = topPadding(list) + index * rowHeight
-  if (top < list.scrollTop) list.scrollTop = top
-  else if (top + rowHeight > list.scrollTop + list.clientHeight) list.scrollTop = top + rowHeight - list.clientHeight
-  slide()
+  rowWindow.reveal(rows.findIndex((r) => r.path === path))
 }
 
 files.subscribe((next: Entry[] | undefined) => {

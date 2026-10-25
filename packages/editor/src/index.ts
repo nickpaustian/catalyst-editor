@@ -1,4 +1,4 @@
-export { EditorSession, PREFABS_DIR, type EditorCells, type EditorCommand, type TreeRow, type KindNode, type SelectMode, type DropPlace, type ViewMode, type SelectionProperty, type SelectionScript } from "./EditorSession"
+export { EditorSession, PREFABS_DIR, type EditorCells, type EditorCommand, type TreeRow, type TreeSelection, type KindNode, type SelectMode, type DropPlace, type ViewMode, type SelectionProperty, type SelectionScript } from "./EditorSession"
 export { ScriptCompiler, SCRIPTS_DIR, editorModules, scriptTemplate } from "./ScriptCompiler"
 export { EditorCamera, nodeTarget, groupTarget, type GizmoMode, type GizmoTarget } from "./EditorCamera"
 export { EditorInput } from "./EditorInput"

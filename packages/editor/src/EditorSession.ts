@@ -27,10 +27,15 @@ export interface TreeRow {
   depth: number
   hasChildren: boolean
   expanded: boolean
-  selected: boolean
-  /** The one the fields panel and gizmo pivot follow; the last clicked. */
-  active: boolean
   isRoot: boolean
+  hiddenInEditor: boolean
+  hiddenAbove: boolean
+}
+
+export interface TreeSelection {
+  ids: number[]
+  /** The one the fields panel and gizmo pivot follow; the last clicked. */
+  active: number | null
 }
 
 export type DropPlace = "before" | "after" | "inside"
@@ -86,6 +91,8 @@ export interface EditorCells {
   "editor:settings": { title: string; fields: SelectionProperty[] } | null
   "editor:view": { view: ViewMode; visualised: boolean; gizmo: GizmoMode; tool: DrawTool | null; vertexEdit: boolean; editMode: EditMode; physics: boolean; scripts: boolean; snap: SnapSettings; streaming: StreamingPreset; slateEditing: boolean }
   "editor:tree": TreeRow[]
+  /** Kept apart from the rows so selecting restyles them without rebuilding the tree. */
+  "editor:treeSelection": TreeSelection
   /** The kinds the tree can add, as the class hierarchy they sit in: bases that are not kinds are shown but cannot be added. */
   "editor:kinds": KindNode[]
   /** Set true to open the add dialog; the dialog sets it back. */
@@ -674,13 +681,13 @@ export class EditorSession {
     return node.getChildren().filter((child): child is Node3D => child instanceof Node3D && !child.internal)
   }
 
-  private visibleNodes(): { node: Node3D; depth: number }[] {
-    const rows: { node: Node3D; depth: number }[] = []
-    const visit = (node: Node3D, depth: number) => {
-      rows.push({ node, depth })
-      if (!this.collapsed.has(node)) this.ownedChildren(node).forEach((child) => visit(child, depth + 1))
+  private visibleNodes(): { node: Node3D; depth: number; hiddenAbove: boolean }[] {
+    const rows: { node: Node3D; depth: number; hiddenAbove: boolean }[] = []
+    const visit = (node: Node3D, depth: number, hiddenAbove: boolean) => {
+      rows.push({ node, depth, hiddenAbove })
+      if (!this.collapsed.has(node)) this.ownedChildren(node).forEach((child) => visit(child, depth + 1, hiddenAbove || node.hiddenInEditor))
     }
-    if (this._root) visit(this._root, 0)
+    if (this._root) visit(this._root, 0, false)
     return rows
   }
 
@@ -688,7 +695,7 @@ export class EditorSession {
     this.rememberHidden()
     this.set(
       "editor:tree",
-      this.visibleNodes().map(({ node, depth }) => ({
+      this.visibleNodes().map(({ node, depth, hiddenAbove }) => ({
         id: this.idOf(node),
         name: node.name,
         type: this.engine.registry.typeOf(node),
@@ -696,18 +703,16 @@ export class EditorSession {
         depth,
         hasChildren: this.ownedChildren(node).length > 0,
         expanded: !this.collapsed.has(node),
-        selected: this.selection.has(node),
-        active: node === this.selected,
         isRoot: node === this._root,
         hiddenInEditor: node.hiddenInEditor,
-        hiddenAbove: this.hiddenAbove(node),
+        hiddenAbove,
       })),
     )
+    this.publishTreeSelection()
   }
 
-  private hiddenAbove(node: Node3D): boolean {
-    for (let parent = node.parent; parent; parent = parent.parent) if (parent instanceof Node3D && parent.hiddenInEditor) return true
-    return false
+  private publishTreeSelection(): void {
+    this.set("editor:treeSelection", { ids: [...this.selection].map((node) => this.idOf(node)), active: this.selected ? this.idOf(this.selected) : null })
   }
 
   /** A node's place in the scene as its names from the root down, which is how the nodes hidden in the editor are remembered. */
@@ -1809,7 +1814,7 @@ export class EditorSession {
     this.selected = node
     if (node && node !== root) this.attachGizmo(node)
     else this.camera.detach()
-    this.publishTree()
+    this.publishTreeSelection()
     this.publishSelection()
   }
 
@@ -1822,7 +1827,7 @@ export class EditorSession {
     this.anchor = node
     if (node) this.attachGizmo(node)
     else this.camera.detach()
-    this.publishTree()
+    this.publishTreeSelection()
     this.publishSelection()
   }
 

@@ -1,13 +1,15 @@
 <view>
-<div class="rows" role="tree" aria-label="Scene nodes" aria-multiselectable="true" tabindex="0" @contextmenu="contextEmpty($event)">
+<div class="rows" role="tree" aria-label="Scene nodes" aria-multiselectable="true" tabindex="0" $ref="list" @contextmenu="contextEmpty($event)" @scroll="slide()">
+  <div class="window" $style="'height: ' + state.height + 'px; padding-top: ' + state.before + 'px'">
   <div
     class="row"
     role="treeitem"
-    $for="row in shared['editor:tree']"
+    $for="row in state.shown"
     $key="row.id"
-    $class="{ selected: row.selected, active: row.active, root: row.isRoot, concealed: row.hiddenInEditor || row.hiddenAbove }"
+    $data-id="row.id"
+    $class="{ selected: shared['editor:treeSelection'].ids.includes(row.id), active: shared['editor:treeSelection'].active === row.id, root: row.isRoot, concealed: row.hiddenInEditor || row.hiddenAbove }"
     $style="'--depth: ' + row.depth"
-    $aria-selected="row.selected"
+    $aria-selected="shared['editor:treeSelection'].ids.includes(row.id)"
     $aria-expanded="row.hasChildren ? row.expanded : null"
     @pointerdown="press($event, row)"
     @click="select($event, row)"
@@ -48,21 +50,62 @@
     </button>
     <span $else class="eye"></span>
   </div>
+  </div>
 </div>
 </view>
 
 <logic lang="ts">
-import { reactive, shared } from '@lightspeed-js/core'
+import { reactive, shared, defineRefs, onUnmounted } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { openContextMenu, type MenuItem } from '../contextMenu.ts'
+import { RowWindow } from '../rowWindow.ts'
 
-interface Row { id: number; name: string; type: string; icon: string; depth: number; hasChildren: boolean; expanded: boolean; selected: boolean; active: boolean; isRoot: boolean; hiddenInEditor: boolean; hiddenAbove: boolean }
+interface Row { id: number; name: string; type: string; icon: string; depth: number; hasChildren: boolean; expanded: boolean; isRoot: boolean; hiddenInEditor: boolean; hiddenAbove: boolean }
+interface TreeSelection { ids: number[]; active: number | null }
 type Place = 'before' | 'after' | 'inside'
 
-shared('editor:tree', [])
+const tree = shared('editor:tree', [])
+const treeSelection = shared('editor:treeSelection', { ids: [], active: null })
 const addDialog = shared('editor:addDialog', false)
 const selection = shared('editor:selection', null)
-const state = reactive({ renaming: null as number | null })
+const state = reactive({ renaming: null as number | null, shown: [] as Row[], before: 0, height: 0 })
+const refs = defineRefs<{ list: HTMLElement }>()
+
+// ---- the rows in view ----
+
+let rowsById = new Map<number, Row>()
+let activeId: number | null = null
+
+const rowWindow = new RowWindow<Row>({
+  list: () => refs.list,
+  show: (shown, before, height) => Object.assign(state, { shown, before, height }),
+  chosen: () => indexOf(activeId),
+})
+onUnmounted(() => rowWindow.destroy())
+
+function indexOf(id: number | null): number {
+  return id === null ? -1 : rowWindow.all.findIndex((r) => r.id === id)
+}
+
+function slide() {
+  rowWindow.slide()
+}
+
+tree.subscribe((rows: Row[] | undefined) => {
+  rowsById = new Map((rows ?? []).map((row) => [row.id, row]))
+  rowWindow.set(rows ?? [])
+})
+
+// A node chosen elsewhere, in the viewport or by undo, scrolls into view
+treeSelection.subscribe((picked: TreeSelection | undefined) => {
+  const active = picked?.active ?? null
+  if (active !== activeId && active !== null) rowWindow.reveal(indexOf(active))
+  activeId = active
+})
+
+function isSelected(row: Row): boolean {
+  return (treeSelection.value as TreeSelection).ids.includes(row.id)
+}
 
 // ---- files dragged from the files pane ----
 
@@ -85,12 +128,12 @@ function fileDrop(event: DragEvent, row: Row) {
 
 // ---- inline rename ----
 
-// Selecting republishes the tree, which rebuilds the rows, so the input is
-// shown only once that has settled, and focused once it exists
+// Selecting restyles the rows a frame later, so the input is shown only once
+// that has settled, and focused once it exists
 function startRename(event: Event, row: Row) {
   event.stopPropagation()
   if (row.isRoot) return
-  if (!row.selected || !row.active) sendCommand({ type: 'select', id: row.id })
+  if (!isSelected(row) || activeId !== row.id) sendCommand({ type: 'select', id: row.id })
   setTimeout(() => {
     state.renaming = row.id
     setTimeout(() => {
@@ -123,7 +166,7 @@ const PRIMITIVES = new Set(['Box', 'Sphere', 'Capsule', 'Cylinder', 'Wedge'])
 function context(event: MouseEvent, row: Row) {
   event.preventDefault()
   event.stopPropagation()
-  if (!row.selected) sendCommand({ type: 'select', id: row.id })
+  if (!isSelected(row)) sendCommand({ type: 'select', id: row.id })
   // The selection cell has caught up by the next tick, so the menu reads it
   setTimeout(() => {
     const picked = selection.value as { count: number; prefab: string | null; type: string; onSlate: boolean } | null
@@ -197,8 +240,9 @@ function select(event: MouseEvent, row: Row) {
 
 // Dragging a selected row carries the whole selection; any other row moves alone
 function draggedIds(row: Row): number[] {
-  const rows = shared('editor:tree').value as Row[]
-  return row.selected ? rows.filter((r) => r.selected && !r.isRoot).map((r) => r.id) : [row.id]
+  if (!isSelected(row)) return [row.id]
+  const ids = new Set((treeSelection.value as TreeSelection).ids)
+  return rowWindow.all.filter((r) => ids.has(r.id) && !r.isRoot).map((r) => r.id)
 }
 
 function hideInEditor(event: Event, row: Row) {
@@ -211,13 +255,10 @@ function toggle(event: Event, row: Row) {
   sendCommand({ type: 'toggleExpand', id: row.id })
 }
 
-// Rows are rendered in the same order as the cell, so a row element maps
-// back to its data by position
 function rowAt(list: HTMLElement, x: number, y: number): { row: Row; element: HTMLElement } | null {
   const element = document.elementFromPoint(x, y)?.closest<HTMLElement>('.row')
   if (!element || !list.contains(element)) return null
-  const elements = Array.from(list.querySelectorAll<HTMLElement>('.row'))
-  const row = (shared('editor:tree').value as Row[])[elements.indexOf(element)]
+  const row = rowsById.get(Number(element.dataset.id))
   return row ? { row, element } : null
 }
 
@@ -282,11 +323,20 @@ function release() {
 .rows {
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-anchor: none;
   padding: var(--cat-space-1);
   box-sizing: border-box;
   outline: none;
   user-select: none;
+}
+
+.window {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
 }
 
 .row {
