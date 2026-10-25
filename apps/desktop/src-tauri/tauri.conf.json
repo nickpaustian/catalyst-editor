@@ -7,7 +7,7 @@
     "frontendDist": "../../editor/dist",
     "devUrl": "http://localhost:3100",
     "beforeDevCommand": "node scripts/sidecar.mjs && npm run dev --prefix ../editor",
-    "beforeBuildCommand": "node scripts/sidecar.mjs && npm run build --prefix ../editor"
+    "beforeBuildCommand": "node scripts/sidecar.mjs && node scripts/app-icon.mjs && npm run build --prefix ../editor"
   },
   "app": {
     "windows": [
@@ -57,9 +57,13 @@
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
-      "icons/icon.ico",
-      "icons/Catalyst.icon"
+      "icons/icon.ico"
     ],
+    "macOS": {
+      "files": {
+        "Resources/Assets.car": "icons/build/Assets.car"
+      }
+    },
     "fileAssociations": [
       {
         "ext": [

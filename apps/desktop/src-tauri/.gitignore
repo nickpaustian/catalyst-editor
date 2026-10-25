@@ -5,3 +5,6 @@
 
 # Iapetus, built for the target by scripts/sidecar.mjs
 /binaries/
+
+# Assets.car compiled from Catalyst.icon by scripts/app-icon.mjs
+/icons/build/
