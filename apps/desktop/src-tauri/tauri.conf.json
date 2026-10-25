@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../../editor/dist",
     "devUrl": "http://localhost:3100",
-    "beforeDevCommand": "npm run dev --prefix ../editor",
-    "beforeBuildCommand": "npm run build --prefix ../editor"
+    "beforeDevCommand": "node scripts/sidecar.mjs && npm run dev --prefix ../editor",
+    "beforeBuildCommand": "node scripts/sidecar.mjs && npm run build --prefix ../editor"
   },
   "app": {
     "windows": [
@@ -45,6 +45,9 @@
   },
   "bundle": {
     "active": true,
+    "externalBin": [
+      "binaries/iapetus"
+    ],
     "targets": [
       "app",
       "dmg"
