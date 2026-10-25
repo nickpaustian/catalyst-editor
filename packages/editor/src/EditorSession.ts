@@ -287,6 +287,8 @@ export class EditorSession {
   private anchor: Node3D | null = null
   private ids = new Map<Node3D, number>()
   private nodesById = new Map<number, Node3D>()
+  /** The nodes the tree was last built from, to tell when a selection change must rebuild it. */
+  private treeNodes: Node3D[] = []
   private nextId = 1
   private collapsed = new Set<Node3D>()
   private hidden: { key: string; saved: string } | null = null
@@ -708,7 +710,26 @@ export class EditorSession {
         hiddenAbove,
       })),
     )
+    this.treeNodes = this.sceneNodes()
     this.publishTreeSelection()
+  }
+
+  /** Every scene node in tree order, collapsed or not. */
+  private sceneNodes(): Node3D[] {
+    const nodes: Node3D[] = []
+    const visit = (node: Node3D) => {
+      nodes.push(node)
+      this.ownedChildren(node).forEach(visit)
+    }
+    if (this._root) visit(this._root)
+    return nodes
+  }
+
+  /** Selecting restyles the tree's rows, unless nodes were added, removed or moved since it was built: an add or a delete selects after it changes the scene, so the tree is rebuilt then. */
+  private publishSelectedRows(): void {
+    const nodes = this.sceneNodes()
+    if (nodes.length !== this.treeNodes.length || nodes.some((node, i) => node !== this.treeNodes[i])) this.publishTree()
+    else this.publishTreeSelection()
   }
 
   private publishTreeSelection(): void {
@@ -1814,7 +1835,7 @@ export class EditorSession {
     this.selected = node
     if (node && node !== root) this.attachGizmo(node)
     else this.camera.detach()
-    this.publishTreeSelection()
+    this.publishSelectedRows()
     this.publishSelection()
   }
 
@@ -1827,7 +1848,7 @@ export class EditorSession {
     this.anchor = node
     if (node) this.attachGizmo(node)
     else this.camera.detach()
-    this.publishTreeSelection()
+    this.publishSelectedRows()
     this.publishSelection()
   }
 
