@@ -27,6 +27,12 @@
   <button class="icon-button tool" type="button" title="Draw collider (V): a collision volume only, for blocking out a splat scene" aria-label="Draw collider (V)" $aria-pressed="shared['editor:view'].tool === 'collider'" @click="setTool('collider')">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 1.5" aria-hidden="true"><path d="M8 1.8 14 4.9v6.2L8 14.2 2 11.1V4.9z"/><path d="M2 4.9 8 8l6-3.1M8 8v6.2"/></svg>
   </button>
+  <template $if="shared['editor:selection']?.onSlate || shared['editor:view'].slateEditing">
+    <span class="divider"></span>
+    <button class="icon-button tool" type="button" title="Edit slate: the slate on its own, to place its UI (Esc returns)" aria-label="Edit slate" $aria-pressed="shared['editor:view'].slateEditing" @click="editSlate(!shared['editor:view'].slateEditing)">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5"/><rect x="5" y="6" width="4" height="4"/><path d="M11 6.5v3"/></svg>
+    </button>
+  </template>
 </div>
 </view>
 
@@ -38,6 +44,7 @@ import { PROJECT_DEFAULT, VIEW_DEFAULT } from '../cells.ts'
 
 shared('editor:project', PROJECT_DEFAULT)
 shared('editor:view', VIEW_DEFAULT)
+shared('editor:selection', null)
 
 function setGizmo(mode: string) {
   sendCommand({ type: 'setGizmo', mode })
@@ -49,6 +56,10 @@ function setTool(tool: string) {
 
 function setVertexEdit(on: boolean) {
   sendCommand({ type: 'setVertexEdit', on })
+}
+
+function editSlate(on: boolean) {
+  sendCommand({ type: 'editSlate', on })
 }
 
 function setEditMode(mode: string) {

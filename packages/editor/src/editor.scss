@@ -33,6 +33,102 @@ html.shell-macos #menu-bar .bar {
   height: 100%;
 }
 
+// Editing one slate: the others are hidden, the view behind is dimmed and the overlay takes the pointer
+#app .catalyst-ui[data-editing] > .catalyst-slate:not([data-edited]) {
+  display: none !important;
+}
+
+#app .catalyst-ui[data-editing] > .catalyst-slate[data-edited] {
+  display: block !important;
+}
+
+#app .slate-editor-dim {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 0.55);
+  pointer-events: none;
+}
+
+#app .slate-editor {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  cursor: default;
+}
+
+#app .slate-editor-frame {
+  position: absolute;
+  pointer-events: none;
+  outline: 1px dashed var(--cat-border-strong);
+}
+
+#app .slate-editor-hover {
+  position: absolute;
+  pointer-events: none;
+  outline: 1px solid var(--cat-accent);
+  opacity: 0.5;
+}
+
+#app .slate-editor-selection {
+  position: absolute;
+  outline: 1px solid var(--cat-accent);
+  cursor: move;
+
+  &[data-anchor="flow"], &[data-anchor="fill"] {
+    cursor: default;
+  }
+
+  &[data-anchor="fill"] .slate-editor-handle {
+    display: none;
+  }
+}
+
+#app .slate-editor-handle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  background: var(--cat-bg-panel);
+  border: 1px solid var(--cat-accent);
+  border-radius: 1px;
+
+  &.nw { left: 0; top: 0; cursor: nwse-resize; }
+  &.n { left: 50%; top: 0; cursor: ns-resize; }
+  &.ne { left: 100%; top: 0; cursor: nesw-resize; }
+  &.e { left: 100%; top: 50%; cursor: ew-resize; }
+  &.se { left: 100%; top: 100%; cursor: nwse-resize; }
+  &.s { left: 50%; top: 100%; cursor: ns-resize; }
+  &.sw { left: 0; top: 100%; cursor: nesw-resize; }
+  &.w { left: 0; top: 50%; cursor: ew-resize; }
+}
+
+#app .slate-editor-bar {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: var(--cat-space-2);
+  padding: 4px 4px 4px 12px;
+  font-size: var(--cat-text-sm);
+  color: var(--cat-text-secondary);
+  background: var(--cat-viewport-chrome);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-md);
+  box-shadow: var(--cat-shadow-e1);
+}
+
+#app .slate-editor-done {
+  font: inherit;
+  padding: 3px 10px;
+  color: var(--cat-text-primary);
+  background: var(--cat-bg-raised);
+  border: 1px solid var(--cat-border);
+  border-radius: var(--cat-radius-sm);
+  cursor: pointer;
+}
+
 #app .marquee {
   position: absolute;
   pointer-events: none;

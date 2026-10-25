@@ -111,7 +111,7 @@ function context(event: MouseEvent, row: Row) {
   if (!row.selected) sendCommand({ type: 'select', id: row.id })
   // The selection cell has caught up by the next tick, so the menu reads it
   setTimeout(() => {
-    const picked = selection.value as { count: number; prefab: string | null; type: string } | null
+    const picked = selection.value as { count: number; prefab: string | null; type: string; onSlate: boolean } | null
     const many = (picked?.count ?? 1) > 1
     const items: MenuItem[] = row.isRoot
       ? [{ label: 'Add node…', kbd: '⌘⇧A', run: () => addDialog.set(true) }]
@@ -119,6 +119,7 @@ function context(event: MouseEvent, row: Row) {
           { label: 'Add child…', kbd: '⌘⇧A', run: () => addDialog.set(true) },
           ...(picked?.type === 'Model' && !many ? [{ label: 'Add collider from bounds', run: () => sendCommand({ type: 'addBoundsCollider' }) }, { label: 'Add mesh collider', run: () => sendCommand({ type: 'addMeshCollider' }) }] : []),
           ...(PRIMITIVES.has(picked?.type ?? '') && !many ? [{ label: 'Convert to editable mesh', run: () => sendCommand({ type: 'convertToMesh' }) }] : []),
+          ...(picked?.onSlate && !many ? [{ label: 'Edit slate', run: () => sendCommand({ type: 'editSlate', on: true }) }] : []),
           { label: 'Rename', disabled: many, run: () => startRename(event, row) },
           { label: 'Duplicate', kbd: '⌘D', run: () => sendCommand({ type: 'duplicate' }) },
           { label: 'Delete', kbd: '⌦', danger: true, run: () => sendCommand({ type: 'delete' }) },

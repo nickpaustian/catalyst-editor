@@ -16,6 +16,7 @@ import { LEGACY_PROJECT_FILE, PROJECT_EXTENSION, createProject, readProjectImage
 import { openConfirm } from "./confirm"
 import { PROJECT_DIALOG_DEFAULT } from "./cells"
 import type { NodeKind, Recipe } from "./recipe"
+import { SlateEditor, type UILayout } from "./ui/SlateEditor"
 
 export interface TreeRow {
   id: number
@@ -82,7 +83,7 @@ export interface EditorCells {
   "editor:history": { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
   /** The recipe's project-wide settings, or null when it has none. */
   "editor:settings": { title: string; fields: SelectionProperty[] } | null
-  "editor:view": { view: ViewMode; visualised: boolean; gizmo: GizmoMode; tool: DrawTool | null; vertexEdit: boolean; editMode: EditMode; physics: boolean; scripts: boolean; snap: SnapSettings; streaming: StreamingPreset }
+  "editor:view": { view: ViewMode; visualised: boolean; gizmo: GizmoMode; tool: DrawTool | null; vertexEdit: boolean; editMode: EditMode; physics: boolean; scripts: boolean; snap: SnapSettings; streaming: StreamingPreset; slateEditing: boolean }
   "editor:tree": TreeRow[]
   /** The kinds the tree can add, as the class hierarchy they sit in: bases that are not kinds are shown but cannot be added. */
   "editor:kinds": KindNode[]
@@ -111,6 +112,8 @@ export interface EditorCells {
     actions: { id: string; label: string; title: string }[]
     /** Whether the node has a place in the scene to show and move; UI nodes on a slate don't. */
     spatial: boolean
+    /** Whether the node is a slate or on one, so the slate can be edited on its own. */
+    onSlate: boolean
     position: { x: number; y: number; z: number }
     rotation: { x: number; y: number; z: number }
     properties: SelectionProperty[]
@@ -153,6 +156,7 @@ export type EditorCommand =
   | { type: "convertToMesh" }
   | { type: "setVertexEdit"; on: boolean }
   | { type: "setEditMode"; mode: EditMode }
+  | { type: "editSlate"; on: boolean }
   | { type: "extrude" }
   | { type: "setSnap"; snap: Partial<SnapSettings> }
   | { type: "setStreaming"; preset: StreamingPreset }
@@ -233,6 +237,7 @@ export class EditorSession {
   readonly recipe: Recipe
   private readonly app: LightspeedRuntime
   private readonly camera: EditorCamera
+  private readonly slateEditor: SlateEditor
   private readonly input: EditorInput | null
   private folder: AssetFolder | null = null
   private settings: ProjectSettings | null = null
@@ -276,6 +281,10 @@ export class EditorSession {
   }
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (event.key === "Shift") this.setSnapInverted(true)
+    if (event.key === "Escape" && this.slateEditor.slate && !isTyping(event.target)) {
+      this.editSlate(false)
+      return
+    }
     if (!(event.metaKey || event.ctrlKey) || event.altKey) return
     const key = event.key.toLowerCase()
     if (key === "r" && !event.shiftKey) {
@@ -332,6 +341,16 @@ export class EditorSession {
     }
     this.camera = new EditorCamera(this.engine)
     uiLayer(this.engine)?.setAttribute("inert", "")
+    this.slateEditor = new SlateEditor({
+      engine: this.engine,
+      select: (node) => this.select(node),
+      selected: () => this.selected,
+      changed: (node) => {
+        if (this.selected === node) this.publishSelection()
+      },
+      commit: (node, before, after) => this.record(`move ${node.name}`, () => this.writeLayout(node, before), () => this.writeLayout(node, after)),
+      closed: () => this.publishView(),
+    })
     for (const { kind, cls } of this.recipe.kinds) if (!this.engine.registry.has(kind) && typeof cls === "function") this.engine.register({ [kind]: cls as NodeClass })
     const input = this.engine.find(Input)
     this.input = input ? new EditorInput(input, { focusSelected: () => this.focusSelected(), deleteSelected: () => this.deleteSelected(), moveTool: () => this.setGizmo("translate"), rotateTool: () => this.setGizmo("rotate"), scaleTool: () => this.setGizmo("scale"), boxTool: () => this.setTool("box"), colliderTool: () => this.setTool("collider"), vertexTool: () => this.setVertexEdit(!this.camera.vertexEdit), vertexMode: () => this.setEditMode("vertex"), edgeMode: () => this.setEditMode("edge"), faceMode: () => this.setEditMode("face"), extrude: () => this.extrude() }) : null
@@ -556,7 +575,7 @@ export class EditorSession {
   }
 
   private publishView(): void {
-    this.set("editor:view", { view: this.view, visualised: this.visualised, gizmo: this.gizmo, tool: this.camera.tool, vertexEdit: this.camera.vertexEdit, editMode: this.camera.editMode, physics: !(this.engine.find(Physics)?.paused ?? true), scripts: this.engine.scripts.running, snap: this.snap, streaming: this.streaming })
+    this.set("editor:view", { view: this.view, visualised: this.visualised, gizmo: this.gizmo, tool: this.camera.tool, vertexEdit: this.camera.vertexEdit, editMode: this.camera.editMode, physics: !(this.engine.find(Physics)?.paused ?? true), scripts: this.engine.scripts.running, snap: this.snap, streaming: this.streaming, slateEditing: this.slateEditor.slate !== null })
   }
 
   //=========================
@@ -680,6 +699,7 @@ export class EditorSession {
       scripts: this.selectionScripts(node),
       actions: this.nodeActions(node),
       spatial: isSpatial(node),
+      onSlate: slateOf(node) !== null,
       position: { x: round(p.x), y: round(p.y), z: round(p.z) },
       rotation: { x: round(degrees(e.x), 2), y: round(degrees(e.y), 2), z: round(degrees(e.z), 2) },
       properties: exposedProperties(node)
@@ -819,6 +839,9 @@ export class EditorSession {
         break
       case "setVertexEdit":
         this.setVertexEdit(command.on)
+        break
+      case "editSlate":
+        this.editSlate(command.on)
         break
       case "setEditMode":
         this.setEditMode(command.mode)
@@ -1828,6 +1851,21 @@ export class EditorSession {
 
   /** New nodes go under the selected node (or the root), at the orbit target in world space. A kind that needs a file asks for it first. */
   /** The vertex tool: on, the selected editable mesh shows its vertices and the move gizmo drags the chosen ones. */
+  /** The selected slate, or the one the selected UI node is on, by itself over the viewport; off goes back to the scene. */
+  private editSlate(on: boolean): void {
+    const slate = on && this.selected ? slateOf(this.selected) : null
+    if (slate) this.slateEditor.open(slate)
+    else this.slateEditor.close()
+    this.publishView()
+  }
+
+  private writeLayout(node: UIElement, layout: UILayout): void {
+    node.x = layout.x
+    node.y = layout.y
+    node.width = layout.width
+    node.height = layout.height
+  }
+
   private setVertexEdit(on: boolean): void {
     this.camera.vertexEdit = on
     if (on) {
@@ -2172,6 +2210,13 @@ const degrees = (radians: number): number => (radians * 180) / Math.PI
 const radians = (degrees: number): number => (degrees * Math.PI) / 180
 
 /** A box's dimensions, for undo; null for a node without them. */
+const slateOf = (node: Node3D): Slate | null => (node instanceof Slate ? node : node instanceof UIElement ? node.slate : null)
+
+const isTyping = (target: EventTarget | null): boolean => {
+  const element = target as HTMLElement | null
+  return !!element && (element.tagName === "INPUT" || element.tagName === "TEXTAREA" || element.tagName === "SELECT" || element.isContentEditable)
+}
+
 const isSpatial = (node: Node3D): boolean => (node instanceof Slate ? node.space === "world" : !(node instanceof UIElement))
 
 const sizeOf = (node: Node3D): Vector3 | null => (isSized(node) ? new Vector3(node.width, node.height, node.depth) : null)
