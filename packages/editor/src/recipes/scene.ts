@@ -275,15 +275,6 @@ export const sceneRecipe: Recipe = {
     return [SCENE_FILE]
   },
   download: (root, engine) => ({ name: SCENE_FILE, text: JSON.stringify(toFile(engine, root), null, 2) + "\n" }),
-  hint: (root) => {
-    let orbit = false
-    root.walk((node) => {
-      if (node instanceof OrbitCamera) orbit = true
-    })
-    return orbit
-      ? "drag turns · right-drag, shift-drag or two fingers pan · wheel or pinch zooms · F frames the subject · run again from the editor to reload"
-      : "click to look around · WASD move · shift sprint · space jump · F interacts · run again from the editor to reload"
-  },
   run: async ({ engine, root, scene }) => {
     applyEnvironment(engine, (scene as { environment?: Partial<SceneEnvironment> }).environment, true)
     engine.metadata = metadataOf(scene)

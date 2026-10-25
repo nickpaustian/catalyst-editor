@@ -20,7 +20,7 @@ export class Runner {
   private readonly recipe: Recipe
   private readonly folders: FolderSource
   private readonly unsubscribe: () => void
-  private hint = true
+  private linked = true
   /** The stats block over the canvas; the backquote key shows and hides it. */
   readonly debug: DebugOverlay
 
@@ -37,7 +37,7 @@ export class Runner {
     const link = options.link === null ? null : (options.link ?? windowRunnerPageLink())
     this.unsubscribe = link?.onRun((message) => void this.play(message)) ?? (() => undefined)
     link?.ready()
-    this.hint = link !== null
+    this.linked = link !== null
   }
 
   get isPlaying(): boolean {
@@ -60,10 +60,7 @@ export class Runner {
     this.root = root
     this.engine.add(root)
     this.teardown = await this.recipe.run({ engine: this.engine, root, scene, folder })
-    if (!this.hint) return
-    document.title = `${folder?.name ?? "untitled"} · running`
-    const hint = document.getElementById("hint")
-    if (hint && this.recipe.hint) hint.textContent = `${this.recipe.hint(root)} · \` stats`
+    if (this.linked) document.title = `${folder?.name ?? "untitled"} · running`
   }
 
   stop(): void {
