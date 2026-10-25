@@ -4,6 +4,7 @@ export { EditorCamera, nodeTarget, groupTarget, type GizmoMode, type GizmoTarget
 export { EditorInput } from "./EditorInput"
 export { HandleFolder, NativeFolder, browserFolders, nativeFolders, folderLoader, pickFile, type ProjectFolder, type ProjectStorage, type FolderSource, type FolderTransfer, type FolderEntry, type NativeFs, type RecentProject } from "./ProjectFolder"
 export { AssetFolder, ASSET_TABLE, type Relinked } from "./AssetFolder"
+export { HttpFolder } from "./HttpFolder"
 export { openFilePicker, FILE_PICKER_CELL, fileKind, accepts, acceptedExtensions, type FilePickerRequest } from "./fileField"
 export { windowRunnerLink, windowRunnerPageLink, type RunnerLink, type RunnerPageLink, type RunMessage } from "./RunnerLink"
 export { PROJECT_EXTENSION, LEGACY_PROJECT_FILE, projectFileOf, projectFolderOfFile, readProjectSettings, writeProjectSettings, createProject, slug as projectSlug, type ProjectSettings, type NewProject } from "./project"

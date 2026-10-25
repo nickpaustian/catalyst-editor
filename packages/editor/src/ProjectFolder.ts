@@ -8,7 +8,7 @@ declare global {
   }
 }
 
-export type ProjectStorage = "disk" | "browser" | "native"
+export type ProjectStorage = "disk" | "browser" | "native" | "web"
 
 export interface FolderEntry {
   path: string

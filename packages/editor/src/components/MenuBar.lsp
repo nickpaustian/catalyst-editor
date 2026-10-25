@@ -16,6 +16,7 @@
         <button class="menu-item" role="menuitem" @click="run('saveAs')">Save as…</button>
         <hr />
         <button class="menu-item" role="menuitem" @click="run('download')">Download scene file</button>
+        <button class="menu-item" role="menuitem" @click="run('exportSite')" $disabled="!shared['editor:project'].open">Export site… <span class="dim">a folder any static host can serve</span></button>
         <hr />
         <button class="menu-item" role="menuitem" @click="run('run')">Run <kbd>⌘R</kbd></button>
       </div>

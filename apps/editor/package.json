@@ -4,10 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host",
-    "build": "tsc && vite build",
+    "dev": "vite build --config vite.player.config.ts --logLevel warn && vite --host",
+    "build": "tsc && vite build --config vite.player.config.ts && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "build:player": "vite build --config vite.player.config.ts"
   },
   "dependencies": {
     "@lightspeed-js/core": "^0.4.9",

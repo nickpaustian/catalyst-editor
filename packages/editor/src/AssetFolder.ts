@@ -1,6 +1,8 @@
 import type { FileInfo, FolderEntry, FolderTransfer, ProjectFolder, ProjectStorage } from "./ProjectFolder"
 
 export const ASSET_TABLE = ".assets.json"
+/** Where the table was before; ids only it knows still load, and are written into the table with its next change. */
+const LEGACY_ASSET_TABLE = ".catalyst/assets.json"
 const ASSET_PREFIX = "asset:"
 const ID_PATTERN = /^asset:[0-9a-f-]{36}$/
 const FILE_PATH = /^[^:?#\s][^:?#]*\.[A-Za-z0-9]{1,10}$/
@@ -203,17 +205,23 @@ export class AssetFolder implements ProjectFolder {
   }
 
   private index(): void {
-    this.byPath = new Map(Object.entries(this.table.assets).map(([id, entry]) => [entry.path, id]))
+    this.byPath = new Map()
+    for (const [id, entry] of Object.entries(this.table.assets)) if (!this.byPath.has(entry.path)) this.byPath.set(entry.path, id)
     this.byPrevious = new Map()
     for (const [id, entry] of Object.entries(this.table.assets)) for (const path of entry.previous ?? []) if (!this.byPath.has(path) && !this.byPrevious.has(path)) this.byPrevious.set(path, id)
   }
 
   private async readTable(): Promise<void> {
-    if (await this.raw.exists(ASSET_TABLE).catch(() => false)) {
-      const json = await this.raw.readJSON<Partial<AssetTableJSON>>(ASSET_TABLE).catch(() => null)
-      if (json?.assets && typeof json.assets === "object") this.table = { version: 1, assets: json.assets }
-    }
+    const assets = { ...(await this.readAssets(ASSET_TABLE)) }
+    for (const [id, entry] of Object.entries(await this.readAssets(LEGACY_ASSET_TABLE))) assets[id] ??= entry
+    this.table = { version: 1, assets }
     this.index()
+  }
+
+  private async readAssets(path: string): Promise<AssetTableJSON["assets"]> {
+    if (!(await this.raw.exists(path).catch(() => false))) return {}
+    const json = await this.raw.readJSON<Partial<AssetTableJSON>>(path).catch(() => null)
+    return json?.assets && typeof json.assets === "object" ? json.assets : {}
   }
 
   private writeTable(): Promise<void> {

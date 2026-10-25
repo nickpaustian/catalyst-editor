@@ -22,3 +22,6 @@ logs
 bun.lock
 bun.lockb
 design/
+
+# the published page's runtime, built by apps/editor's build:player
+apps/editor/public/player/

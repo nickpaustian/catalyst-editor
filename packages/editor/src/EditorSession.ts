@@ -14,6 +14,7 @@ import { accepts } from "./fileField"
 import { SCRIPTS_DIR, ScriptCompiler, scriptTemplate } from "./ScriptCompiler"
 import { LEGACY_PROJECT_FILE, PROJECT_EXTENSION, createProject, readProjectImage, readProjectSettings, writeProjectImage, writeProjectSettings, type NewProject, type ProjectSettings } from "./project"
 import { openConfirm } from "./confirm"
+import { publish, ZipTarget, type PublishTarget } from "./publish"
 import { PROJECT_DIALOG_DEFAULT } from "./cells"
 import type { NodeKind, Recipe } from "./recipe"
 import { SlateEditor, type UILayout } from "./ui/SlateEditor"
@@ -140,6 +141,7 @@ export type EditorCommand =
   | { type: "saveAll" }
   | { type: "saveAs" }
   | { type: "download" }
+  | { type: "exportSite" }
   | { type: "run" }
   | { type: "stop" }
   | { type: "undo" }
@@ -216,14 +218,26 @@ const PREVIEW_BYTES = 6 * 1024 * 1024
 const PREFAB_KIND = "prefab:"
 const slug = (name: string) => name.trim().toLowerCase().replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "prefab"
 
-const download = (name: string, text: string) => {
-  const url = URL.createObjectURL(new Blob([text], { type: "application/json" }))
+const download = (name: string, text: string | Blob) => {
+  const url = URL.createObjectURL(typeof text === "string" ? new Blob([text], { type: "application/json" }) : text)
   const a = document.createElement("a")
   a.href = url
   a.download = name
   a.click()
   URL.revokeObjectURL(url)
 }
+
+/** Whether `inner` is `outer` or a folder inside it, as far as the two can tell. */
+const isWithin = async (inner: ProjectFolder, outer: ProjectFolder): Promise<boolean> => {
+  const a = inner.transfer(), b = outer.transfer()
+  if (a.kind === "path" && b.kind === "path") return a.path === b.path || a.path.startsWith(`${b.path.replace(/[\\/]+$/, "")}/`)
+  if (a.kind === "handle" && b.kind === "handle") return (await a.handle.isSameEntry(b.handle)) || (await b.handle.resolve(a.handle)) !== null
+  return false
+}
+
+/** The confirm dialog as a yes or no; closed with Escape, it is a no that never arrives. */
+const confirmed = (title: string, message: string, yes: string): Promise<boolean> =>
+  new Promise((resolve) => openConfirm(title, message, [{ label: "Cancel", run: () => resolve(false) }, { label: yes, primary: true, run: () => resolve(true) }]))
 
 /**
  * The editor's logic, with no DOM of its own. It publishes what the panel
@@ -794,6 +808,9 @@ export class EditorSession {
         if (file && this._root) download(file.name, file.text)
         break
       }
+      case "exportSite":
+        await this.exportSite()
+        break
       case "run":
         await this.run()
         break
@@ -1113,6 +1130,50 @@ export class EditorSession {
     const scene = this.folder ? await this.folder.toPaths(live) : live
     this.runner.send({ type: "catalyst:run", recipe: this.recipe.name, scene, folder: this.folder?.transfer() ?? null })
     this.publishProject("running")
+  }
+
+  /**
+   * Write the project as a static site to a folder the user picks (a zip
+   * download where folders can't be picked): the player runtime, the
+   * project's files and the scene as it is now, unsaved edits included.
+   */
+  async exportSite(): Promise<void> {
+    const project = this.folder
+    if (!this._root || !project) return this.publishProject("save the project before exporting it")
+    const live = this.recipe.serialise?.(this._root, this.engine) ?? this.engine.serialise(this._root)
+    const scene = await project.toPaths(live)
+    let target: PublishTarget
+    let zip: ZipTarget | null = null
+    let place: string
+    if (this.folders.isSupported) {
+      const out = await this.folders.pick()
+      if (!out) return
+      if (await isWithin(out, project)) return this.publishProject("choose a folder outside the project to export into")
+      if ((await out.list()).length > 0 && !(await confirmed(`Export into ${out.name}?`, "It isn't empty: files with the same names are replaced, the rest left as they are.", "Export"))) return
+      target = out
+      place = out.name
+    } else {
+      target = zip = new ZipTarget()
+      place = "a zip"
+    }
+    let shown = 0
+    try {
+      const total = await publish({
+        project,
+        scene,
+        sceneFile: this.recipe.files?.[0] ?? "scene.json",
+        target,
+        onProgress: (done, total) => {
+          if (done !== total && performance.now() - shown < 100) return
+          shown = performance.now()
+          this.publishProject(`exporting ${done} of ${total} files`)
+        },
+      })
+      if (zip) download(`${slug(this.settings?.name ?? project.name)}.zip`, zip.blob())
+      this.publishProject(`exported ${total} files to ${place}`)
+    } catch (error) {
+      this.publishProject(`export failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   private saveRequests = 0

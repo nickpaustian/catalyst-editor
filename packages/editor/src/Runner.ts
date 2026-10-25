@@ -1,7 +1,7 @@
 import type { Catalyst, Node3D } from "@nickpaustian/catalyst"
 import { DebugOverlay, Node3D as Node3DClass } from "@nickpaustian/catalyst"
 import { AssetFolder } from "./AssetFolder"
-import { browserFolders, folderLoader, type FolderSource } from "./ProjectFolder"
+import { browserFolders, folderLoader, type FolderSource, type ProjectFolder } from "./ProjectFolder"
 import type { Recipe } from "./recipe"
 import { windowRunnerPageLink, type RunMessage, type RunnerPageLink } from "./RunnerLink"
 import { ScriptCompiler } from "./ScriptCompiler"
@@ -20,10 +20,12 @@ export class Runner {
   private readonly recipe: Recipe
   private readonly folders: FolderSource
   private readonly unsubscribe: () => void
+  private hint = true
   /** The stats block over the canvas; the backquote key shows and hides it. */
   readonly debug: DebugOverlay
 
-  constructor(engine: Catalyst, recipe: Recipe, options: { folders?: FolderSource; link?: RunnerPageLink; debug?: boolean } = {}) {
+  /** `link: null` plays only what `playProject` is given, as a published page does. */
+  constructor(engine: Catalyst, recipe: Recipe, options: { folders?: FolderSource; link?: RunnerPageLink | null; debug?: boolean } = {}) {
     this.engine = engine
     this.recipe = recipe
     this.folders = options.folders ?? browserFolders
@@ -31,10 +33,11 @@ export class Runner {
     window.addEventListener("keydown", (event) => {
       if (event.code === "Backquote" && !isTyping(event)) this.debug.toggle()
     })
-    const link = options.link ?? windowRunnerPageLink()
     for (const { kind, cls } of recipe.kinds) if (!engine.registry.has(kind) && typeof cls === "function") engine.register({ [kind]: cls as any })
-    this.unsubscribe = link.onRun((message) => void this.play(message))
-    link.ready()
+    const link = options.link === null ? null : (options.link ?? windowRunnerPageLink())
+    this.unsubscribe = link?.onRun((message) => void this.play(message)) ?? (() => undefined)
+    link?.ready()
+    this.hint = link !== null
   }
 
   get isPlaying(): boolean {
@@ -42,16 +45,22 @@ export class Runner {
   }
 
   async play(message: RunMessage): Promise<void> {
+    await this.playProject(message.scene, message.folder ? this.folders.fromTransfer(message.folder) : null)
+  }
+
+  /** Play a scene, its names already paths, with the files it names read from `folder`. */
+  async playProject(scene: RunMessage["scene"], from: ProjectFolder | null): Promise<void> {
     this.stop()
-    const folder = message.folder ? await AssetFolder.open(this.folders.fromTransfer(message.folder)) : null
+    const folder = from ? await AssetFolder.open(from) : null
     if (folder) this.engine.loader = folderLoader(folder)
     this.engine.scripts.invalidate()
     if (folder) this.engine.scripts.loader = new ScriptCompiler(folder).loader
-    const made = this.engine.create(message.scene)
+    const made = this.engine.create(scene)
     const root = made instanceof Node3DClass ? made : (new Node3DClass("scene").addNode(made).parent as Node3D)
     this.root = root
     this.engine.add(root)
-    this.teardown = await this.recipe.run({ engine: this.engine, root, scene: message.scene, folder })
+    this.teardown = await this.recipe.run({ engine: this.engine, root, scene, folder })
+    if (!this.hint) return
     document.title = `${folder?.name ?? "untitled"} · running`
     const hint = document.getElementById("hint")
     if (hint && this.recipe.hint) hint.textContent = `${this.recipe.hint(root)} · \` stats`
