@@ -1027,6 +1027,7 @@ export class EditorSession {
     if (scene) this.askAboutSceneOnDisk()
     await this.relinkAssets(folder)
     void this.publishFiles()
+    await this.reloadUIFiles(changed)
     const notes: string[] = []
     if (scripts.length) {
       await this.reloadScripts()
@@ -1411,6 +1412,7 @@ export class EditorSession {
     const folder = this.folder
     if (!folder) return
     await folder.writeText(path, text)
+    await this.reloadUIFiles([path])
     await this.reloadScripts()
     this.compiler?.invalidate(path)
     this.engine.scripts.invalidate(path)
@@ -1421,6 +1423,17 @@ export class EditorSession {
       status = error instanceof Error ? error.message : String(error)
     }
     this.set("editor:code", { path, text, status })
+  }
+
+  /** Slates and UI nodes reading any of these files read them again. */
+  private async reloadUIFiles(paths: string[]): Promise<void> {
+    const changed = new Set(paths)
+    const reloads: Promise<void>[] = []
+    this._root?.walk((node) => {
+      const reader = node as Node3D & { files?: string[]; reload?: () => Promise<void> }
+      if ((node instanceof Slate || node instanceof UIElement) && reader.reload && reader.files?.some((file) => changed.has(file))) reloads.push(reader.reload())
+    })
+    await Promise.all(reloads)
   }
 
   /** Read every script file again and rebuild the scripts on every node, keeping their values. */

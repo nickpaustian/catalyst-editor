@@ -1,4 +1,4 @@
-import { Camera, Colour, Html, Light, Model, Node3D, Slate, StreamedSurface, type AntiAliasing, type Catalyst, type NodeJSON, type RenderSettings } from "@nickpaustian/catalyst"
+import { Button, Camera, Colour, Html, Label, Light, Model, Node3D, Panel, Picture, Slate, Stack, StreamedSurface, Toggle, type AntiAliasing, type Catalyst, type NodeJSON, type RenderSettings } from "@nickpaustian/catalyst"
 import { pickFile } from "../ProjectFolder"
 import { Interactable } from "@nickpaustian/catalyst/interaction"
 import { BoxCollider, CapsuleCollider, MeshCollider, SphereCollider } from "@nickpaustian/catalyst/physics"
@@ -8,6 +8,7 @@ import { Physics } from "@nickpaustian/catalyst/physics"
 import { Vector3 } from "@nickpaustian/catalyst"
 import type { Recipe } from "../recipe"
 import { PlayerStart } from "./playerStart"
+import { Component } from "../ui/Component"
 
 export const SCENE_FILE = "scene.json"
 
@@ -143,6 +144,13 @@ export const sceneRecipe: Recipe = {
       make: (o) => new MeshCollider({ ...o, url: String(o.url ?? "") }),
     },
     { kind: "Slate", label: "Slate", cls: Slate, description: "A canvas for UI over the scene, styled by its own stylesheet: one per screen, such as a HUD, a menu or a modal.", make: (o) => new Slate(o) },
+    { kind: "Panel", label: "Panel", cls: Panel, description: "A box on a slate with a background, padding and rounded corners around the UI under it.", make: (o) => new Panel(o) },
+    { kind: "Stack", label: "Stack", cls: Stack, description: "UI in a row or a column with a gap between: a toolbar, a menu, a form.", make: (o) => new Stack(o) },
+    { kind: "Label", label: "Label", cls: Label, description: "Text on a slate.", make: (o) => new Label({ text: "Label", ...o }) },
+    { kind: "Button", label: "Button", cls: Button, description: "A button on a slate; scripts hear it through its onPressed signal.", make: (o) => new Button(o) },
+    { kind: "Picture", label: "Picture", cls: Picture, description: "An image from the project on a slate.", make: (o) => new Picture(o) },
+    { kind: "Toggle", label: "Toggle", cls: Toggle, description: "A checkbox with a label on a slate; scripts hear it through its onChanged signal.", make: (o) => new Toggle({ text: "Toggle", ...o }) },
+    { kind: "Component", label: "Component", cls: Component, description: "A Lightspeed component from a .lsp file in the project, on a slate.", make: (o) => new Component(o) },
     { kind: "Html", label: "HTML", cls: Html, description: "Markup on a slate, from an .html file or written in place, styled by the slate's stylesheet.", make: (o) => new Html(o) },
     { kind: "Interactable", label: "Interactable", cls: Interactable, description: "Something the pointer or crosshair can land on and click, with focus and interact signals for your code.", make: (o) => new Interactable({ ...o, radius: 0.25 }) },
     { kind: "PointOfInterest", label: "Point of interest", cls: PointOfInterest, description: "An interactable with a marker on screen that fades with distance and hides when something is in the way.", make: (o) => new PointOfInterest(o) },
