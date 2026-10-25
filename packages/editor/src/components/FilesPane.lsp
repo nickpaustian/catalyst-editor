@@ -170,7 +170,7 @@ function refresh() {
 
 // ---- the rows in view ----
 
-const OVERSCAN = 8
+const MIN_BUFFER = 8
 const FALLBACK_VIEW = 800
 let rowHeight = 24
 let shownFrom = -1
@@ -205,9 +205,14 @@ function slide(force = false) {
   if (measured) rowHeight = measured
   const view = list ? list.clientHeight : FALLBACK_VIEW
   const top = list ? Math.min(list.scrollTop - topPadding(list), Math.max(0, rows.length * rowHeight - view)) : 0
-  const from = Math.max(0, Math.floor(top / rowHeight) - OVERSCAN)
-  const to = Math.min(rows.length, Math.ceil((top + view) / rowHeight) + OVERSCAN)
-  if (!force && from === shownFrom && to === shownTo) return
+  const first = Math.floor(top / rowHeight)
+  const last = Math.ceil((top + view) / rowHeight)
+  const buffer = Math.max(MIN_BUFFER, last - first)
+  const margin = Math.floor(buffer / 2)
+  const covered = shownFrom <= Math.max(0, first - margin) && shownTo >= Math.min(rows.length, last + margin)
+  if (!force && covered) return
+  const from = Math.max(0, first - buffer)
+  const to = Math.min(rows.length, last + buffer)
   shownFrom = from
   shownTo = to
   state.shown = rows.slice(from, to)
