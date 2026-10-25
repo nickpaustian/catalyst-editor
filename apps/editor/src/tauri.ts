@@ -1,4 +1,4 @@
-import { nativeFolders, type FolderTransfer, type NativeFs, type RunMessage, type RunnerLink, type RunnerPageLink } from "@nickpaustian/catalyst-editor"
+import { nativeFolders, type AssetConverter, type FolderTransfer, type NativeFs, type RunMessage, type RunnerLink, type RunnerPageLink, type StreamableMesh, type StreamableProgress, type StreamableResult } from "@nickpaustian/catalyst-editor"
 import { open } from "@tauri-apps/plugin-dialog"
 import { SeekMode, exists, mkdir, open as openFile, readDir, readFile, readTextFile, remove, rename, stat, watch, writeFile, writeTextFile } from "@tauri-apps/plugin-fs"
 import { invoke } from "@tauri-apps/api/core"
@@ -142,6 +142,42 @@ const runnerPageLink = (): RunnerPageLink => ({
   },
 })
 
+/** Iapetus as the app runs it: `describe` answers at once; a build reports each JSON line it prints as an event, and is killed to cancel. */
+const converter = (): AssetConverter => ({
+  async describe(path) {
+    const text = await invoke<string>("iapetus_describe", { path })
+    const described = JSON.parse(text) as { meshes: { index: number; name: string | null; primitives: number; triangles: number | null; hasUvs: boolean; maps: { role: string }[]; warnings: string[] }[] }
+    return described.meshes.map((m): StreamableMesh => ({
+      index: m.index,
+      name: m.name,
+      triangles: m.triangles,
+      maps: m.maps.map((map) => map.role),
+      warnings: m.hasUvs ? m.warnings : [...m.warnings, "has no UVs, which a cluster hierarchy needs"],
+      buildable: m.primitives === 1 && m.hasUvs,
+    }))
+  },
+  makeStreamable(input, out, options, progress) {
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+    const args = ["--mesh", String(options.mesh), "--quality", String(options.quality), "--max-texture", String(options.maxTexture)]
+    if (options.permissive) args.push("--permissive")
+    if (options.partition) args.push("--partition", "--regularize")
+    const listening = listen<{ id: string; progress: StreamableProgress }>("iapetus:progress", (event) => {
+      if (event.payload.id === id) progress(event.payload.progress)
+    })
+    const result = (async () => {
+      const unlisten = await listening
+      try {
+        return JSON.parse(await invoke<string>("iapetus_streamable", { id, input, out, args })) as StreamableResult
+      } catch (error) {
+        throw new Error(error instanceof Error ? error.message : String(error))
+      } finally {
+        unlisten()
+      }
+    })()
+    return { result, cancel: () => void invoke("iapetus_cancel", { id }) }
+  },
+})
+
 /** The start window is declared in the Tauri config and only ever shown or hidden; closing the editor window takes it along so the app exits. */
 export const tauriShell = (): DesktopShell => {
   const current = getCurrentWindow()
@@ -153,6 +189,7 @@ const shell = (): DesktopShell => ({
   folders: nativeFolders(fs),
   runnerLink: runnerLink(),
   runnerPageLink: runnerPageLink(),
+  converter: converter(),
   showEditor(open) {
     const editor = getCurrentWindow()
     if (open) {

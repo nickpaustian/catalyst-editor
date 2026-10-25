@@ -1,9 +1,11 @@
-import type { FolderSource, FolderTransfer, RunnerLink, RunnerPageLink } from "@nickpaustian/catalyst-editor"
+import type { AssetConverter, FolderSource, FolderTransfer, RunnerLink, RunnerPageLink } from "@nickpaustian/catalyst-editor"
 
 export interface DesktopShell {
   folders: FolderSource
   runnerLink: RunnerLink
   runnerPageLink: RunnerPageLink
+  /** Iapetus, run by the app, for making models streamable. */
+  converter: AssetConverter
   /** The editor window: shown while a project is open, hidden behind the start window otherwise. */
   showEditor(open: boolean): void
   /** From the start window: a project chosen; the editor window opens it. */

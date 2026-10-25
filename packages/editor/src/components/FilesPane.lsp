@@ -79,7 +79,7 @@ import { reactive, shared, defineRefs, onUnmounted } from '@lightspeed-js/core'
 import { DRAGGING_FILE_CELL } from '../fileField.ts'
 import { sendCommand } from '../commands.ts'
 import { openContextMenu, type MenuItem } from '../contextMenu.ts'
-import { PROJECT_DEFAULT } from '../cells.ts'
+import { PROJECT_DEFAULT, STREAMABLE_DEFAULT } from '../cells.ts'
 import { RowWindow } from '../rowWindow.ts'
 
 interface Entry { path: string; name: string; kind: 'file' | 'directory'; children?: Entry[] }
@@ -89,6 +89,7 @@ interface Creating { dir: string; kind: 'folder' | 'script' }
 const files = shared('editor:files', [])
 shared('editor:project', PROJECT_DEFAULT)
 shared('editor:fileInfo', null)
+const streamable = shared('editor:streamable', STREAMABLE_DEFAULT)
 const state = reactive({ shown: [] as Row[], count: 0, before: 0, height: 0, selected: null as string | null, filter: '', renaming: null as string | null, creating: null as Creating | null, dropTarget: null as string | null })
 // Folders closed by hand; every folder starts open
 const collapsed = new Set<string>()
@@ -109,6 +110,7 @@ const icons = {
 }
 
 const MODEL = /\.(glb|gltf)$/i
+const GLB = /\.glb$/i
 const IMAGE = /\.(png|jpe?g|webp|gif|avif|svg)$/i
 const SCRIPT = /\.(ts|js)$/i
 const HDR = /\.hdr$/i
@@ -408,6 +410,7 @@ function itemsFor(row: Row): MenuItem[] {
   } else {
     if (SCRIPT.test(row.name)) items.push({ label: 'Open in code pane', run: () => sendCommand({ type: 'openFile', path: row.path }) })
     if (MODEL.test(row.name)) items.push({ label: 'Add to scene', run: () => sendCommand({ type: 'addModel', path: row.path }) })
+    if (GLB.test(row.name) && streamable.value?.available) items.push({ label: 'Make streamable…', run: () => sendCommand({ type: 'streamable', path: row.path }) })
     if (HDR.test(row.name)) items.push({ label: 'Use as environment', run: () => sendCommand({ type: 'useEnvironment', path: row.path }) })
     if (PREFAB.test(row.path)) items.push({ label: 'Add to scene', run: () => sendCommand({ type: 'add', kind: `prefab:${row.path}` }) })
   }

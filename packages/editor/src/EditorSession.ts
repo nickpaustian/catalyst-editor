@@ -15,7 +15,8 @@ import { SCRIPTS_DIR, ScriptCompiler, scriptTemplate } from "./ScriptCompiler"
 import { LEGACY_PROJECT_FILE, PROJECT_EXTENSION, createProject, readProjectImage, readProjectSettings, writeProjectImage, writeProjectSettings, type NewProject, type ProjectSettings } from "./project"
 import { openConfirm } from "./confirm"
 import { publish, ZipTarget, type PublishTarget } from "./publish"
-import { PROJECT_DIALOG_DEFAULT } from "./cells"
+import { PROJECT_DIALOG_DEFAULT, STREAMABLE_DEFAULT } from "./cells"
+import { MAP_NAMES, type AssetConverter, type StreamableJob, type StreamableOptions } from "./converter"
 import type { NodeKind, Recipe } from "./recipe"
 import { SlateEditor, type UILayout } from "./ui/SlateEditor"
 
@@ -84,6 +85,8 @@ export interface EditorCells {
   "editor:startMode": "overlay" | "window" | "off"
   /** The new-project or project-settings dialog: closed when `mode` is null. */
   "editor:projectDialog": typeof PROJECT_DIALOG_DEFAULT
+  /** Making a model streamable: the dialog's choices, the build's progress and its outcome. */
+  "editor:streamable": typeof STREAMABLE_DEFAULT
   /** The recipes a project may use. */
   "editor:recipes": string[]
   "editor:history": { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
@@ -196,6 +199,10 @@ export type EditorCommand =
   | { type: "openFile"; path: string }
   | { type: "addModel"; path: string }
   | { type: "useEnvironment"; path: string }
+  | { type: "streamable"; path: string }
+  | { type: "streamableStart"; out: string; addToScene: boolean; options: StreamableOptions }
+  | { type: "streamableCancel" }
+  | { type: "streamableClose" }
   | { type: "saveScript"; path: string; text: string }
   | { type: "closeScript" }
   | { type: "focus" }
@@ -299,6 +306,9 @@ export class EditorSession {
   private unsubscribeBlur: () => void
   private readonly folders: FolderSource
   private readonly runner: RunnerLink
+  private readonly converter: AssetConverter | null
+  private streamJob: StreamableJob | null = null
+  private streamCancelled = false
   private runnerReady = false
   private readonly unsubscribeRunner: () => void
   private readonly onKeyUp = (event: KeyboardEvent): void => {
@@ -343,12 +353,13 @@ export class EditorSession {
     }
   }
 
-  constructor(options: { app: LightspeedRuntime; engine: Catalyst; recipe: Recipe; folders?: FolderSource; runner?: RunnerLink }) {
+  constructor(options: { app: LightspeedRuntime; engine: Catalyst; recipe: Recipe; folders?: FolderSource; runner?: RunnerLink; converter?: AssetConverter }) {
     this.app = options.app
     this.engine = options.engine
     this.recipe = options.recipe
     this.folders = options.folders ?? browserFolders
     this.runner = options.runner ?? windowRunnerLink()
+    this.converter = options.converter ?? null
     const unsubscribeReady = this.runner.onReady(() => {
       this.runnerReady = true
       void this.sendToRunner()
@@ -435,6 +446,7 @@ export class EditorSession {
     this.set("editor:code", { path: null, text: "", status: "" })
     this.set("editor:saveRequest", 0)
     this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
+    this.set("editor:streamable", { ...STREAMABLE_DEFAULT, available: this.converter !== null })
     this.set("editor:recipes", [this.recipe.name])
     this.setView("orbit")
     void this.publishRecent()
@@ -1051,6 +1063,18 @@ export class EditorSession {
         break
       case "useEnvironment":
         this.writeSetting("environment", command.path)
+        break
+      case "streamable":
+        await this.openStreamable(command.path)
+        break
+      case "streamableStart":
+        await this.startStreamable(command.out, command.addToScene, command.options)
+        break
+      case "streamableCancel":
+        this.cancelStreamable()
+        break
+      case "streamableClose":
+        if (!this.streamJob) this.setStreamable({ open: false })
         break
       case "saveScript":
         await this.saveScript(command.path, command.text)
@@ -2168,6 +2192,79 @@ export class EditorSession {
     const index = node.indexOf(collider)
     this.record("add mesh collider", () => collider.remove(), () => node.insertNode(collider, index, collider.name))
     this.select(collider)
+  }
+
+  private setStreamable(change: Partial<typeof STREAMABLE_DEFAULT>): void {
+    this.set("editor:streamable", { ...this.app.shared("editor:streamable").value, ...change })
+  }
+
+  /** A project path as the converter takes it: absolute, for a project in a folder on disk. */
+  private absolutePath(path: string): string | null {
+    const transfer = this.folder?.transfer()
+    return transfer?.kind === "path" ? `${transfer.path.replace(/\/+$/, "")}/${path}` : null
+  }
+
+  /** The dialog for a model file: its meshes and maps as the converter reads them, built beside the file by default. */
+  private async openStreamable(path: string): Promise<void> {
+    if (!this.converter || this.streamJob) return
+    const absolute = this.absolutePath(path)
+    if (!absolute) return this.publishProject("making a model streamable needs a project folder on disk")
+    const stem = path.replace(/^.*\//, "").replace(/\.[^.]+$/, "")
+    const dir = path.includes("/") ? path.replace(/\/[^/]*$/, "") : ""
+    this.set("editor:streamable", { ...STREAMABLE_DEFAULT, available: true, open: true, phase: "reading", source: path, out: dir ? `${dir}/${stem}` : stem })
+    try {
+      const meshes = await this.converter.describe(absolute)
+      const first = meshes.find((mesh) => mesh.buildable)
+      this.setStreamable({ phase: "choose", meshes, mesh: first?.index ?? 0, error: first ? "" : "No mesh in this file can be built: each needs a single primitive with UVs." })
+    } catch (error) {
+      this.setStreamable({ phase: "failed", error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  private async startStreamable(out: string, addToScene: boolean, options: StreamableOptions): Promise<void> {
+    const state = this.app.shared("editor:streamable").value as typeof STREAMABLE_DEFAULT
+    const folder = this.folder
+    if (!this.converter || this.streamJob || !folder) return
+    const target = out.trim().replace(/^\/+|\/+$/g, "")
+    if (!target || target.split("/").some((part) => part === ".." || part === "." || part === "")) return this.setStreamable({ error: "The output folder must be a path inside the project." })
+    // A folder already there is replaced only when it is an earlier build, never anything else.
+    const there = await folder.raw.list(target).catch(() => [])
+    if (there.length > 0 && !(await folder.raw.exists(`${target}/clusters/manifest.json`).catch(() => false))) {
+      return this.setStreamable({ error: `${target} is already a folder that is not a streamable build; choose another name.` })
+    }
+    const input = this.absolutePath(state.source)
+    const output = this.absolutePath(target)
+    if (!input || !output) return
+    this.streamCancelled = false
+    this.setStreamable({ phase: "running", out: target, error: "", stage: "", step: 0, steps: 0, fraction: null, message: "Starting" })
+    const job = this.converter.makeStreamable(input, output, options, (progress) =>
+      this.setStreamable({ stage: progress.stage, step: progress.step, steps: progress.steps, fraction: progress.fraction, ...(progress.message ? { message: progress.message } : {}) }),
+    )
+    this.streamJob = job
+    try {
+      const result = await job.result
+      this.streamJob = null
+      await this.publishFiles()
+      const name = state.source.replace(/^.*\//, "").replace(/\.[^.]+$/, "")
+      if (addToScene) await this.addNode("StreamedSurface", { name, clusters: `${target}/${result.clusters}`, tiles: result.tiles ? `${target}/${result.tiles}` : "" })
+      const maps = result.maps.map((map) => MAP_NAMES[map.role] ?? map.role).join(", ")
+      this.setStreamable({
+        phase: "done",
+        warnings: result.warnings,
+        summary: `${result.triangles.toLocaleString()} triangles into ${target}/${result.clusters}${maps ? `, with tile pyramids for ${maps}` : ", geometry only"}${addToScene ? "; added to the scene" : ""}.`,
+      })
+    } catch (error) {
+      this.streamJob = null
+      if (this.streamCancelled) this.setStreamable({ phase: "choose", message: "", error: "Stopped; nothing was written." })
+      else this.setStreamable({ phase: "failed", error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  private cancelStreamable(): void {
+    if (!this.streamJob) return
+    this.streamCancelled = true
+    this.setStreamable({ message: "Stopping" })
+    this.streamJob.cancel()
   }
 
   private async addNode(kind: string, given?: Record<string, unknown>, at?: Vector3, under?: Node3D): Promise<void> {

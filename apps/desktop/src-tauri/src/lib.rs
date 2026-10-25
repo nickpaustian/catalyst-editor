@@ -2,6 +2,7 @@ use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 use tauri_plugin_window_state::StateFlags;
 
+mod iapetus;
 #[cfg(target_os = "macos")]
 mod pointer_lock;
 
@@ -38,7 +39,8 @@ fn init_git(path: String) -> Result<String, String> {
 pub fn run() {
   let app = tauri::Builder::default()
     .manage(OpenedFiles(Mutex::new(project_files(std::env::args().skip(1)))))
-    .invoke_handler(tauri::generate_handler![init_git, take_opened_files])
+    .manage(iapetus::Jobs::default())
+    .invoke_handler(tauri::generate_handler![init_git, take_opened_files, iapetus::iapetus_describe, iapetus::iapetus_streamable, iapetus::iapetus_cancel])
     .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_dialog::init())
     // The project window comes back at the size, place and maximised state it was left in; the launcher keeps its own.
@@ -67,6 +69,10 @@ pub fn run() {
     .build(tauri::generate_context!())
     .expect("error while building tauri application");
   app.run(|app, event| {
+    // A build still running would outlive the app.
+    if let tauri::RunEvent::Exit = event {
+      app.state::<iapetus::Jobs>().stop_all();
+    }
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     if let tauri::RunEvent::Opened { urls } = event {
       let paths = project_files(urls.iter().filter_map(|url| url.to_file_path().ok()).map(|path| path.to_string_lossy().to_string()));
