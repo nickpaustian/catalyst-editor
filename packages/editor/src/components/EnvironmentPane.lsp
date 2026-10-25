@@ -31,6 +31,7 @@
                   <span class="file-name" $class="{ empty: !field.value }">{{ field.display }}</span>
                   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"/></svg>
                 </button>
+                <textarea $else-if="field.type === 'text'" class="well" rows="3" $aria-label="field.label" $model="field.value" @change="apply(field)"></textarea>
                 <input $else class="well" type="text" $aria-label="field.label" $model="field.value" @change="apply(field)" />
               </div>
             </template>

@@ -1,4 +1,4 @@
-import type { NodeJSON } from "@nickpaustian/catalyst"
+import type { NodeJSON, SceneMetadata } from "@nickpaustian/catalyst"
 import type { ProjectFolder } from "./ProjectFolder"
 
 /** Where the published page's runtime is served beside the editor, with `files.json` listing it. */
@@ -40,7 +40,8 @@ export const publish = async ({ project, scene, sceneFile, target, runtime = new
   for (const path of runtimeFiles) {
     const response = await fetch(new URL(path, runtime))
     if (!response.ok) throw new Error(`the player runtime's ${path} is missing (${response.status})`)
-    await target.writeFile(path, await response.blob())
+    const blob = await response.blob()
+    await target.writeFile(path, path === "index.html" ? new Blob([named(await blob.text(), (scene as { metadata?: SceneMetadata }).metadata ?? {})], { type: "text/html" }) : blob)
     step()
   }
   // GitHub Pages runs Jekyll unless told not to, and Jekyll leaves out dotfiles such as the asset table.
@@ -53,6 +54,17 @@ export const publish = async ({ project, scene, sceneFile, target, runtime = new
     step()
   }
   return total
+}
+
+const escapeHtml = (text: string): string => text.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!)
+
+/** The page's title and description from the record, in the HTML itself, for link previews and search, which don't run the page. */
+const named = (html: string, metadata: SceneMetadata): string => {
+  const tags: string[] = []
+  if (metadata.title) tags.push(`<meta property="og:title" content="${escapeHtml(metadata.title)}" />`)
+  if (metadata.description) tags.push(`<meta name="description" content="${escapeHtml(metadata.description)}" />`, `<meta property="og:description" content="${escapeHtml(metadata.description)}" />`)
+  const titled = metadata.title ? html.replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(metadata.title)}</title>`) : html
+  return tags.length ? titled.replace("</head>", `  ${tags.join("\n    ")}\n  </head>`) : titled
 }
 
 const filesUnder = async (folder: ProjectFolder, dir: string): Promise<string[]> => {

@@ -1,4 +1,4 @@
-import { Button, Camera, Colour, Html, Label, Light, Model, Node3D, Panel, Picture, Slate, Stack, StreamedSurface, Toggle, type AntiAliasing, type Catalyst, type NodeJSON, type RenderSettings } from "@nickpaustian/catalyst"
+import { Button, Camera, Colour, Html, Label, Light, Model, Node3D, Panel, Picture, Slate, Stack, StreamedSurface, Toggle, type AntiAliasing, type Catalyst, type MetadataLink, type NodeJSON, type RenderSettings, type SceneMetadata } from "@nickpaustian/catalyst"
 import { pickFile } from "../ProjectFolder"
 import { Interactable } from "@nickpaustian/catalyst/interaction"
 import { BoxCollider, CapsuleCollider, MeshCollider, SphereCollider } from "@nickpaustian/catalyst/physics"
@@ -86,8 +86,56 @@ const applyEnvironment = (engine: Catalyst, environment: Partial<SceneEnvironmen
   engine.exposure = next.exposure
 }
 
-/** The scene file with the environment beside the nodes. */
-const toFile = (engine: Catalyst, root: Node3D): NodeJSON & { environment: SceneEnvironment } => ({ ...engine.serialise(root), environment: readEnvironment(engine) })
+const RECORD_TEXT = ["title", "maker", "date", "credit", "licence", "description"] as const
+const RECORD_KEYS = new Set<string>([...RECORD_TEXT, "links", "unit", "unitScale"])
+
+/** One link a line, its label then its url; a line that is only a url is labelled by it. */
+const linksOf = (text: string): MetadataLink[] =>
+  text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const at = line.search(/\S+$/)
+      const url = line.slice(at)
+      const label = line.slice(0, at).trim()
+      return { label: label || url, url }
+    })
+
+const linksText = (links: MetadataLink[] | undefined): string => (links ?? []).map((link) => (link.label && link.label !== link.url ? `${link.label} ${link.url}` : link.url)).join("\n")
+
+/** The record as the settings show it: the links as lines, the units as a name and a scale. */
+const readRecord = (metadata: SceneMetadata): Record<string, unknown> => ({
+  ...Object.fromEntries(RECORD_TEXT.map((key) => [key, metadata[key] ?? ""])),
+  links: linksText(metadata.links),
+  unit: metadata.units?.unit ?? "",
+  unitScale: metadata.units?.scale ?? 1,
+})
+
+/** The record with one setting changed; empty fields are left out of it. */
+const writeRecord = (metadata: SceneMetadata, key: string, value: unknown): SceneMetadata => {
+  const next: SceneMetadata = { ...metadata }
+  if (key === "links") next.links = linksOf(String(value ?? ""))
+  else if (key === "unit" || key === "unitScale") {
+    const unit = key === "unit" ? String(value ?? "").trim() : (metadata.units?.unit ?? "")
+    const scale = key === "unitScale" ? Number(value) : (metadata.units?.scale ?? 1)
+    next.units = unit ? { unit, ...(Number.isFinite(scale) && scale !== 1 ? { scale } : {}) } : undefined
+  } else (next as Record<string, unknown>)[key] = String(value ?? "").trim() || undefined
+  if (next.links?.length === 0) next.links = undefined
+  return JSON.parse(JSON.stringify(next)) as SceneMetadata
+}
+
+const metadataOf = (scene: unknown): SceneMetadata => {
+  const metadata = (scene as { metadata?: unknown } | null)?.metadata
+  return metadata && typeof metadata === "object" ? (metadata as SceneMetadata) : {}
+}
+
+/** The scene file with the environment, and the record when it says anything, beside the nodes. */
+const toFile = (engine: Catalyst, root: Node3D): NodeJSON & { environment: SceneEnvironment; metadata?: SceneMetadata } => ({
+  ...engine.serialise(root),
+  environment: readEnvironment(engine),
+  ...(Object.keys(engine.metadata).length ? { metadata: engine.metadata } : {}),
+})
 
 /** A plain Catalyst scene: a folder holding `scene.json` and whatever it names. */
 export const sceneRecipe: Recipe = {
@@ -160,6 +208,15 @@ export const sceneRecipe: Recipe = {
   settings: {
     title: "Environment",
     fields: [
+      { section: "Record", key: "title", type: "string" },
+      { section: "Record", key: "maker", type: "string" },
+      { section: "Record", key: "date", type: "string" },
+      { section: "Record", key: "credit", type: "string" },
+      { section: "Record", key: "licence", type: "string" },
+      { section: "Record", key: "description", type: "text" },
+      { section: "Record", key: "links", label: "Links", type: "text" },
+      { section: "Record", key: "unit", type: "string" },
+      { section: "Record", key: "unitScale", label: "Unit scale", type: "number", min: 0, step: 0.001 },
       { section: "Lighting", key: "environment", label: "Environment", type: "file", accept: ".hdr" },
       { section: "Lighting", key: "environmentIntensity", label: "Environment strength", type: "number", min: 0, step: 0.05 },
       { section: "Lighting", key: "ambient", label: "Ambient", type: "colour" },
@@ -179,9 +236,13 @@ export const sceneRecipe: Recipe = {
     read: (engine) => {
       const environment = readEnvironment(engine)
       const { floor, ...rest } = environment
-      return { floored: floor !== null, floor: floor ?? 0, ...rest }
+      return { ...readRecord(engine.metadata), floored: floor !== null, floor: floor ?? 0, ...rest }
     },
     write: (engine, _root, key, value) => {
+      if (RECORD_KEYS.has(key)) {
+        engine.metadata = writeRecord(engine.metadata, key, value)
+        return
+      }
       const current = readEnvironment(engine)
       if (key === "floored") applyEnvironment(engine, { ...current, floor: value ? (current.floor ?? 0) : null })
       else if (key === "floor") applyEnvironment(engine, { ...current, floor: Number(value) })
@@ -190,6 +251,7 @@ export const sceneRecipe: Recipe = {
   },
   load: async (folder, engine) => {
     applyEnvironment(engine, undefined)
+    engine.metadata = {}
     if (folder && (await folder.exists(SCENE_FILE))) {
       const json = await folder.readJSON<(NodeJSON & { environment?: Partial<SceneEnvironment> }) | NodeJSON[]>(SCENE_FILE)
       if (Array.isArray(json)) {
@@ -198,6 +260,7 @@ export const sceneRecipe: Recipe = {
         return root
       }
       applyEnvironment(engine, json.environment)
+      engine.metadata = metadataOf(json)
       const root = engine.create(json)
       if (root instanceof Node3D) return root
       const wrapped = new Node3D("scene")
@@ -223,6 +286,7 @@ export const sceneRecipe: Recipe = {
   },
   run: async ({ engine, root, scene }) => {
     applyEnvironment(engine, (scene as { environment?: Partial<SceneEnvironment> }).environment, true)
+    engine.metadata = metadataOf(scene)
     const physics = engine.find(Physics)
     let orbit: OrbitCamera | null = null
     root.walk((node) => {
