@@ -509,6 +509,7 @@ export class EditorSession {
       newScriptFor: (node) => this.newScriptFor(node),
       setScriptField: (node, url, key, value) => this.setScriptField(node, url, key, value),
       prefabFiles: () => this.prefabFiles(),
+      sceneFile: () => this.sceneFile,
     })
     this.history.onChange = () => {
       this.publishHistory()

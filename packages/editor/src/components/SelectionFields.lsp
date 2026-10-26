@@ -125,6 +125,7 @@
               <span class="dim" aria-hidden="true">→</span>
               <span class="mono">{{ row.call }}()</span>
               <span class="problem" $if="row.problem" $title="row.problem">{{ row.problem }}</span>
+              <span class="note" $if="row.note" $title="row.note">{{ row.note }}</span>
               <button class="icon-button small edit" type="button" $if="row.index !== null" title="Change the connection" aria-label="Change the connection" @click="editConnection(script, row)">
                 <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 2.5l3 3-8 8H2.5v-3z"/></svg>
               </button>
@@ -199,7 +200,7 @@ const dragging = shared(DRAGGING_FILE_CELL, null)
 // Local copies of the fields, so typing doesn't fight the scene publishing
 // the same values back on every gizmo move
 interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number; options?: string[]; readonly?: boolean; hex?: string; ranged?: boolean; choices?: string[]; display?: string; missing?: boolean; droppable?: boolean; over?: boolean }
-interface Connection { url: string; index: number | null; from?: string; field?: string; group: string | null; source: number | null; signal: string; call: string; problem: string | null }
+interface Connection { url: string; index: number | null; from?: string; field?: string; group: string | null; source: number | null; signal: string; call: string; problem: string | null; note: string | null }
 interface ScriptEntry { index: number; url: string; name: string; built: boolean; fields: Field[]; connections: Connection[]; shared: number; fixed: boolean }
 interface SignalsView { listens: Connection[]; scripts: { url: string; shared: number }[] }
 
@@ -765,11 +766,16 @@ function apply() {
   color: var(--cat-danger);
 }
 
-.problem {
+.problem,
+.note {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: var(--cat-text-xs);
+}
+
+.note {
+  color: var(--cat-text-tertiary);
 }
 
 .link {

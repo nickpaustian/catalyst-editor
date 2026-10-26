@@ -20,6 +20,8 @@ export interface ConnectionRow {
   signal: string
   call: string
   problem: string | null
+  /** Something to know that isn't wrong: a node this file doesn't hold, which the scene loading it may. */
+  note: string | null
 }
 
 export interface SignalRow {
@@ -106,6 +108,8 @@ export interface WiringHost {
   newScriptFor(node: Node3D): Promise<string | null>
   /** Set a field of the script from `url` on `node`, as the inspector would, undoably. */
   setScriptField(node: Node3D, url: string, key: string, value: unknown): void
+  /** The node-tree file being edited on its own (a level, a prefab), or null for the project's scene. */
+  sceneFile(): string | null
   /** The project's prefab files, read as scene entries, for the tags and signals of what the game makes while it runs. */
   prefabFiles(): Promise<{ path: string; json: NodeJSON }[]>
 }
@@ -229,17 +233,20 @@ export class SignalWiring {
     const group = groupTag(from)
     if (group !== null) {
       const problem = typeof (script as unknown as Record<string, unknown>)[connection.call] !== "function" ? `${fileName(entry.url)} has no method ${connection.call}` : null
-      return { url: entry.url, index: entry.index, node: this.host.idOf(node), nodeName: node.name, from, field, group, source: null, signal: connection.signal, call: connection.call, problem }
+      return { url: entry.url, index: entry.index, node: this.host.idOf(node), nodeName: node.name, from, field, group, source: null, signal: connection.signal, call: connection.call, problem, note: null }
     }
     const found = !from || !root ? [] : nodesNamed(root, from, node)
     const source = found[0] ?? null
     let problem: string | null = null
+    let note: string | null = null
+    const editingFile = this.host.sceneFile()
     if (typeof (script as unknown as Record<string, unknown>)[connection.call] !== "function") problem = `${fileName(entry.url)} has no method ${connection.call}`
     else if (from === "") problem = `${field} is not set on ${node.name}`
+    else if (from !== undefined && !source && editingFile) note = `"${from}" isn't in this file; the scene that loads it may have it`
     else if (from !== undefined && !source) problem = `no node "${from}"`
     else if (found.length > 1) problem = `${found.length} nodes are named "${from}"; the first is heard`
     else if (!signalAt(source ? source.signals : this.host.engine.signals, connection.signal)) problem = `no signal ${connection.signal} on ${source ? `"${from}"` : "the engine"}`
-    return { url: entry.url, index: entry.index, node: this.host.idOf(node), nodeName: node.name, from, field, group: null, source: source ? this.host.idOf(source) : null, signal: connection.signal, call: connection.call, problem }
+    return { url: entry.url, index: entry.index, node: this.host.idOf(node), nodeName: node.name, from, field, group: null, source: source ? this.host.idOf(source) : null, signal: connection.signal, call: connection.call, problem, note }
   }
 
   view(node: Node3D): SignalsView {

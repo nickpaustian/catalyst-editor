@@ -26,6 +26,7 @@
         <button class="link" type="button" @click="select(row.node)">{{ row.nodeName }}</button>
         <button class="link mono" type="button" $title="'Open ' + row.url" @click="open(row.url)">{{ row.call }}()</button>
         <span class="problem" $if="row.problem">{{ row.problem }}</span>
+        <span class="note" $if="row.note">{{ row.note }}</span>
       </div>
       <h3 class="group">Signals declared by scripts <span class="count">{{ state.declared.length }}</span></h3>
       <p class="hint" $if="!state.browser.declared.length">None: a script adds signals to its node with <span class="mono">static signals</span>, or Add in the inspector writes one.</p>
@@ -73,7 +74,7 @@ import { reactive, shared, defineRefs } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { storage } from '../preferences.ts'
 
-interface Row { url: string; index: number | null; node: number; nodeName: string; from?: string; source: number | null; signal: string; call: string; problem: string | null }
+interface Row { url: string; index: number | null; node: number; nodeName: string; from?: string; source: number | null; signal: string; call: string; problem: string | null; note: string | null }
 interface Browser { connections: Row[]; declared: { node: number; nodeName: string; name: string; url: string; listeners: number }[]; engine: { group: string | null; signals: { name: string; description?: string; payload?: string; listeners: Row[] }[] }[] }
 interface Fired { at: number; node: string | null; signal: string; value: string }
 
@@ -274,6 +275,14 @@ function clear() {
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--cat-danger);
+  font-size: var(--cat-text-xs);
+}
+
+.note {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--cat-text-tertiary);
   font-size: var(--cat-text-xs);
 }
 
