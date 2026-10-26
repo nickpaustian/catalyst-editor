@@ -81,13 +81,14 @@ import { sendCommand } from '../commands.ts'
 import { openContextMenu, type MenuItem } from '../contextMenu.ts'
 import { PREVIEW_DEFAULT, PROJECT_DEFAULT, STREAMABLE_DEFAULT } from '../cells.ts'
 import { RowWindow } from '../rowWindow.ts'
+import { storage } from '../preferences.ts'
 
 interface Entry { path: string; name: string; kind: 'file' | 'directory'; children?: Entry[] }
 interface Row { path: string; name: string; kind: 'file' | 'directory' | 'creating'; depth: number; expanded: boolean; icon: string; type: string }
 interface Creating { dir: string; kind: 'folder' | 'script' }
 
 const files = shared('editor:files', [])
-shared('editor:project', PROJECT_DEFAULT)
+const project = shared('editor:project', PROJECT_DEFAULT)
 shared('editor:fileInfo', null)
 const streamable = shared('editor:streamable', STREAMABLE_DEFAULT)
 const preview = shared('editor:preview', PREVIEW_DEFAULT)
@@ -225,8 +226,29 @@ function toggle(event: Event, row: Row) {
   if (row.kind !== 'directory') return
   if (collapsed.has(row.path)) collapsed.delete(row.path)
   else collapsed.add(row.path)
+  rememberFolders()
   refresh()
 }
+
+// Which folders are closed and which packages open, kept per project in this browser, so a reload comes back to them.
+const FOLDERS_KEY = 'files-folders'
+let foldersOf = ''
+
+function rememberFolders() {
+  if (foldersOf) storage.set(`${FOLDERS_KEY}:${foldersOf}`, { collapsed: [...collapsed], opened: [...opened] })
+}
+
+project.subscribe((next: { open: boolean; name: string | null } | undefined) => {
+  const name = next?.open ? next.name ?? '' : ''
+  if (name === foldersOf) return
+  foldersOf = name
+  collapsed.clear()
+  opened.clear()
+  const saved = name ? storage.get<{ collapsed?: string[]; opened?: string[] } | null>(`${FOLDERS_KEY}:${name}`, null) : null
+  for (const path of saved?.collapsed ?? []) collapsed.add(path)
+  for (const path of saved?.opened ?? []) opened.add(path)
+  refresh()
+})
 
 // Two clicks open what can be opened: a script in the code pane, a folder's rows
 function activate(row: Row) {
@@ -272,7 +294,10 @@ function finishRename(target: EventTarget | null, row: Row) {
 // ---- new folder, new script ----
 
 function startCreate(dir: string, kind: Creating['kind']) {
-  if (dir && collapsed.has(dir)) collapsed.delete(dir)
+  if (dir && collapsed.has(dir)) {
+    collapsed.delete(dir)
+    rememberFolders()
+  }
   state.creating = { dir, kind }
   refresh()
   reveal('\0creating')
@@ -453,6 +478,7 @@ function itemsFor(row: Row): MenuItem[] {
 function showContents(path: string, show: boolean) {
   if (show) opened.add(path)
   else opened.delete(path)
+  rememberFolders()
   refresh()
 }
 
