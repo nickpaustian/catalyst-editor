@@ -87,6 +87,12 @@ export class History {
     this.onChange?.()
   }
 
+  /** The project differs from what is saved, with no change to undo back to it: unsaved work restored. */
+  markUnsaved(): void {
+    this.savedIndex = -1
+    this.onChange?.()
+  }
+
   get isDirty(): boolean {
     return this.index !== this.savedIndex
   }

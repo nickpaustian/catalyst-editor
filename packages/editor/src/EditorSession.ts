@@ -14,6 +14,7 @@ import { accepts } from "./fileField"
 import { SCRIPTS_DIR, ScriptCompiler, scriptTemplate } from "./ScriptCompiler"
 import { LEGACY_PROJECT_FILE, PROJECT_EXTENSION, createProject, readProjectImage, readProjectSettings, writeProjectImage, writeProjectSettings, type NewProject, type ProjectSettings } from "./project"
 import { openConfirm } from "./confirm"
+import { capturing, dropRecovery, keepRecovery, overlaid, readRecovery, type Recovery } from "./recovery"
 import { publish, ZipTarget, type PublishTarget } from "./publish"
 import { PREVIEW_DEFAULT, PROJECT_DIALOG_DEFAULT, STREAMABLE_DEFAULT } from "./cells"
 import { MAP_NAMES, type AssetConverter, type StreamableJob, type StreamableOptions } from "./converter"
@@ -113,8 +114,8 @@ export interface EditorCells {
   "editor:fileInfo": { path: string; size: number; modified: number; preview: string | null; facts: string } | null
   /** The files the code pane edits: scripts, components and stylesheets. */
   "editor:codeFiles": string[]
-  /** The script file open in the code pane: its text as last read or saved, and what happened on the last save. */
-  "editor:code": { path: string | null; text: string; status: string }
+  /** The script file open in the code pane: its text as last read or saved, and what happened on the last save; `draft` is unsaved text to show in its place. */
+  "editor:code": { path: string | null; text: string; status: string; draft?: string }
   /** Bumped when everything should save: the code pane answers with its unsaved file. */
   "editor:saveRequest": number
   /** The code pane's file while its text differs from what was last read or saved. */
@@ -297,9 +298,19 @@ const isWithin = async (inner: ProjectFolder, outer: ProjectFolder): Promise<boo
   return false
 }
 
-/** The confirm dialog as a yes or no; closed with Escape, it is a no that never arrives. */
+/** The confirm dialog as a yes or no; closed with Escape, a no. */
 const confirmed = (title: string, message: string, yes: string): Promise<boolean> =>
-  new Promise((resolve) => openConfirm(title, message, [{ label: "Cancel", run: () => resolve(false) }, { label: yes, primary: true, run: () => resolve(true) }]))
+  new Promise((resolve) => openConfirm(title, message, [{ label: "Cancel", run: () => resolve(false) }, { label: yes, primary: true, run: () => resolve(true) }], () => resolve(false)))
+
+const AUTOSAVE_DELAY = 2000
+
+/** How long ago `time` was, as a phrase. */
+const ago = (time: number): string => {
+  const minutes = Math.round((Date.now() - time) / 60000)
+  if (minutes < 1) return "moments ago"
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`
+  return `on ${new Date(time).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}`
+}
 
 /**
  * The editor's logic, with no DOM of its own. It publishes what the panel
@@ -453,6 +464,7 @@ export class EditorSession {
     this.history.onChange = () => {
       this.publishHistory()
       this.publishProject()
+      this.autosaveSoon()
     }
     this.camera.onDrag = (dragging) => (dragging ? this.beginDrag() : this.endDrag())
     this.unsubscribeGhosts = this.engine.signals.onRender.subscribe(() => this.placeGhosts(), 40)
@@ -500,6 +512,7 @@ export class EditorSession {
     this.set("editor:code", { path: null, text: "", status: "" })
     this.set("editor:saveRequest", 0)
     this.set("editor:codeUnsaved", null)
+    this.app.shared("editor:codeUnsaved").subscribe(() => this.autosaveSoon())
     this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
     this.set("editor:streamable", { ...STREAMABLE_DEFAULT, available: this.converter !== null })
     this.set("editor:preview", PREVIEW_DEFAULT)
@@ -525,13 +538,16 @@ export class EditorSession {
     this.set("editor:code", { path: null, text: "", status: "" })
     this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
     this.publishProject(folder ? `opening ${folder.name}` : "new project")
-    const root = await this.recipe.load(folder, this.engine)
+    const recovery = folder ? await this.offerRecovery(folder) : null
+    this.recoveryKept = recovery !== null
+    const root = await this.recipe.load(folder && recovery ? overlaid(folder, recovery.files) : folder, this.engine)
     this._root = root
     this.engine.add(root)
     this.setVisualised(this.visualised)
     await this.loadPrefabs()
     await this.loadScriptFiles()
     this.history.clear()
+    if (recovery && Object.keys(recovery.files).length) this.history.markUnsaved()
     this.publishSettings()
     this.publishProject(folder ? "" : "unsaved")
     if (folder) await this.relinkAssets(folder)
@@ -541,6 +557,7 @@ export class EditorSession {
     this.camera.focusPoint(new Vector3(0, 0.5, 0), 8)
     if (folder) await folder.remember()
     void this.publishRecent()
+    if (folder && recovery?.code) await this.restoreCode(folder, recovery.code)
     if (folder?.watch) {
       try {
         this.unwatch = await folder.watch((paths) => this.onDiskChange(paths))
@@ -589,16 +606,78 @@ export class EditorSession {
         { label: "Cancel", run: () => resolve("stay") },
         { label: "Don't save", run: () => resolve("discard") },
         { label: "Save", primary: true, run: () => resolve("save") },
-      ]),
+      ], () => resolve("stay")),
     )
     if (choice === "stay") return false
-    if (choice === "discard") return true
+    if (choice === "discard") {
+      await this.dropRecovery()
+      return true
+    }
     await this.saveUnsavedCode()
     if (this.history.isDirty) {
       if (this.folder) await this.save(this.folder)
       else await this.saveAs()
     }
+    await this.autosave()
     return !this.hasUnsavedWork
+  }
+
+  private autosaveTimer: ReturnType<typeof setTimeout> | null = null
+  /** Whether this project has unsaved work kept in the recovery store, from this session or one before. */
+  private recoveryKept = false
+
+  /** Keep the unsaved work a moment after the last change, so a crash or a forced quit loses at most that moment. */
+  private autosaveSoon(): void {
+    if (this.autosaveTimer) clearTimeout(this.autosaveTimer)
+    this.autosaveTimer = setTimeout(() => {
+      this.autosaveTimer = null
+      void this.autosave().catch((error: unknown) => this.engine.log(`unsaved work could not be kept: ${error instanceof Error ? error.message : error}`, "editor"))
+    }, AUTOSAVE_DELAY)
+  }
+
+  /** What a save would write, and the code pane's unsaved file, into the recovery store; with nothing unsaved, the kept work goes. */
+  private async autosave(): Promise<void> {
+    if (this.autosaveTimer) clearTimeout(this.autosaveTimer)
+    this.autosaveTimer = null
+    const folder = this.folder
+    const root = this._root
+    if (!folder || !root) return
+    if (!this.hasUnsavedWork) {
+      if (this.recoveryKept) await this.dropRecovery()
+      return
+    }
+    const capture = capturing(folder)
+    if (this.history.isDirty) await this.recipe.save(capture.folder, root, this.engine)
+    const code = (this.app.shared("editor:codeUnsaved").value as EditorCells["editor:codeUnsaved"]) ?? null
+    await keepRecovery(folder, { kept: Date.now(), files: capture.files, code })
+    this.recoveryKept = true
+  }
+
+  private async dropRecovery(): Promise<void> {
+    if (this.autosaveTimer) clearTimeout(this.autosaveTimer)
+    this.autosaveTimer = null
+    if (this.folder) await dropRecovery(this.folder)
+    this.recoveryKept = false
+  }
+
+  /** Unsaved work kept from a session that ended without saving: restored, thrown away, or (dismissed) left for next time. */
+  private async offerRecovery(folder: ProjectFolder): Promise<Recovery | null> {
+    const recovery = await readRecovery(folder).catch(() => null)
+    if (!recovery) return null
+    const name = this.settings?.name ?? folder.name
+    const what = [Object.keys(recovery.files).length ? "the scene" : "", recovery.code ? recovery.code.path : ""].filter(Boolean).join(" and ")
+    return new Promise((resolve) =>
+      openConfirm(`Restore unsaved changes to ${name}?`, `Changes to ${what} from ${ago(recovery.kept)} were never saved.\nRestore them to carry on where you left off, or discard them and open what is saved.`, [
+        { label: "Discard", run: () => void dropRecovery(folder).then(() => resolve(null), () => resolve(null)) },
+        { label: "Restore", primary: true, run: () => resolve(recovery) },
+      ], () => resolve(null)),
+    )
+  }
+
+  /** The code pane's unsaved file as it was kept, shown unsaved over what is on disk. */
+  private async restoreCode(folder: ProjectFolder, code: { path: string; text: string }): Promise<void> {
+    const text = await folder.readText(code.path).catch(() => "")
+    this.set("editor:code", { path: code.path, text, status: "restored unsaved changes", draft: code.text })
   }
 
   /** Write the code pane's unsaved file here and now, not through the pane, so it is on disk before the project goes. */
@@ -610,6 +689,8 @@ export class EditorSession {
   }
 
   private close(): void {
+    if (this.autosaveTimer) clearTimeout(this.autosaveTimer)
+    this.autosaveTimer = null
     this.unwatch?.()
     this.unwatch = null
     this.select(null)

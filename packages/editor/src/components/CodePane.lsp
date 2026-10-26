@@ -30,7 +30,7 @@ import { css } from '@codemirror/lang-css'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { sendCommand } from '../commands.ts'
 
-interface Code { path: string | null; text: string; status: string }
+interface Code { path: string | null; text: string; status: string; draft?: string }
 
 const code = shared('editor:code', { path: null, text: '', status: '' })
 shared('editor:codeFiles', [])
@@ -96,11 +96,16 @@ function show(next: Code) {
   state.status = next.status
   state.error = Boolean(next.status) && !/^(saved|reloaded|previewing) /.test(next.status)
   if (replace || /^(saved|reloaded) /.test(next.status)) {
-    if (replace) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next.text } })
+    const draft = replace && next.draft !== undefined && next.draft !== next.text ? next.draft : null
+    if (replace) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: draft ?? next.text } })
+    shown = next.text
+    state.dirty = draft !== null
+    unsaved.set(draft !== null ? { path, text: draft } : null)
+    view.dispatch({ effects: readOnly.reconfigure(EditorState.readOnly.of(!path)) })
+  } else if (state.dirty && next.text === view.state.doc.toString()) {
     shown = next.text
     state.dirty = false
     unsaved.set(null)
-    view.dispatch({ effects: readOnly.reconfigure(EditorState.readOnly.of(!path)) })
   }
 }
 

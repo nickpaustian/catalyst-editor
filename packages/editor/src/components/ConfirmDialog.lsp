@@ -19,11 +19,14 @@ const cell = shared('editor:confirm', null)
 const state = reactive({ open: false, title: '', message: '', actions: [] as Action[] })
 
 function close() {
-  if (cell.value) cell.set(null)
+  const asked = cell.value as { dismiss?: () => void } | null
+  if (!asked) return
+  cell.set(null)
+  asked.dismiss?.()
 }
 
 function pick(action: Action) {
-  close()
+  if (cell.value) cell.set(null)
   action.run()
 }
 
