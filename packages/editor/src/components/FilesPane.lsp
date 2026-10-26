@@ -253,7 +253,7 @@ project.subscribe((next: { open: boolean; name: string | null } | undefined) => 
 // Two clicks open what can be opened: a script in the code pane, a folder's rows
 function activate(row: Row) {
   if (row.kind === 'directory') return toggle(new Event('click'), row)
-  if (CODE.test(row.name)) sendCommand({ type: 'openFile', path: row.path })
+  if (CODE.test(row.name) || /\.json$/i.test(row.name)) sendCommand({ type: 'openFile', path: row.path })
 }
 
 // ---- rename ----
@@ -459,6 +459,7 @@ function itemsFor(row: Row): MenuItem[] {
     items.push({ label: 'Show contents', run: () => showContents(row.path, true) })
   } else {
     if (CODE.test(row.name)) items.push({ label: 'Open in code pane', run: () => sendCommand({ type: 'openFile', path: row.path }) })
+    if (/\.json$/i.test(row.name)) items.push({ label: 'Edit in the scene tree', run: () => sendCommand({ type: 'openScene', path: row.path }) })
     if (PREVIEWABLE.test(row.name)) items.push({ label: 'Preview', kbd: 'Space', run: () => sendCommand({ type: 'preview', path: row.path }) })
     if (MODEL.test(row.name)) items.push({ label: 'Add to scene', run: () => sendCommand({ type: 'addModel', path: row.path }) })
     if (GLB.test(row.name) && streamable.value?.available) items.push({ label: 'Make streamable…', run: () => sendCommand({ type: 'streamable', path: row.path }) })

@@ -148,6 +148,8 @@ export interface EditorCells {
   /** The selected node's signals, who hears them, and what its scripts listen to. */
   "editor:signals": SignalsView | null
   "editor:connect": ConnectDialog
+  /** The node-tree file the scene tree shows and saves to, when it isn't the project's own scene. */
+  "editor:sceneFile": string | null
   "editor:signalBrowser": SignalBrowser
   /** The signals that fired in the run window since the run began, oldest first, the last few hundred kept. */
   "editor:signalLog": FiredSignal[]
@@ -167,6 +169,7 @@ export type EditorCommand =
   | { type: "closeProject" }
   | { type: "openConnect"; mode: "emit" | "listen"; signal?: string; url?: string; node?: number; edit?: { url: string; index: number } }
   | { type: "closeConnect" }
+  | { type: "openScene"; path: string | null }
   | { type: "clearSignalLog" }
   | { type: "setFrequentSignals"; on: boolean }
   | { type: "clearConsole" }
@@ -559,6 +562,7 @@ export class EditorSession {
     this.set("editor:saveRequest", 0)
     this.set("editor:codeFile", null)
     this.set("editor:signals", null)
+    this.set("editor:sceneFile", null)
     this.set("editor:connect", CONNECT_DEFAULT)
     this.set("editor:signalBrowser", BROWSER_DEFAULT)
     this.set("editor:signalLog", [])
@@ -579,10 +583,14 @@ export class EditorSession {
     return this._root
   }
 
-  /** Put a project in the viewport: the folder's, or a fresh one when there is no folder. Unsaved work is asked about first unless `discarding`. */
-  async open(source: ProjectFolder | null, { discarding = false } = {}): Promise<void> {
+  /**
+   * Put a project in the viewport: the folder's, or a fresh one when there is no folder. Unsaved work is asked about first
+   * unless `discarding`. `scene` is a node-tree file of the project to edit instead of its own scene (a level, a prefab).
+   */
+  async open(source: ProjectFolder | null, { discarding = false, scene = null as string | null } = {}): Promise<void> {
     if (!discarding && !(await this.leave())) return
     this.close()
+    this.sceneFile = scene
     const folder = source ? await AssetFolder.open(source) : null
     this.folder = folder
     this.settings = folder ? await readProjectSettings(folder) : null
@@ -593,7 +601,9 @@ export class EditorSession {
     this.publishProject(folder ? `opening ${folder.name}` : "new project")
     const recovery = folder ? await this.offerRecovery(folder) : null
     this.recoveryKept = recovery !== null
-    const root = await this.recipe.load(folder && recovery ? overlaid(folder, recovery.files) : folder, this.engine)
+    if (recovery) this.sceneFile = recovery.scene ?? null
+    this.set("editor:sceneFile", this.sceneFile)
+    const root = await this.loadRoot(folder && recovery ? overlaid(folder, recovery.files) : folder)
     this._root = root
     this.engine.add(root)
     void this.whenScriptsBuilt(root)
@@ -626,7 +636,7 @@ export class EditorSession {
     const folder = this.folder
     if (!folder) return
     if (!discarding && !(await this.leave())) return
-    await this.open(folder, { discarding: true })
+    await this.open(folder, { discarding: true, scene: this.sceneFile })
     this.publishProject("reloaded from disk")
   }
 
@@ -638,6 +648,49 @@ export class EditorSession {
     if (this._root !== root) return
     this.signalsShown.stale = true
     this.publishSelection()
+  }
+
+  /** The node-tree file being edited instead of the project's own scene, or null for that scene. */
+  private sceneFile: string | null = null
+  /** The open file's root had a transform of its own; a prefab's doesn't, its copies carrying one. */
+  private sceneFileHasTransform = false
+
+  /** The scene tree's root: the project's scene through the recipe, or the open node-tree file as it is. */
+  private async loadRoot(folder: ProjectFolder | null): Promise<Node3D> {
+    if (!this.sceneFile || !folder) return this.recipe.load(folder, this.engine)
+    const json = await folder.readJSON<NodeJSON>(this.sceneFile)
+    this.sceneFileHasTransform = json.transform !== undefined
+    const made = this.engine.create(json)
+    if (made instanceof Node3D) return made
+    const wrapped = new Node3D("scene")
+    wrapped.addNode(made)
+    return wrapped
+  }
+
+  /** Write the tree back where it came from; gives back what was written. */
+  private async writeRoot(folder: ProjectFolder, root: Node3D): Promise<string[]> {
+    if (!this.sceneFile) return this.recipe.save(folder, root, this.engine)
+    const json = this.engine.serialise(root)
+    if (!this.sceneFileHasTransform) delete json.transform
+    await folder.writeJSON(this.sceneFile, json)
+    this.engine.prefabs.invalidate(this.sceneFile)
+    return [this.sceneFile]
+  }
+
+  /** Edit a node-tree file of the project in the scene tree (a level, a prefab), or the project's own scene with null. */
+  private async openScene(path: string | null): Promise<void> {
+    const folder = this.folder
+    if (!folder || path === this.sceneFile) return
+    if (path !== null && path === this.recipe.files?.[0]) return this.openScene(null)
+    if (!(await this.leave())) return
+    // Nothing is unsaved now, so whatever autosave kept goes before the next file opens, rather than being offered back.
+    await this.autosave()
+    if (path !== null) {
+      const json = await folder.readJSON<{ type?: unknown }>(path).catch(() => null)
+      if (typeof json?.type !== "string") return this.publishProject(`${path} isn't a node tree to edit`)
+    }
+    await this.open(folder, { discarding: true, scene: path })
+    this.publishProject(path ? `editing ${path}` : "editing the project's scene")
   }
 
   /** Take the project out of the viewport and show the start screen again. */
@@ -715,8 +768,8 @@ export class EditorSession {
       return
     }
     const capture = capturing(folder)
-    if (this.history.isDirty) await this.recipe.save(capture.folder, root, this.engine)
-    await keepRecovery(folder, { kept: Date.now(), files: capture.files, code: this.unsavedCode })
+    if (this.history.isDirty) await this.writeRoot(capture.folder, root)
+    await keepRecovery(folder, { kept: Date.now(), files: capture.files, code: this.unsavedCode, scene: this.sceneFile })
     this.recoveryKept = true
   }
 
@@ -732,7 +785,7 @@ export class EditorSession {
     const recovery = await readRecovery(folder).catch(() => null)
     if (!recovery) return null
     const name = this.settings?.name ?? folder.name
-    const what = [Object.keys(recovery.files).length ? "the scene" : "", ...recovery.code.map((file) => file.path)].filter(Boolean).join(", ").replace(/, ([^,]*)$/, " and $1")
+    const what = [Object.keys(recovery.files).length ? (recovery.scene ?? "the scene") : "", ...recovery.code.map((file) => file.path)].filter(Boolean).join(", ").replace(/, ([^,]*)$/, " and $1")
     return new Promise((resolve) =>
       openConfirm(`Restore unsaved changes to ${name}?`, `Changes to ${what} from ${ago(recovery.kept)} were never saved.\nRestore them to carry on where you left off, or discard them and open what is saved.`, [
         { label: "Discard", run: () => void dropRecovery(folder).then(() => resolve(null), () => resolve(null)) },
@@ -1371,6 +1424,10 @@ export class EditorSession {
         break
       case "openFile":
         if (CODE_FILE.test(command.path)) await this.openScript(command.path)
+        else if (/\.json$/i.test(command.path)) await this.openScene(command.path)
+        break
+      case "openScene":
+        await this.openScene(command.path)
         break
       case "draftFile":
         await this.draftFile(command.path, command.text)
@@ -1595,9 +1652,20 @@ export class EditorSession {
     this.set("editor:console", [])
     this.runErrorShown = false
     this.runner.send({ type: "catalyst:options", frequentSignals: Boolean(this.app.shared("editor:signalLogFrequent").value) })
-    const live = this.recipe.serialise?.(this._root, this.engine) ?? this.engine.serialise(this._root)
-    const scene = this.folder ? await this.folder.toPaths(live) : live
-    this.runner.send({ type: "catalyst:run", recipe: this.recipe.name, scene, folder: this.folder?.transfer() ?? null })
+    const folder = this.folder
+    const sceneFile = this.sceneFile
+    if (folder && sceneFile && this.recipe.files?.[0]) {
+      // A file other than the project's scene is open: the game runs as saved, with that file as it is now.
+      const scene = await folder.readJSON<NodeJSON>(this.recipe.files[0])
+      const open = this.engine.serialise(this._root)
+      if (!this.sceneFileHasTransform) delete open.transform
+      const files = { [sceneFile]: await folder.toPaths(open) }
+      this.runner.send({ type: "catalyst:run", recipe: this.recipe.name, scene, folder: folder.transfer(), files, launch: { open: sceneFile } })
+    } else {
+      const live = this.recipe.serialise?.(this._root, this.engine) ?? this.engine.serialise(this._root)
+      const scene = folder ? await folder.toPaths(live) : live
+      this.runner.send({ type: "catalyst:run", recipe: this.recipe.name, scene, folder: folder?.transfer() ?? null })
+    }
     this.publishProject("running")
   }
 
@@ -1656,7 +1724,7 @@ export class EditorSession {
 
   private async save(folder: ProjectFolder): Promise<void> {
     if (!this._root) return
-    const written = await this.recipe.save(folder, this._root, this.engine)
+    const written = await this.writeRoot(folder, this._root)
     void this.publishFiles()
     this.history.markSaved()
     this.publishProject(`saved ${written.join(", ")}`)

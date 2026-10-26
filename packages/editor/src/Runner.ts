@@ -5,6 +5,8 @@ import { browserFolders, folderLoader, type FolderSource, type ProjectFolder } f
 import type { Recipe } from "./recipe"
 import { windowRunnerPageLink, type RunMessage, type RunnerPageLink } from "./RunnerLink"
 import { ScriptCompiler } from "./ScriptCompiler"
+import { readProjectSettings, slug } from "./project"
+import { overlaid } from "./recovery"
 import { SignalTap } from "./signalTap"
 import { ConsoleTap } from "./consoleTap"
 
@@ -64,7 +66,10 @@ export class Runner {
   }
 
   async play(message: RunMessage): Promise<void> {
-    await this.playProject(message.scene, message.folder ? this.folders.fromTransfer(message.folder) : null)
+    const folder = message.folder ? this.folders.fromTransfer(message.folder) : null
+    const files = Object.fromEntries(Object.entries(message.files ?? {}).map(([path, json]) => [path, JSON.stringify(json)]))
+    this.engine.launch = { ...(message.launch ?? {}) }
+    await this.playProject(message.scene, folder && message.files ? overlaid(folder, files) : folder)
   }
 
   /** Play a scene, its names already paths, with the files it names read from `folder`. */
@@ -73,6 +78,8 @@ export class Runner {
     this.console?.restart()
     const folder = from ? await AssetFolder.open(from) : null
     if (folder) this.engine.loader = folderLoader(folder)
+    // Saves are the project's own, apart from any other played on this site or in this editor.
+    if (folder) this.engine.saves.namespace = slug((await readProjectSettings(folder).catch(() => null))?.name ?? folder.name)
     this.engine.scripts.invalidate()
     if (folder) this.engine.scripts.loader = new ScriptCompiler(folder).loader
     const made = this.engine.create(scene)

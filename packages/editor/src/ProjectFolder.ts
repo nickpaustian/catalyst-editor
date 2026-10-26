@@ -755,7 +755,18 @@ const isAbsolute = (url: string): boolean => /^(?:[a-z]+:)?\/\//i.test(url) || u
  * passes absolute ones to the network, so a scene file and the files it
  * names load from disk exactly as they would from a server.
  */
+/** The files under `dir` in the folder, at any depth, sorted. */
+const filesIn = async (folder: ProjectFolder, dir: string): Promise<string[]> => {
+  const out: string[] = []
+  for (const entry of await folder.list(dir).catch(() => [])) {
+    if (entry.kind === "directory") out.push(...(await filesIn(folder, entry.path)))
+    else out.push(entry.path)
+  }
+  return out.sort()
+}
+
 export const folderLoader = (folder: ProjectFolder, fallback: Loader = fetchLoader()): Loader => ({
+  list: (dir) => filesIn(folder, dir.replace(/^\.?\/+|\/+$/g, "")),
   fetch: (url, init) => (isAbsolute(url) ? (fallback.fetch ?? fetch)(url, init) : folderResponse(folder, url, init)),
   json: (url) => (isAbsolute(url) ? fallback.json(url) : folder.readJSON(url)),
   text: (url) => (isAbsolute(url) ? fallback.text(url) : folder.readText(url)),

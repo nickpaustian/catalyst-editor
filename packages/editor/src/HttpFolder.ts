@@ -1,3 +1,4 @@
+import { FILE_INDEX } from "@nickpaustian/catalyst"
 import type { FileInfo, FolderEntry, FolderTransfer, ProjectFolder, ProjectStorage } from "./ProjectFolder"
 
 const READ_ONLY = "a published project is read-only"
@@ -71,9 +72,21 @@ export class HttpFolder implements ProjectFolder {
     return { size: Number(response.headers.get("content-length")) || 0, modified: Number.isFinite(modified) ? modified : 0 }
   }
 
-  /** A web server lists nothing, so neither does this. */
-  async list(): Promise<FolderEntry[]> {
-    return []
+  private index: Promise<string[]> | null = null
+
+  /** The entries directly under `dir`, from the site's `files.json` index an export writes; nothing without one, as a web server lists nothing. */
+  async list(dir = ""): Promise<FolderEntry[]> {
+    this.index ??= this.readJSON<string[]>(FILE_INDEX).catch(() => [])
+    const prefix = dir.replace(/^\/+|\/+$/g, "")
+    const entries = new Map<string, FolderEntry>()
+    for (const path of await this.index) {
+      if (prefix && !path.startsWith(`${prefix}/`)) continue
+      const rest = path.slice(prefix ? prefix.length + 1 : 0)
+      const [name, ...deeper] = rest.split("/")
+      const at = prefix ? `${prefix}/${name}` : name
+      if (!entries.has(at)) entries.set(at, { path: at, name, kind: deeper.length ? "directory" : "file" })
+    }
+    return [...entries.values()]
   }
 
   transfer(): FolderTransfer {

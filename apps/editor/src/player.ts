@@ -31,6 +31,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const engine = createEngine(sceneRecipe, { container: "#app", grid: false })
   engine.start()
   const runner = new Runner(engine, sceneRecipe, { link: null, debug: params.has("debug") })
+  engine.launch = Object.fromEntries(params)
   Object.assign(window, { engine, runner })
   try {
     const folder = await AssetFolder.open(new HttpFolder(new URL("./project/", location.href)))

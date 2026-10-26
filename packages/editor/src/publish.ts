@@ -1,3 +1,4 @@
+import { FILE_INDEX } from "@nickpaustian/catalyst"
 import type { NodeJSON, SceneMetadata } from "@nickpaustian/catalyst"
 import type { ProjectFolder } from "./ProjectFolder"
 
@@ -34,7 +35,7 @@ export const publish = async ({ project, scene, sceneFile, target, runtime = new
   if (!listed.ok) throw new Error("the player runtime is missing: build it with `npm run build:player` in apps/editor")
   const runtimeFiles = (await listed.json()) as string[]
   const projectFiles = (await filesUnder(project, "")).filter((path) => path !== sceneFile)
-  const total = runtimeFiles.length + projectFiles.length + 2
+  const total = runtimeFiles.length + projectFiles.length + 3
   let done = 0
   const step = () => onProgress?.(++done, total)
   for (const path of runtimeFiles) {
@@ -53,6 +54,10 @@ export const publish = async ({ project, scene, sceneFile, target, runtime = new
     await target.writeFile(PUBLISHED_PROJECT_DIR + path, await project.readFile(path))
     step()
   }
+  // A web server lists nothing, so the project's files are listed for a game that looks for them (its levels, say).
+  const index = [sceneFile, ...projectFiles].filter((path) => path !== FILE_INDEX).sort()
+  await target.writeFile(PUBLISHED_PROJECT_DIR + FILE_INDEX, new Blob([JSON.stringify(index, null, 2) + "\n"], { type: "application/json" }))
+  step()
   return total
 }
 

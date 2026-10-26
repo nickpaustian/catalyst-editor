@@ -9,6 +9,10 @@ export interface RunMessage {
   recipe: string
   scene: NodeJSON
   folder: FolderTransfer | null
+  /** Node-tree files read as given instead of from the folder: the one the editor has open, unsaved edits and all. */
+  files?: Record<string, NodeJSON>
+  /** For `engine.launch`: `open`, the file the editor had open. */
+  launch?: Record<string, string>
 }
 
 /** How the runner should report while it plays, sent with each run and whenever it changes. */

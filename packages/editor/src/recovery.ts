@@ -9,6 +9,8 @@ export interface Recovery {
   kept: number
   files: Record<string, string | Blob>
   code: { path: string; text: string }[]
+  /** The node-tree file being edited, when it wasn't the project's own scene. */
+  scene?: string | null
 }
 
 interface Stored extends Recovery {
@@ -48,7 +50,7 @@ const sameFolder = async (a: FolderTransfer, b: FolderTransfer): Promise<boolean
 export const readRecovery = async (folder: ProjectFolder): Promise<Recovery | null> => {
   const stored = await withStore<Stored | undefined>("readonly", (store) => store.get(keyOf(folder)))
   if (!stored || !(await sameFolder(stored.transfer, folder.transfer()))) return null
-  return { kept: stored.kept, files: stored.files, code: Array.isArray(stored.code) ? stored.code : [] }
+  return { kept: stored.kept, files: stored.files, code: Array.isArray(stored.code) ? stored.code : [], scene: stored.scene ?? null }
 }
 
 export const keepRecovery = async (folder: ProjectFolder, recovery: Recovery): Promise<void> => {
