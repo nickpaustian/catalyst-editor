@@ -46,6 +46,8 @@ import { sendCommand } from '../commands.ts'
 import { PREVIEW_DEFAULT } from '../cells.ts'
 import { ModelViewer } from '../previews.ts'
 import { ComponentPreview, cellsOf, propsOf } from '../componentPreview.ts'
+import { storage } from '../preferences.ts'
+import { PROJECT_DEFAULT } from '../cells.ts'
 
 interface Input { key: string; kind: 'cell' | 'prop'; name: string; type: 'boolean' | 'number' | 'string' | 'json'; value: unknown; text: string; invalid: boolean }
 
@@ -77,6 +79,22 @@ let shownSheet = ''
 // Props set by hand outlive an edit of the source; they go when another file is shown.
 let propValues: Record<string, unknown> = {}
 let cellWatchers: (() => void)[] = []
+
+// What a component's preview was set to (its cells, props set by hand and stylesheet), kept per project and file in this browser.
+interface Remembered { cells?: Record<string, unknown>; props?: Record<string, unknown>; stylesheet?: string }
+const project = shared('editor:project', PROJECT_DEFAULT)
+const rememberKey = (path: string) => `component-preview:${project.value?.name ?? ''}:${path}`
+const remembered = (path: string): Remembered => storage.get<Remembered>(rememberKey(path), {}) ?? {}
+// The saved cells are put back once, after the first mount of a file; later mounts keep what the cells hold.
+let restoreFor = ''
+
+function rememberPreview() {
+  const path = cell.value?.path
+  if (!path || !component || cell.value?.kind !== 'component') return
+  const cells: Record<string, unknown> = {}
+  for (const name of cellsOf(shownSource)) cells[name] = component.cell(name).value
+  storage.set<Remembered>(rememberKey(path), { cells, props: propValues, stylesheet: state.stylesheet })
+}
 
 const typeOf = (value: unknown): Input['type'] => (typeof value === 'boolean' ? 'boolean' : typeof value === 'number' ? 'number' : typeof value === 'string' || value === undefined ? 'string' : 'json')
 const textOf = (value: unknown, type: Input['type']) => (type === 'json' ? JSON.stringify(value) : value === undefined ? '' : String(value))
@@ -115,6 +133,11 @@ function showComponent(next: typeof PREVIEW_DEFAULT) {
     if (error) return void (state.componentError = error)
     state.componentError = ''
     for (const stop of cellWatchers.splice(0)) stop()
+    if (restoreFor === next.path) {
+      restoreFor = ''
+      const saved = remembered(next.path).cells ?? {}
+      for (const name of cellsOf(next.source)) if (name in saved) view.cell(name).set(saved[name])
+    }
     const inputs: Input[] = []
     for (const name of cellsOf(next.source)) {
       const shared = view.cell(name)
@@ -123,6 +146,7 @@ function showComponent(next: typeof PREVIEW_DEFAULT) {
       cellWatchers.push(shared.subscribe((value: unknown) => {
         const at = state.inputs.findIndex((input) => input.key === `cell:${name}`)
         if (at >= 0) state.inputs[at] = inputOf('cell', name, value)
+        rememberPreview()
       }))
     }
     for (const [name, value] of Object.entries(props)) inputs.push(inputOf('prop', name, value))
@@ -153,15 +177,19 @@ function setInput(input: Input, event: Event) {
   }
   if (input.kind === 'cell') return component?.cell(input.name).set(value)
   propValues[input.name] = value
+  rememberPreview()
   shownSource = ''
   showComponent(cell.value)
 }
 
 function chooseSheet() {
   sendCommand({ type: 'previewStylesheet', path: state.stylesheet })
+  rememberPreview()
 }
 
 function resetComponent() {
+  const path = cell.value?.path
+  if (path) storage.remove(rememberKey(path))
   propValues = {}
   dropComponent()
   if (cell.value?.open && cell.value.kind === 'component') showComponent(cell.value)
@@ -204,6 +232,12 @@ cell.subscribe((next: typeof PREVIEW_DEFAULT | undefined) => {
     propValues = {}
     dropComponent()
     state.componentError = ''
+    if (next.kind === 'component') {
+      const saved = remembered(next.path)
+      propValues = { ...(saved.props ?? {}) }
+      restoreFor = next.path
+      if (saved.stylesheet !== undefined && saved.stylesheet !== next.stylesheet) sendCommand({ type: 'previewStylesheet', path: saved.stylesheet })
+    }
     if (next.kind === 'model') showModel(next)
     else dropViewer()
     setTimeout(() => refs.frame?.focus({ preventScroll: true }), 0)
