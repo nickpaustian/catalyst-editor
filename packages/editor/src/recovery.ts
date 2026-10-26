@@ -3,12 +3,12 @@ import type { FolderTransfer, ProjectFolder } from "./ProjectFolder"
 const DB = "catalyst-editor-recovery"
 const STORE = "projects"
 
-/** Unsaved work kept against a crash: the files a save would have written, and the code pane's unsaved file. */
+/** Unsaved work kept against a crash: the files a save would have written, and the code pane's unsaved files. */
 export interface Recovery {
   /** When it was kept, in ms since the epoch. */
   kept: number
   files: Record<string, string | Blob>
-  code: { path: string; text: string } | null
+  code: { path: string; text: string }[]
 }
 
 interface Stored extends Recovery {
@@ -48,7 +48,7 @@ const sameFolder = async (a: FolderTransfer, b: FolderTransfer): Promise<boolean
 export const readRecovery = async (folder: ProjectFolder): Promise<Recovery | null> => {
   const stored = await withStore<Stored | undefined>("readonly", (store) => store.get(keyOf(folder)))
   if (!stored || !(await sameFolder(stored.transfer, folder.transfer()))) return null
-  return { kept: stored.kept, files: stored.files, code: stored.code }
+  return { kept: stored.kept, files: stored.files, code: Array.isArray(stored.code) ? stored.code : [] }
 }
 
 export const keepRecovery = async (folder: ProjectFolder, recovery: Recovery): Promise<void> => {

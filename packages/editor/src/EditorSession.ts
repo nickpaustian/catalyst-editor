@@ -114,12 +114,14 @@ export interface EditorCells {
   "editor:fileInfo": { path: string; size: number; modified: number; preview: string | null; facts: string } | null
   /** The files the code pane edits: scripts, components and stylesheets. */
   "editor:codeFiles": string[]
-  /** The script file open in the code pane: its text as last read or saved, and what happened on the last save; `draft` is unsaved text to show in its place. */
+  /** A file for the code pane to show, in a tab of its own or brought forward: its text as read, and `draft`, unsaved text to show in its place; no path closes every tab. */
   "editor:code": { path: string | null; text: string; status: string; draft?: string }
+  /** News of a file the code pane may have open: saved or reloaded (`text`), what happened (`status`), renamed (`to`) or deleted (`gone`). */
+  "editor:codeFile": { path: string; text?: string; status: string; to?: string; gone?: boolean } | null
   /** Bumped when everything should save: the code pane answers with its unsaved file. */
   "editor:saveRequest": number
-  /** The code pane's file while its text differs from what was last read or saved. */
-  "editor:codeUnsaved": { path: string; text: string } | null
+  /** The code pane's files whose text differs from what was last read or saved. */
+  "editor:codeUnsaved": { path: string; text: string }[]
   "editor:selection": {
     id: number
     name: string
@@ -221,7 +223,7 @@ export type EditorCommand =
   | { type: "streamableClose" }
   | { type: "saveScript"; path: string; text: string }
   | { type: "draftFile"; path: string; text: string }
-  | { type: "closeScript" }
+  | { type: "closeScript"; path: string }
   | { type: "focus" }
   | { type: "setTransform"; position: { x: number; y: number; z: number }; rotation: { x: number; y: number; z: number } }
   | { type: "setProperty"; key: string; value: unknown; pick?: boolean }
@@ -511,7 +513,8 @@ export class EditorSession {
     this.set("editor:fileInfo", null)
     this.set("editor:code", { path: null, text: "", status: "" })
     this.set("editor:saveRequest", 0)
-    this.set("editor:codeUnsaved", null)
+    this.set("editor:codeFile", null)
+    this.set("editor:codeUnsaved", [])
     this.app.shared("editor:codeUnsaved").subscribe(() => this.autosaveSoon())
     this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
     this.set("editor:streamable", { ...STREAMABLE_DEFAULT, available: this.converter !== null })
@@ -557,7 +560,7 @@ export class EditorSession {
     this.camera.focusPoint(new Vector3(0, 0.5, 0), 8)
     if (folder) await folder.remember()
     void this.publishRecent()
-    if (folder && recovery?.code) await this.restoreCode(folder, recovery.code)
+    if (folder && recovery) await this.restoreCode(folder, recovery.code)
     if (folder?.watch) {
       try {
         this.unwatch = await folder.watch((paths) => this.onDiskChange(paths))
@@ -589,9 +592,13 @@ export class EditorSession {
     void this.publishRecent()
   }
 
+  private get unsavedCode(): EditorCells["editor:codeUnsaved"] {
+    return (this.app.shared("editor:codeUnsaved").value as EditorCells["editor:codeUnsaved"] | undefined) ?? []
+  }
+
   /** Whether closing the project now would lose anything: scene edits or the code pane's file. */
   get hasUnsavedWork(): boolean {
-    return Boolean(this._root) && (this.history.isDirty || this.app.shared("editor:codeUnsaved").value != null)
+    return Boolean(this._root) && (this.history.isDirty || this.unsavedCode.length > 0)
   }
 
   /**
@@ -648,8 +655,7 @@ export class EditorSession {
     }
     const capture = capturing(folder)
     if (this.history.isDirty) await this.recipe.save(capture.folder, root, this.engine)
-    const code = (this.app.shared("editor:codeUnsaved").value as EditorCells["editor:codeUnsaved"]) ?? null
-    await keepRecovery(folder, { kept: Date.now(), files: capture.files, code })
+    await keepRecovery(folder, { kept: Date.now(), files: capture.files, code: this.unsavedCode })
     this.recoveryKept = true
   }
 
@@ -665,7 +671,7 @@ export class EditorSession {
     const recovery = await readRecovery(folder).catch(() => null)
     if (!recovery) return null
     const name = this.settings?.name ?? folder.name
-    const what = [Object.keys(recovery.files).length ? "the scene" : "", recovery.code ? recovery.code.path : ""].filter(Boolean).join(" and ")
+    const what = [Object.keys(recovery.files).length ? "the scene" : "", ...recovery.code.map((file) => file.path)].filter(Boolean).join(", ").replace(/, ([^,]*)$/, " and $1")
     return new Promise((resolve) =>
       openConfirm(`Restore unsaved changes to ${name}?`, `Changes to ${what} from ${ago(recovery.kept)} were never saved.\nRestore them to carry on where you left off, or discard them and open what is saved.`, [
         { label: "Discard", run: () => void dropRecovery(folder).then(() => resolve(null), () => resolve(null)) },
@@ -674,18 +680,19 @@ export class EditorSession {
     )
   }
 
-  /** The code pane's unsaved file as it was kept, shown unsaved over what is on disk. */
-  private async restoreCode(folder: ProjectFolder, code: { path: string; text: string }): Promise<void> {
-    const text = await folder.readText(code.path).catch(() => "")
-    this.set("editor:code", { path: code.path, text, status: "restored unsaved changes", draft: code.text })
+  /** The code pane's unsaved files as they were kept, each shown unsaved over what is on disk. */
+  private async restoreCode(folder: ProjectFolder, code: Recovery["code"]): Promise<void> {
+    for (const file of code) {
+      const text = await folder.readText(file.path).catch(() => "")
+      this.set("editor:code", { path: file.path, text, status: "restored unsaved changes", draft: file.text })
+    }
   }
 
-  /** Write the code pane's unsaved file here and now, not through the pane, so it is on disk before the project goes. */
+  /** Write the code pane's unsaved files here and now, not through the pane, so they are on disk before the project goes. */
   private async saveUnsavedCode(): Promise<void> {
-    const unsaved = this.app.shared("editor:codeUnsaved").value as EditorCells["editor:codeUnsaved"]
-    if (!unsaved || !this.folder) return
-    await this.saveScript(unsaved.path, unsaved.text)
-    this.set("editor:codeUnsaved", null)
+    if (!this.folder) return
+    for (const file of this.unsavedCode) await this.saveScript(file.path, file.text)
+    this.set("editor:codeUnsaved", [])
   }
 
   private close(): void {
@@ -700,6 +707,7 @@ export class EditorSession {
     this.nodesById.clear()
     this.collapsed.clear()
     this.hidden = null
+    this.drafts.clear()
   }
 
   dispose(): void {
@@ -1282,8 +1290,7 @@ export class EditorSession {
         await this.saveScript(command.path, command.text)
         break
       case "closeScript":
-        await this.discardDrafts()
-        this.set("editor:code", { path: null, text: "", status: "" })
+        await this.discardDraft(command.path)
         break
       case "focus":
         this.focusSelected()
@@ -1382,15 +1389,14 @@ export class EditorSession {
     await this.relinkAssets(folder)
     void this.publishFiles()
     await this.reloadUIFiles(changed)
+    for (const path of changed.filter((path) => CODE_FILE.test(path))) {
+      try {
+        this.set("editor:codeFile", { path, text: await folder.readText(path), status: `reloaded ${path} from disk` })
+      } catch {}
+    }
     const notes: string[] = []
     if (scripts.length) {
       await this.reloadScripts()
-      const code = this.app.shared("editor:code").value as EditorCells["editor:code"] | undefined
-      if (code?.path && scripts.includes(code.path)) {
-        try {
-          this.set("editor:code", { path: code.path, text: await folder.readText(code.path), status: `reloaded ${code.path} from disk` })
-        } catch {}
-      }
       notes.push(`${scripts.length} script${scripts.length === 1 ? "" : "s"}`)
     }
     if (prefabs.length) {
@@ -1632,8 +1638,7 @@ export class EditorSession {
     }
     this.publishProject(`renamed ${from} to ${to}`)
     this.retarget(from, to)
-    const code = this.app.shared("editor:code").value as EditorCells["editor:code"] | undefined
-    if (code?.path === from) this.set("editor:code", { ...code, path: to })
+    this.set("editor:codeFile", { path: from, to, status: "" })
     await this.loadScriptFiles()
     await this.loadPrefabs()
   }
@@ -1704,8 +1709,7 @@ export class EditorSession {
             .remove(path)
             .then(() => {
               this.publishProject(`deleted ${path}`)
-              const code = this.app.shared("editor:code").value as EditorCells["editor:code"] | undefined
-              if (code?.path === path) this.set("editor:code", { path: null, text: "", status: "" })
+              this.set("editor:codeFile", { path, gone: true, status: "" })
               this.set("editor:fileInfo", null)
               return this.loadScriptFiles()
             })
@@ -1826,7 +1830,6 @@ export class EditorSession {
   private async openScript(path: string): Promise<void> {
     const folder = this.folder
     if (!folder) return
-    await this.discardDrafts()
     try {
       this.set("editor:code", { path, text: await folder.readText(path), status: "" })
     } catch {
@@ -1848,11 +1851,11 @@ export class EditorSession {
 
   /** Show a component or stylesheet's unsaved text in the viewport, and say whether it compiled. */
   private async draftFile(path: string, text: string): Promise<void> {
-    if (!PREVIEWED_CODE.test(path) || (this.app.shared("editor:code").value as EditorCells["editor:code"])?.path !== path) return
+    if (!PREVIEWED_CODE.test(path)) return
     this.drafts.set(path, text)
     this.followInPreview(path, text)
     const status = await this.reloadAndReport(path, "previewing")
-    this.set("editor:code", { ...(this.app.shared("editor:code").value as EditorCells["editor:code"]), status })
+    this.set("editor:codeFile", { path, status })
   }
 
   /** Reload what reads a file and give back the first component's error, or `ok` with the file named. */
@@ -1872,13 +1875,11 @@ export class EditorSession {
     return readers || previewed ? `${ok} ${path}` : `${ok} ${path} · nothing in the scene uses it`
   }
 
-  /** Unsaved texts back to what is on disk, and what showed them reloaded. */
-  private async discardDrafts(): Promise<void> {
-    if (!this.drafts.size) return
-    const paths = [...this.drafts.keys()]
-    this.drafts.clear()
-    for (const path of paths) this.followInPreview(path, await this.readDraftOrFile(path))
-    await this.reloadUIFiles(paths)
+  /** A closed tab's unsaved text back to what is on disk, and what showed it reloaded. */
+  private async discardDraft(path: string): Promise<void> {
+    if (!this.drafts.delete(path)) return
+    this.followInPreview(path, await this.readDraftOrFile(path))
+    await this.reloadUIFiles([path])
   }
 
   /** Write a file from the code pane: a script rebuilds every script, reporting a build error against the file; a component or stylesheet reloads what shows it. */
@@ -1891,7 +1892,7 @@ export class EditorSession {
       this.followInPreview(path, text)
       const status = await this.reloadAndReport(path, "saved")
       await this.publishFiles()
-      return this.set("editor:code", { path, text, status })
+      return this.set("editor:codeFile", { path, text, status })
     }
     await this.reloadUIFiles([path])
     await this.reloadScripts()
@@ -1903,7 +1904,7 @@ export class EditorSession {
     } catch (error) {
       status = error instanceof Error ? error.message : String(error)
     }
-    this.set("editor:code", { path, text, status })
+    this.set("editor:codeFile", { path, text, status })
   }
 
   /** Slates and UI nodes reading any of these files read them again. */
