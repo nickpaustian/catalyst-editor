@@ -42,6 +42,13 @@ export default class ${className} extends Script<Node3D> {
 }
 `
 
+/** A script with nothing in it yet, for a node that needs one to hold its connections or signals. */
+export const plainScriptTemplate = (className: string): string => `import { Script, type Node3D } from "@nickpaustian/catalyst"
+
+export default class ${className} extends Script<Node3D> {
+}
+`
+
 const dirname = (path: string): string => path.slice(0, path.lastIndexOf("/") + 1)
 
 const normalise = (path: string): string => {

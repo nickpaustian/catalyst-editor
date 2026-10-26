@@ -1,6 +1,7 @@
 <view>
 <aside class="panel">
   <SelectionFields />
+  <SignalsSection />
 
   <div id="recipe-sections"></div>
 </aside>

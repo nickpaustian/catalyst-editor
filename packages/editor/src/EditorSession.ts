@@ -11,7 +11,8 @@ import { browserFolders, folderLoader, pickFile, type FolderSource, type Project
 import { windowRunnerLink, type RunnerLink } from "./RunnerLink"
 import { AssetFolder } from "./AssetFolder"
 import { accepts } from "./fileField"
-import { SCRIPTS_DIR, ScriptCompiler, scriptTemplate } from "./ScriptCompiler"
+import { SCRIPTS_DIR, ScriptCompiler, plainScriptTemplate, scriptTemplate } from "./ScriptCompiler"
+import { CONNECT_DEFAULT, SignalWiring, type ConnectDialog, type SignalsView } from "./SignalWiring"
 import { LEGACY_PROJECT_FILE, PROJECT_EXTENSION, createProject, readProjectImage, readProjectSettings, writeProjectImage, writeProjectSettings, type NewProject, type ProjectSettings } from "./project"
 import { openConfirm } from "./confirm"
 import { capturing, dropRecovery, keepRecovery, overlaid, readRecovery, type Recovery } from "./recovery"
@@ -142,6 +143,9 @@ export interface EditorCells {
     properties: SelectionProperty[]
     scripts: SelectionScript[]
   } | null
+  /** The selected node's signals, who hears them, and what its scripts listen to. */
+  "editor:signals": SignalsView | null
+  "editor:connect": ConnectDialog
 }
 
 export type EditorCommand =
@@ -152,6 +156,12 @@ export type EditorCommand =
   | { type: "forgetRecent"; id: string }
   | { type: "locateRecent"; id: string }
   | { type: "closeProject" }
+  | { type: "openConnect"; mode: "emit" | "listen"; signal?: string }
+  | { type: "closeConnect" }
+  | { type: "connectSignal"; source: number | null; signal: string; target: number; url: string | null; call: string }
+  | { type: "disconnectSignal"; url: string; index: number }
+  | { type: "addSignal"; node: number; url: string | null; name: string }
+  | { type: "removeSignal"; url: string; index: number }
   | { type: "reloadProject" }
   | { type: "openProjectDialog"; mode: "create" | "edit" }
   | { type: "closeProjectDialog" }
@@ -345,6 +355,7 @@ export class EditorSession {
   /** Every file in the project by path, as the files pane last listed them. */
   private projectFiles: string[] = []
   private readonly history = new History()
+  private readonly wiring: SignalWiring
   private dragStart: { node: Node3D; before: Mat4; size: Vector3 | null }[] | null = null
   private vertexDragStart: { mesh: EditMesh; before: number[] } | null = null
   /** The outlines drawn for editable meshes that are hidden but still collide, so they stay findable while editing. */
@@ -464,6 +475,14 @@ export class EditorSession {
     const physics = this.engine.find(Physics)
     if (physics) physics.paused = true
     this.engine.scripts.setRunning(false, this.engine.root, this.engine)
+    this.wiring = new SignalWiring({
+      engine: this.engine,
+      root: () => this._root,
+      idOf: (node) => this.idOf(node as Node3D),
+      nodeById: (id) => this.nodesById.get(id) ?? null,
+      editScript: (url, edit) => this.editScript(url, edit),
+      newScriptFor: (node) => this.newScriptFor(node),
+    })
     this.history.onChange = () => {
       this.publishHistory()
       this.publishProject()
@@ -515,6 +534,8 @@ export class EditorSession {
     this.set("editor:code", { path: null, text: "", status: "" })
     this.set("editor:saveRequest", 0)
     this.set("editor:codeFile", null)
+    this.set("editor:signals", null)
+    this.set("editor:connect", CONNECT_DEFAULT)
     this.set("editor:codeUnsaved", [])
     this.app.shared("editor:codeUnsaved").subscribe(() => this.autosaveSoon())
     this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
@@ -893,7 +914,18 @@ export class EditorSession {
     return rows
   }
 
+  /** The selected node's signals, worked out again only when the selection, the tree or the scripts change, not on every move. */
+  private signalsShown: { node: Node3D | null; stale: boolean } = { node: null, stale: true }
+
+  private publishSignals(): void {
+    const node = this.selected
+    if (!this.signalsShown.stale && this.signalsShown.node === node) return
+    this.signalsShown = { node, stale: false }
+    this.set("editor:signals", node ? this.wiring.view(node) : null)
+  }
+
   private publishTree(): void {
+    this.signalsShown.stale = true
     this.rememberHidden()
     this.set(
       "editor:tree",
@@ -975,6 +1007,7 @@ export class EditorSession {
 
   private publishSelection(): void {
     const node = this.selected
+    this.publishSignals()
     if (!node) {
       this.set("editor:selection", null)
       return
@@ -1046,6 +1079,30 @@ export class EditorSession {
       }
       case "closeProject":
         await this.closeProject()
+        break
+      case "openConnect":
+        if (this.selected) this.set("editor:connect", this.wiring.dialog(command.mode, this.selected, command.signal ?? ""))
+        break
+      case "closeConnect":
+        this.set("editor:connect", CONNECT_DEFAULT)
+        break
+      case "connectSignal":
+        try {
+          await this.wiring.connect(command)
+          this.set("editor:connect", CONNECT_DEFAULT)
+          this.publishProject(`connected ${command.signal} to ${command.call}`)
+        } catch (error) {
+          this.set("editor:connect", { ...(this.app.shared("editor:connect").value as ConnectDialog), error: error instanceof Error ? error.message : String(error) })
+        }
+        break
+      case "disconnectSignal":
+        await this.wiring.disconnect(command.url, command.index).catch((error: unknown) => this.publishProject(error instanceof Error ? error.message : String(error)))
+        break
+      case "addSignal":
+        await this.wiring.addSignal(command.node, command.url, command.name).catch((error: unknown) => this.publishProject(error instanceof Error ? error.message : String(error)))
+        break
+      case "removeSignal":
+        await this.wiring.removeSignal(command.url, command.index).catch((error: unknown) => this.publishProject(error instanceof Error ? error.message : String(error)))
         break
       case "reloadProject":
         await this.reloadProject()
@@ -1570,6 +1627,7 @@ export class EditorSession {
 
   /** Attach a script file to the selected node; its fields appear once it is built. */
   private async attachScript(url: string, node: Node3D | null = this.selected): Promise<void> {
+    this.signalsShown.stale = true
     if (!node || node === this._root) return
     await node.addScript({ url })
     if (this.selected === node) this.publishSelection()
@@ -1589,6 +1647,7 @@ export class EditorSession {
   private readonly knownScripts = new WeakSet<Script>()
 
   private detachScript(index: number): void {
+    this.signalsShown.stale = true
     const node = this.selected
     if (!node) return
     if (index < node.scripts.length) {
@@ -1781,6 +1840,31 @@ export class EditorSession {
     this.set("editor:fileInfo", { path, size: bytes, modified: 0, preview, facts })
   }
 
+  /** Change a script file with `edit`, refused while the code pane holds unsaved changes to it, and rebuild the scripts from it. */
+  private async editScript(url: string, edit: (source: string) => string | null): Promise<void> {
+    const folder = this.folder
+    if (!folder) throw new Error("the project needs a folder before scripts can be written")
+    if (this.unsavedCode.some((file) => file.path === url)) throw new Error(`${url} has unsaved changes in the code pane: save or close it first`)
+    const text = await folder.readText(url)
+    const next = edit(text)
+    if (next === null) throw new Error(`${url} declares its connections or signals in a way the editor can't change; edit it in the code pane`)
+    if (next !== text) await this.saveScript(url, next)
+  }
+
+  /** A script of its own for a node, named after it, attached to it. */
+  private async newScriptFor(node: Node3D): Promise<string | null> {
+    const folder = this.folder
+    if (!folder) return null
+    const className = node.name.replace(/[^\w$]+(.)?/g, (_, next: string | undefined) => (next ?? "").toUpperCase()).replace(/^[^A-Za-z_$]+/, "") || "NodeScript"
+    const base = `${SCRIPTS_DIR}/${slug(className)}`
+    let path = `${base}.ts`
+    for (let n = 2; await folder.exists(path); n++) path = `${base}-${n}.ts`
+    await folder.writeText(path, plainScriptTemplate(className.charAt(0).toUpperCase() + className.slice(1)))
+    await this.loadScriptFiles()
+    await this.attachScript(path, node)
+    return path
+  }
+
   private async newScript(name: string, attach = true): Promise<void> {
     const folder = this.folder
     if (!folder) return this.publishProject("the project needs a folder before scripts can be written")
@@ -1943,6 +2027,7 @@ export class EditorSession {
       for (const json of node.pendingScripts) urls.add(json.url)
     })
     await Promise.all([...urls].map((url) => this.engine.scripts.reload(url, root)))
+    this.signalsShown.stale = true
     await this.loadScriptFiles()
     this.publishProject(urls.size ? `rebuilt ${urls.size} script${urls.size === 1 ? "" : "s"}` : "no scripts in the scene")
     this.publishSelection()
@@ -2230,12 +2315,26 @@ export class EditorSession {
     const clean = name.trim()
     if (!node || !clean || clean === node.name) return
     const before = node.name
+    const references = this.wiring.referencesTo(node)
     if (!node.rename(clean)) {
       this.publishProject(`"${clean}" already exists under ${node.parent?.name}`)
       this.publishSelection()
       return
     }
-    this.record("rename", () => node.rename(before), () => node.rename(clean))
+    // Connections that hear the node are written by name, so they follow it, both ways through undo.
+    const follow = () => void this.wiring.retarget(references, node).catch((error: unknown) => this.publishProject(error instanceof Error ? error.message : String(error)))
+    if (references.length) follow()
+    this.record(
+      "rename",
+      () => {
+        node.rename(before)
+        if (references.length) follow()
+      },
+      () => {
+        node.rename(clean)
+        if (references.length) follow()
+      },
+    )
     this.publishTree()
     this.publishSelection()
   }
