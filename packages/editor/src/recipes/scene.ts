@@ -1,4 +1,4 @@
-import { Button, Camera, Colour, Grid, Html, Label, Light, Model, Node3D, Panel, Path, Picture, Slate, Stack, StreamedSurface, Toggle, type AntiAliasing, type Catalyst, type MetadataLink, type NodeJSON, type RenderSettings, type SceneMetadata } from "@nickpaustian/catalyst"
+import { Button, Camera, Colour, Grid, Html, Sprite, Label, Light, Model, Node3D, Panel, Path, Picture, Slate, Stack, StreamedSurface, Toggle, type AntiAliasing, type Catalyst, type MetadataLink, type NodeJSON, type RenderSettings, type SceneMetadata } from "@nickpaustian/catalyst"
 import { pickFile } from "../ProjectFolder"
 import { Interactable } from "@nickpaustian/catalyst/interaction"
 import { BoxCollider, CapsuleCollider, MeshCollider, SphereCollider } from "@nickpaustian/catalyst/physics"
@@ -174,6 +174,13 @@ export const sceneRecipe: Recipe = {
             { name: "wall", colour: 0x3b3f47, height: 1, tags: [] },
           ],
         }),
+    },
+    {
+      kind: "Sprite",
+      label: "Sprite",
+      cls: Sprite,
+      description: "Pixel art from a sheet of frames, standing on its position and turned to the camera, sharp and cut out; it plays named animations (name, frames, frames a second, once).",
+      make: (o) => new Sprite({ ...o, columns: 4, rows: 3, animations: "idle 0-3 4\nwalk 4-7 8\nattack 8-11 10 once", animation: "idle" }),
     },
     { kind: "PlayerStart", label: "Player start", cls: PlayerStart, description: "Where a run puts the player: its position and facing. The first one in the scene is used.", make: (o) => new PlayerStart(o) },
     { kind: "Box", label: "Box", cls: Box, description: "A block with a mesh and a matching collider: floors, walls, crates.", make: (o) => new Box(o) },
