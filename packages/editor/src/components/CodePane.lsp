@@ -1,7 +1,7 @@
 <view>
 <div class="code-pane">
   <div class="tabs" role="tablist" aria-label="Open files" $if="state.tabs.length">
-    <div $for="tab in state.tabs" $key="tab.path" class="tab" role="tab" tabindex="0" $aria-selected="String(tab.path === state.path)" $title="tab.path" @click="activate(tab.path)" @auxclick="closeOnMiddle($event, tab.path)" @keydown="tabKey($event, tab.path)">
+    <div $for="tab in state.tabs" $key="tab.path" class="tab" role="tab" tabindex="0" $aria-selected="String(tab.path === state.path)" $title="tab.path" @click="choose(tab.path)" @auxclick="closeOnMiddle($event, tab.path)" @keydown="tabKey($event, tab.path)">
       <span class="tab-name">{{ tab.name }}</span>
       <button class="tab-close" type="button" tabindex="-1" $class="{ unsaved: tab.dirty }" $aria-label="'Close ' + tab.path" $title="tab.dirty ? 'Unsaved: close' : 'Close'" @click="closeTab($event, tab.path)"></button>
     </div>
@@ -36,6 +36,7 @@ import { css } from '@codemirror/lang-css'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { sendCommand } from '../commands.ts'
 import { openConfirm } from '../confirm.ts'
+import { storage } from '../preferences.ts'
 
 interface Code { path: string | null; text: string; status: string; draft?: string }
 interface FileNews { path: string; text?: string; status: string; to?: string; gone?: boolean }
@@ -44,6 +45,7 @@ interface Tab { path: string; name: string; dirty: boolean }
 interface Kept { state: EditorState; shown: string; status: string }
 
 const code = shared('editor:code', { path: null, text: '', status: '' })
+const project = shared('editor:project', null)
 const news = shared('editor:codeFile', null)
 shared('editor:codeFiles', [])
 const saveRequest = shared('editor:saveRequest', 0)
@@ -79,6 +81,22 @@ const extensionsFor = (path: string) => [
 ]
 
 const blank = () => EditorState.create({ doc: '', extensions: [oneDark, EditorState.readOnly.of(true), EditorView.editable.of(false)] })
+
+// The open tabs and the one in front, kept per project in this browser, so a reload comes back to them.
+const TABS_KEY = 'code-tabs'
+let tabsOf = ''
+
+function rememberTabs() {
+  if (tabsOf) storage.set(`${TABS_KEY}:${tabsOf}`, { paths: state.tabs.map((tab) => tab.path), active: state.path || null })
+}
+
+project.subscribe((next: { open: boolean; name: string | null } | null | undefined) => {
+  const name = next?.open ? next.name ?? '' : ''
+  if (name === tabsOf) return
+  tabsOf = name
+  const saved = name ? storage.get<{ paths?: string[]; active?: string | null } | null>(`${TABS_KEY}:${name}`, null) : null
+  if (saved?.paths?.length) sendCommand({ type: 'openScripts', paths: saved.paths, active: saved.active ?? null })
+})
 
 // Every tab whose text differs from what was last read or saved, for the session's saves, questions and autosave.
 function publishUnsaved() {
@@ -126,7 +144,7 @@ function activate(path: string) {
   state.choice = state.path
   state.dirty = Boolean(state.tabs.find((tab) => tab.path === state.path)?.dirty)
   showStatus(entry?.status ?? '')
-  if (entry) view.focus()
+  if (entry) rememberTabs()
 }
 
 /** Replace a tab's whole text, shown or kept. */
@@ -176,6 +194,7 @@ function hear(next: FileNews | null | undefined) {
     const tab = state.tabs.find((tab) => tab.path === next.path)
     if (tab) Object.assign(tab, { path: next.to, name: nameOf(next.to) })
     if (state.path === next.path) state.path = state.choice = next.to
+    rememberTabs()
     return publishUnsaved()
   }
   if (next.text !== undefined) {
@@ -200,6 +219,7 @@ function drop(path: string) {
     state.path = ''
     activate(state.tabs[Math.min(index, state.tabs.length - 1)]?.path ?? '')
   }
+  rememberTabs()
   publishUnsaved()
 }
 
@@ -227,7 +247,7 @@ function closeOnMiddle(event: MouseEvent, path: string) {
 function tabKey(event: KeyboardEvent, path: string) {
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault()
-    activate(path)
+    choose(path)
   } else if (event.key === 'Delete' || event.key === 'Backspace') {
     event.preventDefault()
     closeTab(null, path)
@@ -261,11 +281,13 @@ saveRequest.subscribe((n: number | undefined) => {
   for (const tab of state.tabs) if (tab.dirty) sendCommand({ type: 'saveScript', path: tab.path, text: textOf(tab.path) })
 })
 
-function choose() {
-  const path = state.choice
+// A tab or a file picked by hand: brought forward with the typing going to it.
+function choose(path = state.choice) {
   if (!path) state.choice = state.path
-  else if (kept.has(path)) activate(path)
-  else sendCommand({ type: 'openScript', path })
+  else if (kept.has(path)) {
+    activate(path)
+    view?.focus()
+  } else sendCommand({ type: 'openScript', path })
 }
 
 onMounted(() => {

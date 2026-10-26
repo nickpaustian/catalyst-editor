@@ -201,6 +201,7 @@ export type EditorCommand =
   | { type: "newScript"; name: string; attach?: boolean }
   | { type: "reloadScripts" }
   | { type: "openScript"; path: string }
+  | { type: "openScripts"; paths: string[]; active: string | null }
   | { type: "importAsset"; dir?: string }
   | { type: "importDropped"; dir?: string; files: File[] }
   | { type: "renameFile"; from: string; to: string }
@@ -1221,6 +1222,9 @@ export class EditorSession {
       case "openScript":
         await this.openScript(command.path)
         break
+      case "openScripts":
+        await this.openScripts(command.paths, command.active)
+        break
       case "importAsset":
         await this.importAsset(command.dir)
         break
@@ -1825,6 +1829,16 @@ export class EditorSession {
     const path = await folder.importFile(file, dir)
     this.publishProject(`imported ${path}`)
     await this.publishFiles()
+  }
+
+  /** Tabs the code pane had open, read again in their order, then `active` brought forward; files gone since are left out. */
+  private async openScripts(paths: string[], active: string | null): Promise<void> {
+    const folder = this.folder
+    if (!folder) return
+    const present: string[] = []
+    for (const path of paths) if (await folder.exists(path).catch(() => false)) present.push(path)
+    if (active && present.includes(active)) present.push(active)
+    for (const path of present) if (this.folder === folder) await this.openScript(path)
   }
 
   private async openScript(path: string): Promise<void> {
