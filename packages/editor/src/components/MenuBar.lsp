@@ -158,8 +158,9 @@ function setStreaming(preset: string) {
 function resetLayout() {
   state.open = null
   preferences.resetLayout()
+  preferences.resetFloating()
   const panes = (window as any).panes
-  if (panes) panes.layout = preferences.layout
+  if (panes) panes.replace(preferences.layout, preferences.floating)
 }
 </logic>
 

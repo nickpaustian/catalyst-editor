@@ -75,7 +75,7 @@ export class Preference<T> {
 }
 
 import { defaultStreamingQuality, type StreamingQuality } from "@nickpaustian/catalyst"
-import { addTabs, isSingleKindLayout, isValidLayout, leafOf, pane, split, upgradeLayout, type LayoutNode, type PaneKind } from "./panes/layout"
+import { addTabs, emptyFloating, isSingleKindLayout, isValidFloating, isValidLayout, leafOf, pane, split, upgradeLayout, type FloatingState, type LayoutNode, type PaneKind } from "./panes/layout"
 
 export const PANE_KINDS: PaneKind[] = ["scene", "viewport", "inspector", "environment", "code", "files"]
 
@@ -95,6 +95,12 @@ const layout = new Preference<LayoutNode>({
   key: "layout-v2",
   initial: defaultLayout(),
   fallback: defaultLayout,
+})
+
+const floating = new Preference<FloatingState>({
+  key: "floating-v1",
+  initial: emptyFloating(),
+  fallback: emptyFloating,
 })
 
 export interface SnapSettings {
@@ -144,8 +150,22 @@ export const preferences = {
   setLayout: layout.set,
   resetLayout: layout.reset,
 
+  /** The floating windows; any that no longer fit the known kinds, or hold a kind the tree also has, are dropped. */
+  get floating(): FloatingState {
+    const tree = preferences.layout
+    const stored: unknown = floating.value
+    if (isValidFloating(stored, PANE_KINDS, tree)) return stored
+    // The windows are dropped, but where each kind's window was is kept when it still reads.
+    const rects = (stored as Partial<FloatingState> | null)?.rects
+    const kept = { panes: [], rects }
+    return isValidFloating(kept, PANE_KINDS, tree) ? kept : emptyFloating()
+  },
+  setFloating: floating.set,
+  resetFloating: floating.reset,
+
   init: () => {
     layout.init()
+    floating.init()
     snap.init()
     streaming.init()
     publish()

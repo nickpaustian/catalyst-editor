@@ -41,6 +41,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     },
     layout: preferences.layout,
     onChange: preferences.setLayout,
+    floating: preferences.floating,
+    onFloatingChange: preferences.setFloating,
   })
   ;(window as any).panes = panes
 

@@ -246,3 +246,46 @@ export const upgradeLayout = (node: any): unknown => {
   if (node.type === "split" && Array.isArray(node.children)) return { ...node, children: node.children.map(upgradeLayout) }
   return node
 }
+
+/** A window's place on the page, in CSS pixels. */
+export interface FloatRect {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+/** A pane popped out of the tree: a leaf of tabs in a window of its own, above the layout. */
+export interface FloatingPane {
+  leaf: PaneLeaf
+  rect: FloatRect
+}
+
+/** The floating windows, front last, and where each kind's window was last, so it reopens there. */
+export interface FloatingState {
+  panes: FloatingPane[]
+  rects: Record<PaneKind, FloatRect>
+}
+
+export const emptyFloating = (): FloatingState => ({ panes: [], rects: {} })
+
+const isRect = (value: any): value is FloatRect =>
+  Boolean(value) && ["left", "top", "width", "height"].every((key) => typeof value[key] === "number" && Number.isFinite(value[key]))
+
+/** Floating windows that hold known kinds, none of them also in `layout` or in another window. */
+export const isValidFloating = (value: unknown, kinds: Iterable<PaneKind>, layout: LayoutNode): value is FloatingState => {
+  const state = value as FloatingState
+  if (!state || typeof state !== "object" || !Array.isArray(state.panes) || !state.rects || typeof state.rects !== "object") return false
+  const known = new Set(kinds)
+  const seen = new Set(leaves(layout).flatMap((leaf) => leaf.kinds))
+  for (const floating of state.panes) {
+    const leaf = floating?.leaf
+    if (!isRect(floating?.rect) || !leaf || leaf.type !== "pane" || typeof leaf.id !== "string") return false
+    if (!Array.isArray(leaf.kinds) || leaf.kinds.length === 0 || !leaf.kinds.includes(leaf.active)) return false
+    for (const kind of leaf.kinds) {
+      if (!known.has(kind) || seen.has(kind)) return false
+      seen.add(kind)
+    }
+  }
+  return Object.values(state.rects).every(isRect)
+}

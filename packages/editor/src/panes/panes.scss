@@ -232,7 +232,8 @@ body.pane-dragging .pane-body {
 
 .pane-ghost {
   position: fixed;
-  z-index: 30;
+  // Above the floating windows, so a pane carried over one stays in sight
+  z-index: 1150;
   padding: var(--cat-space-1) var(--cat-space-3);
   background: var(--cat-bg-raised);
   border: 1px solid var(--cat-accent);
@@ -266,4 +267,104 @@ body.pane-dragging .pane-body {
 
 .pane-drop.bottom {
   top: 50%;
+}
+
+// Floating windows: panes popped out of the tree, above it and below dialogs
+.pane-float-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  pointer-events: none;
+}
+
+.pane-floating {
+  position: absolute;
+  pointer-events: auto;
+  min-width: 240px;
+  min-height: 160px;
+  border: 1px solid var(--cat-border-strong);
+  border-radius: var(--cat-radius-md);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 45%);
+}
+
+.pane-floating.pane-float-docking {
+  opacity: 0.6;
+}
+
+.pane-float-edge {
+  position: absolute;
+  z-index: 15;
+}
+
+.pane-float-edge.n,
+.pane-float-edge.s {
+  left: 10px;
+  right: 10px;
+  height: 5px;
+  cursor: ns-resize;
+}
+
+.pane-float-edge.n {
+  top: 0;
+}
+
+.pane-float-edge.s {
+  bottom: 0;
+}
+
+.pane-float-edge.e,
+.pane-float-edge.w {
+  top: 10px;
+  bottom: 10px;
+  width: 5px;
+  cursor: ew-resize;
+}
+
+.pane-float-edge.e {
+  right: 0;
+}
+
+.pane-float-edge.w {
+  left: 0;
+}
+
+.pane-float-edge.ne,
+.pane-float-edge.nw,
+.pane-float-edge.se,
+.pane-float-edge.sw {
+  width: 10px;
+  height: 10px;
+}
+
+.pane-float-edge.ne {
+  top: 0;
+  right: 0;
+  cursor: nesw-resize;
+}
+
+.pane-float-edge.nw {
+  top: 0;
+  left: 0;
+  cursor: nwse-resize;
+}
+
+.pane-float-edge.se {
+  bottom: 0;
+  right: 0;
+  cursor: nwse-resize;
+}
+
+.pane-float-edge.sw {
+  bottom: 0;
+  left: 0;
+  cursor: nesw-resize;
+}
+
+body.pane-float-resizing,
+body.pane-float-resizing * {
+  user-select: none;
+}
+
+body.pane-float-resizing .pane-body {
+  pointer-events: none;
 }
