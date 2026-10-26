@@ -109,6 +109,8 @@ export interface EditorCells {
   "editor:files": FileTree[]
   /** The file the files pane has selected: its size, when it changed, and a preview of an image. */
   "editor:fileInfo": { path: string; size: number; modified: number; preview: string | null; facts: string } | null
+  /** The files the code pane edits: scripts, components and stylesheets. */
+  "editor:codeFiles": string[]
   /** The script file open in the code pane: its text as last read or saved, and what happened on the last save. */
   "editor:code": { path: string | null; text: string; status: string }
   /** Bumped when everything should save: the code pane answers with its unsaved file. */
@@ -211,6 +213,7 @@ export type EditorCommand =
   | { type: "streamableCancel" }
   | { type: "streamableClose" }
   | { type: "saveScript"; path: string; text: string }
+  | { type: "draftFile"; path: string; text: string }
   | { type: "closeScript" }
   | { type: "focus" }
   | { type: "setTransform"; position: { x: number; y: number; z: number }; rotation: { x: number; y: number; z: number } }
@@ -222,6 +225,11 @@ const round = (n: number, places = 4) => Number(n.toFixed(places))
 const toStrings = (value: unknown): string[] => (Array.isArray(value) ? value.map(String) : String(value ?? "").split(","))
 const LIST_TYPES: ExposedProperty["type"][] = ["tags", "layers"]
 export const PREFABS_DIR = "prefabs"
+/** Files the code pane edits: scripts, components and stylesheets. */
+const CODE_FILE = /\.(ts|js|lsp|css)$/i
+/** Of those, the ones the viewport shows as they are typed. */
+const PREVIEWED_CODE = /\.(lsp|css)$/i
+
 /** Files the preview window can show: images, and models it turns over. */
 const PREVIEWED = /\.(png|jpe?g|webp|gif|avif|svg|glb|gltf)$/i
 const PREVIEWED_MODEL = /\.(glb|gltf)$/i
@@ -343,6 +351,8 @@ export class EditorSession {
   private streamJob: StreamableJob | null = null
   private streamCancelled = false
   private readonly previews = new Previews()
+  /** Unsaved text of the component or stylesheet open in the code pane, by path. */
+  private readonly drafts = new Map<string, string>()
   private runnerReady = false
   private readonly unsubscribeRunner: () => void
   private readonly onKeyUp = (event: KeyboardEvent): void => {
@@ -476,6 +486,7 @@ export class EditorSession {
     this.publishSelection()
     this.set("editor:scripts", [])
     this.set("editor:files", [])
+    this.set("editor:codeFiles", [])
     this.set("editor:fileInfo", null)
     this.set("editor:code", { path: null, text: "", status: "" })
     this.set("editor:saveRequest", 0)
@@ -497,7 +508,7 @@ export class EditorSession {
     const folder = source ? await AssetFolder.open(source) : null
     this.folder = folder
     this.settings = folder ? await readProjectSettings(folder) : null
-    this.engine.loader = folder ? folderLoader(folder) : this.engine.loader
+    this.engine.loader = folder ? this.loaderFor(folder) : this.engine.loader
     this.useFolderScripts()
     this.set("editor:code", { path: null, text: "", status: "" })
     this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
@@ -1092,7 +1103,10 @@ export class EditorSession {
         await this.publishFiles()
         break
       case "openFile":
-        if (/\.(ts|js)$/.test(command.path)) await this.openScript(command.path)
+        if (CODE_FILE.test(command.path)) await this.openScript(command.path)
+        break
+      case "draftFile":
+        await this.draftFile(command.path, command.text)
         break
       case "addModel":
         await this.addNode("Model", { url: command.path, name: command.path.replace(/^.*\//, "").replace(/\.[^.]+$/, "") })
@@ -1128,6 +1142,7 @@ export class EditorSession {
         await this.saveScript(command.path, command.text)
         break
       case "closeScript":
+        await this.discardDrafts()
         this.set("editor:code", { path: null, text: "", status: "" })
         break
       case "focus":
@@ -1363,7 +1378,7 @@ export class EditorSession {
     this.folder = folder
     await folder.remember()
     void this.publishRecent()
-    this.engine.loader = folderLoader(folder)
+    this.engine.loader = this.loaderFor(folder)
     this.useFolderScripts()
     await this.save(folder)
     await this.loadPrefabs()
@@ -1650,6 +1665,7 @@ export class EditorSession {
     gather(tree)
     if (files.join("\n") === this.projectFiles.join("\n")) return
     this.projectFiles = files.sort()
+    this.set("editor:codeFiles", this.projectFiles.filter((path) => CODE_FILE.test(path)))
     this.publishSettings()
     this.publishSelection()
   }
@@ -1668,6 +1684,7 @@ export class EditorSession {
   private async openScript(path: string): Promise<void> {
     const folder = this.folder
     if (!folder) return
+    await this.discardDrafts()
     try {
       this.set("editor:code", { path, text: await folder.readText(path), status: "" })
     } catch {
@@ -1675,11 +1692,60 @@ export class EditorSession {
     }
   }
 
-  /** Write a script file from the code pane and rebuild every script, reporting a build error against the file. */
+  /**
+   * The engine reads the project through this: the folder, but a component or stylesheet the code
+   * pane is editing reads as its unsaved text, so the viewport shows it before it is saved.
+   */
+  private loaderFor(folder: ProjectFolder) {
+    const base = folderLoader(folder)
+    return {
+      ...base,
+      text: (url: string) => (this.drafts.has(url) ? Promise.resolve(this.drafts.get(url)!) : base.text(url)),
+    }
+  }
+
+  /** Show a component or stylesheet's unsaved text in the viewport, and say whether it compiled. */
+  private async draftFile(path: string, text: string): Promise<void> {
+    if (!PREVIEWED_CODE.test(path) || (this.app.shared("editor:code").value as EditorCells["editor:code"])?.path !== path) return
+    this.drafts.set(path, text)
+    const status = await this.reloadAndReport(path, "previewing")
+    this.set("editor:code", { ...(this.app.shared("editor:code").value as EditorCells["editor:code"]), status })
+  }
+
+  /** Reload what reads a file and give back the first component's error, or `ok` with the file named. */
+  private async reloadAndReport(path: string, ok: string): Promise<string> {
+    await this.reloadUIFiles([path])
+    let error: string | null = null
+    let readers = 0
+    this._root?.walk((node) => {
+      const reader = node as Node3D & { files?: string[]; error?: string | null }
+      if (!reader.files?.includes(path)) return
+      readers++
+      error ??= reader.error ?? null
+    })
+    if (error) return error
+    return readers ? `${ok} ${path}` : `${ok} ${path} · nothing in the scene uses it`
+  }
+
+  /** Unsaved texts back to what is on disk, and what showed them reloaded. */
+  private async discardDrafts(): Promise<void> {
+    if (!this.drafts.size) return
+    const paths = [...this.drafts.keys()]
+    this.drafts.clear()
+    await this.reloadUIFiles(paths)
+  }
+
+  /** Write a file from the code pane: a script rebuilds every script, reporting a build error against the file; a component or stylesheet reloads what shows it. */
   private async saveScript(path: string, text: string): Promise<void> {
     const folder = this.folder
     if (!folder) return
     await folder.writeText(path, text)
+    this.drafts.delete(path)
+    if (PREVIEWED_CODE.test(path)) {
+      const status = await this.reloadAndReport(path, "saved")
+      await this.publishFiles()
+      return this.set("editor:code", { path, text, status })
+    }
     await this.reloadUIFiles([path])
     await this.reloadScripts()
     this.compiler?.invalidate(path)

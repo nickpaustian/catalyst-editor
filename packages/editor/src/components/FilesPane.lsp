@@ -116,6 +116,7 @@ const icons = {
 const MODEL = /\.(glb|gltf)$/i
 const GLB = /\.glb$/i
 const THECA = /\.theca$/i
+const CODE = /\.(ts|js|lsp|css)$/i
 const PREVIEWABLE = /\.(png|jpe?g|webp|gif|avif|svg|glb|gltf)$/i
 const IMAGE = /\.(png|jpe?g|webp|gif|avif|svg)$/i
 const SCRIPT = /\.(ts|js)$/i
@@ -431,7 +432,7 @@ function itemsFor(row: Row): MenuItem[] {
     if (streamable.value?.available) items.push({ label: 'Rebuild…', run: () => sendCommand({ type: 'rebuildTheca', path: row.path }) })
     items.push({ label: 'Show contents', run: () => showContents(row.path, true) })
   } else {
-    if (SCRIPT.test(row.name)) items.push({ label: 'Open in code pane', run: () => sendCommand({ type: 'openFile', path: row.path }) })
+    if (CODE.test(row.name)) items.push({ label: 'Open in code pane', run: () => sendCommand({ type: 'openFile', path: row.path }) })
     if (PREVIEWABLE.test(row.name)) items.push({ label: 'Preview', kbd: 'Space', run: () => sendCommand({ type: 'preview', path: row.path }) })
     if (MODEL.test(row.name)) items.push({ label: 'Add to scene', run: () => sendCommand({ type: 'addModel', path: row.path }) })
     if (GLB.test(row.name) && streamable.value?.available) items.push({ label: 'Make streamable…', run: () => sendCommand({ type: 'streamable', path: row.path }) })

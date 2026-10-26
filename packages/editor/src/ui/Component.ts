@@ -61,6 +61,9 @@ export class Component extends UIElement {
     this.element.append(this.style, this.mountPoint)
   }
 
+  /** Why the file did not show the last time it was loaded, or null when it did. */
+  error: string | null = null
+
   get source(): string {
     return this._source
   }
@@ -108,6 +111,7 @@ export class Component extends UIElement {
   private async load(engine: Catalyst): Promise<void> {
     const generation = ++this.generation
     this.unmount()
+    this.error = null
     const url = this._source
     if (!url) return
     try {
@@ -126,6 +130,7 @@ export class Component extends UIElement {
       this.handle = { runtime, mount }
     } catch (error) {
       if (generation !== this.generation) return
+      this.error = error instanceof Error ? error.message : String(error)
       engine.log(`"${this.name}" could not show ${url}: ${error instanceof Error ? error.message : error}`, "ui")
     }
   }

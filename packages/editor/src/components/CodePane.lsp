@@ -1,18 +1,18 @@
 <view>
 <div class="code-pane">
   <div class="bar">
-    <span class="well select file"><select aria-label="Script" $model="state.path" @change="choose()">
-      <option value="">Choose a script…</option>
-      <option $for="file in shared['editor:scripts']" $key="file.path" $value="file.path">{{ file.path }}</option>
+    <span class="well select file"><select aria-label="File" $model="state.path" @change="choose()">
+      <option value="">Choose a file…</option>
+      <option $for="file in shared['editor:codeFiles']" $key="file" $value="file">{{ file }}</option>
     </select></span>
     <span class="dirty" $if="state.dirty">unsaved</span>
     <span class="status" $class="{ error: state.error }">{{ state.status }}</span>
-    <button class="button small primary" $disabled="!state.path || !state.dirty" @click="save()">Save script</button>
+    <button class="button small primary" $disabled="!state.path || !state.dirty" @click="save()">Save</button>
   </div>
   <div class="host" $ref="host"></div>
   <div class="empty-state" $if="!state.path">
-    <span class="what">No script open</span>
-    <span class="how">Pick one above or from a node's Scripts section. Saving rebuilds every script in the scene.</span>
+    <span class="what">No file open</span>
+    <span class="how">Pick a script, component or stylesheet above. Components and stylesheets show in the viewport as you type; saving a script rebuilds every script in the scene.</span>
   </div>
 </div>
 </view>
@@ -23,14 +23,16 @@ import { EditorView, basicSetup } from 'codemirror'
 import { EditorState, Compartment } from '@codemirror/state'
 import { keymap } from '@codemirror/view'
 import { indentWithTab } from '@codemirror/commands'
-import { javascript } from '@codemirror/lang-javascript'
+import { javascript, typescriptLanguage } from '@codemirror/lang-javascript'
+import { html } from '@codemirror/lang-html'
+import { css } from '@codemirror/lang-css'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { sendCommand } from '../commands.ts'
 
 interface Code { path: string | null; text: string; status: string }
 
 const code = shared('editor:code', { path: null, text: '', status: '' })
-shared('editor:scripts')
+shared('editor:codeFiles', [])
 const saveRequest = shared('editor:saveRequest', 0)
 const refs = defineRefs<{ host: HTMLElement }>()
 
@@ -39,6 +41,25 @@ const state = reactive({ path: '', dirty: false, status: '', error: false })
 let view: EditorView | null = null
 let shown = ''
 const readOnly = new Compartment()
+const language = new Compartment()
+const PREVIEWED = /\.(lsp|css)$/i
+const DRAFT_DELAY = 350
+let draftTimer: ReturnType<typeof setTimeout> | null = null
+
+// A component is markup with its logic in TypeScript and its style in CSS.
+const languageFor = (path: string) =>
+  /\.lsp$/i.test(path) ? html({ nestedLanguages: [{ tag: 'logic', parser: typescriptLanguage.parser }] }) : /\.css$/i.test(path) ? css() : javascript({ typescript: true })
+
+// A component or stylesheet shows in the viewport a moment after typing stops, before it is saved.
+function draftSoon() {
+  if (draftTimer) clearTimeout(draftTimer)
+  draftTimer = null
+  if (!view || !PREVIEWED.test(state.path) || !state.dirty) return
+  draftTimer = setTimeout(() => {
+    draftTimer = null
+    if (view && state.dirty) sendCommand({ type: 'draftFile', path: state.path, text: view.state.doc.toString() })
+  }, DRAFT_DELAY)
+}
 
 function save(): boolean {
   if (!view || !state.path) return false
@@ -64,9 +85,10 @@ function show(next: Code) {
   if (!view) return
   const path = next.path ?? ''
   const replace = path !== state.path || (!state.dirty && next.text !== shown)
+  if (path !== state.path) view.dispatch({ effects: language.reconfigure(languageFor(path)) })
   state.path = path
   state.status = next.status
-  state.error = Boolean(next.status) && !/^(saved|reloaded) /.test(next.status)
+  state.error = Boolean(next.status) && !/^(saved|reloaded|previewing) /.test(next.status)
   if (replace || /^(saved|reloaded) /.test(next.status)) {
     if (replace) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next.text } })
     shown = next.text
@@ -83,11 +105,13 @@ onMounted(() => {
       extensions: [
         basicSetup,
         keymap.of([{ key: 'Mod-s', run: saveAll }, indentWithTab]),
-        javascript({ typescript: true }),
+        language.of(javascript({ typescript: true })),
         oneDark,
         readOnly.of(EditorState.readOnly.of(true)),
         EditorView.updateListener.of((update) => {
-          if (update.docChanged) state.dirty = update.state.doc.toString() !== shown
+          if (!update.docChanged) return
+          state.dirty = update.state.doc.toString() !== shown
+          draftSoon()
         }),
       ],
     }),
