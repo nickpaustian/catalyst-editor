@@ -93,6 +93,14 @@ export interface WiringHost {
   setScriptField(node: Node3D, url: string, key: string, value: unknown): void
 }
 
+/** A connection written in a script that names its node, and the node it finds, to name it again once names or paths change. */
+export interface CodeReference {
+  url: string
+  index: number
+  listener: Node3D
+  target: Node
+}
+
 /** A `node` field somewhere in the scene and the node it points at, to point it there again once paths change. */
 export interface NodeReference {
   owner: object
@@ -359,21 +367,26 @@ export class SignalWiring {
     await this.host.editScript(url, (text) => changeEntry(text, "signals", index, null))
   }
 
-  /** The written connections that hear `node`, by file and place, to point at it again after it is renamed. */
-  referencesTo(node: Node3D): { url: string; index: number; listener: Node3D }[] {
+  /** The connections written in code that hear `nodes` or anything under them, by file and place, to point at them again after a rename or a move. */
+  referencesTo(nodes: Node3D[]): CodeReference[] {
     const root = this.host.root()
     if (!root) return []
-    return this.connections()
-      .filter((entry) => entry.index !== null && entry.connection.from !== undefined && entry.connection.from !== "." && nodesNamed(root, entry.connection.from, entry.node)[0] === node)
-      .map((entry) => ({ url: entry.url, index: entry.index!, listener: entry.node }))
+    const out: CodeReference[] = []
+    for (const entry of this.connections()) {
+      const from = entry.connection.from
+      if (entry.index === null || from === undefined || from === "." || from.startsWith("$")) continue
+      const target = nodesNamed(root, from, entry.node)[0]
+      if (target && nodes.some((node) => node === target || node.contains(target))) out.push({ url: entry.url, index: entry.index, listener: entry.node, target })
+    }
+    return out
   }
 
-  /** Rewrite each reference's `from` to find `node` by what it is called now; a file shared by several listeners is written once per entry. */
-  async retarget(references: { url: string; index: number; listener: Node3D }[], node: Node3D): Promise<void> {
+  /** Rewrite each reference's `from` to find its node by where and what it is now; a file shared by several listeners is written once per entry. */
+  async retarget(references: CodeReference[]): Promise<void> {
     const byFile = new Map<string, Map<number, string>>()
     for (const reference of references) {
       const entries = byFile.get(reference.url) ?? new Map<number, string>()
-      entries.set(reference.index, this.fromFor(node, reference.listener))
+      entries.set(reference.index, this.fromFor(reference.target, reference.listener))
       byFile.set(reference.url, entries)
     }
     for (const [url, entries] of byFile) {
@@ -383,7 +396,7 @@ export class SignalWiring {
           const array = next === null ? null : staticArray(next, "connections")
           if (!array || array === "unreadable" || !next) return null
           const entry = array.entries[index] ? readEntry<Connection>(array.entries[index].text) : null
-          if (!entry) continue
+          if (!entry || entry.from === from) continue
           next = changeEntry(next, "connections", index, writeEntry({ from, signal: entry.signal, call: entry.call }))
         }
         return next

@@ -2373,7 +2373,7 @@ export class EditorSession {
     const clean = name.trim()
     if (!node || !clean || clean === node.name) return
     const before = node.name
-    const references = this.wiring.referencesTo(node)
+    const references = this.wiring.referencesTo([node])
     const fields = this.wiring.nodeReferences()
     if (!node.rename(clean)) {
       this.publishProject(`"${clean}" already exists under ${node.parent?.name}`)
@@ -2383,7 +2383,7 @@ export class EditorSession {
     // Connections that hear the node are written by name, so they follow it, both ways through undo.
     const follow = () => {
       this.wiring.repoint(fields)
-      if (references.length) void this.wiring.retarget(references, node).catch((error: unknown) => this.publishProject(error instanceof Error ? error.message : String(error)))
+      if (references.length) void this.wiring.retarget(references).catch((error: unknown) => this.publishProject(error instanceof Error ? error.message : String(error)))
     }
     follow()
     this.record(
@@ -2983,19 +2983,24 @@ export class EditorSession {
         node.transform.setWorldMatrix(world)
       }
     }
-    // `node` fields name nodes by path, which a move changes.
+    // Fields and connections name nodes by path, which a move changes.
     const fields = this.wiring.nodeReferences()
+    const references = this.wiring.referencesTo(nodes)
+    const follow = () => {
+      this.wiring.repoint(fields)
+      if (references.length) void this.wiring.retarget(references).catch((error: unknown) => this.publishProject(error instanceof Error ? error.message : String(error)))
+    }
     placeAll()
-    this.wiring.repoint(fields)
+    follow()
     this.record(
       nodes.length > 1 ? `move ${nodes.length} nodes` : `move ${nodes[0].name}`,
       () => {
         putBack()
-        this.wiring.repoint(fields)
+        follow()
       },
       () => {
         placeAll()
-        this.wiring.repoint(fields)
+        follow()
       },
     )
     if (renamed.length) this.publishProject(`renamed ${renamed.join(", ")}: the name was taken under ${newParent.name}`)
