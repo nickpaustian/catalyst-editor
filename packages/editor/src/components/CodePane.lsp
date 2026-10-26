@@ -35,6 +35,7 @@ interface Code { path: string | null; text: string; status: string }
 const code = shared('editor:code', { path: null, text: '', status: '' })
 shared('editor:codeFiles', [])
 const saveRequest = shared('editor:saveRequest', 0)
+const unsaved = shared('editor:codeUnsaved', null)
 const refs = defineRefs<{ host: HTMLElement }>()
 
 const state = reactive({ path: '', dirty: false, status: '', error: false })
@@ -98,6 +99,7 @@ function show(next: Code) {
     if (replace) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next.text } })
     shown = next.text
     state.dirty = false
+    unsaved.set(null)
     view.dispatch({ effects: readOnly.reconfigure(EditorState.readOnly.of(!path)) })
   }
 }
@@ -115,7 +117,9 @@ onMounted(() => {
         readOnly.of(EditorState.readOnly.of(true)),
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) return
-          state.dirty = update.state.doc.toString() !== shown
+          const text = update.state.doc.toString()
+          state.dirty = text !== shown
+          unsaved.set(state.dirty && state.path ? { path: state.path, text } : null)
           draftSoon()
         }),
       ],

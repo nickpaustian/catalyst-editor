@@ -88,6 +88,13 @@ pub fn run() {
     .build(tauri::generate_context!())
     .expect("error while building tauri application");
   app.run(|app, event| {
+    // Quitting (⌘Q) asks the editor first, which may have unsaved work; it closes its window itself when it may go.
+    if let tauri::RunEvent::ExitRequested { code: None, api, .. } = &event {
+      if app.get_webview_window("main").is_some() {
+        api.prevent_exit();
+        let _ = app.emit_to("main", "catalyst:quit-requested", ());
+      }
+    }
     // A build still running would outlive the app.
     if let tauri::RunEvent::Exit = event {
       app.state::<iapetus::Jobs>().stop_all();

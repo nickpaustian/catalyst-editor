@@ -95,6 +95,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const folders = shell?.folders ?? browserFolders
   const session = new EditorSession({ app, engine, recipe, folders, runner: shell?.runnerLink, converter: shell?.converter, reveal: shell ? { label: shell.revealLabel, run: shell.reveal } : undefined })
   if (shell) {
+    shell.guardClose(() => session.leave())
     app.shared("editor:startMode").set("off")
     let shown: boolean | null = null
     app.shared("editor:project").subscribe((project: { open: boolean } | undefined) => {
@@ -116,6 +117,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       await openFile(paths)
     })())
     await openFile(await shell.takeOpenedFiles())
+  } else {
+    addEventListener("beforeunload", (event) => {
+      if (session.hasUnsavedWork) event.preventDefault()
+    })
   }
   if (import.meta.env.DEV && !session.root) await reopenLast(session, folders)
   for (const id of recipe.panel ?? []) {

@@ -117,6 +117,8 @@ export interface EditorCells {
   "editor:code": { path: string | null; text: string; status: string }
   /** Bumped when everything should save: the code pane answers with its unsaved file. */
   "editor:saveRequest": number
+  /** The code pane's file while its text differs from what was last read or saved. */
+  "editor:codeUnsaved": { path: string; text: string } | null
   "editor:selection": {
     id: number
     name: string
@@ -497,6 +499,7 @@ export class EditorSession {
     this.set("editor:fileInfo", null)
     this.set("editor:code", { path: null, text: "", status: "" })
     this.set("editor:saveRequest", 0)
+    this.set("editor:codeUnsaved", null)
     this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
     this.set("editor:streamable", { ...STREAMABLE_DEFAULT, available: this.converter !== null })
     this.set("editor:preview", PREVIEW_DEFAULT)
@@ -510,8 +513,9 @@ export class EditorSession {
     return this._root
   }
 
-  /** Put a project in the viewport: the folder's, or a fresh one when there is no folder. */
-  async open(source: ProjectFolder | null): Promise<void> {
+  /** Put a project in the viewport: the folder's, or a fresh one when there is no folder. Unsaved work is asked about first unless `discarding`. */
+  async open(source: ProjectFolder | null, { discarding = false } = {}): Promise<void> {
+    if (!discarding && !(await this.leave())) return
     this.close()
     const folder = source ? await AssetFolder.open(source) : null
     this.folder = folder
@@ -547,15 +551,17 @@ export class EditorSession {
   }
 
   /** Read the project's files again and rebuild the scene from them, dropping unsaved changes. */
-  async reloadProject(): Promise<void> {
+  async reloadProject({ discarding = false } = {}): Promise<void> {
     const folder = this.folder
     if (!folder) return
-    await this.open(folder)
+    if (!discarding && !(await this.leave())) return
+    await this.open(folder, { discarding: true })
     this.publishProject("reloaded from disk")
   }
 
   /** Take the project out of the viewport and show the start screen again. */
-  closeProject(): void {
+  async closeProject(): Promise<void> {
+    if (!(await this.leave())) return
     this.close()
     this.folder = null
     this.settings = null
@@ -564,6 +570,43 @@ export class EditorSession {
     this.publishTree()
     this.publishProject()
     void this.publishRecent()
+  }
+
+  /** Whether closing the project now would lose anything: scene edits or the code pane's file. */
+  get hasUnsavedWork(): boolean {
+    return Boolean(this._root) && (this.history.isDirty || this.app.shared("editor:codeUnsaved").value != null)
+  }
+
+  /**
+   * Ask before unsaved work is lost: save it, drop it, or stay. True when the
+   * project may go; a cancelled question, or a save that did not happen, is false.
+   */
+  async leave(): Promise<boolean> {
+    if (!this.hasUnsavedWork) return true
+    const name = this.settings?.name ?? this.folder?.name ?? "this project"
+    const choice = await new Promise<"save" | "discard" | "stay">((resolve) =>
+      openConfirm(`Save changes to ${name}?`, "Your changes are lost if you don't save them.", [
+        { label: "Cancel", run: () => resolve("stay") },
+        { label: "Don't save", run: () => resolve("discard") },
+        { label: "Save", primary: true, run: () => resolve("save") },
+      ]),
+    )
+    if (choice === "stay") return false
+    if (choice === "discard") return true
+    await this.saveUnsavedCode()
+    if (this.history.isDirty) {
+      if (this.folder) await this.save(this.folder)
+      else await this.saveAs()
+    }
+    return !this.hasUnsavedWork
+  }
+
+  /** Write the code pane's unsaved file here and now, not through the pane, so it is on disk before the project goes. */
+  private async saveUnsavedCode(): Promise<void> {
+    const unsaved = this.app.shared("editor:codeUnsaved").value as EditorCells["editor:codeUnsaved"]
+    if (!unsaved || !this.folder) return
+    await this.saveScript(unsaved.path, unsaved.text)
+    this.set("editor:codeUnsaved", null)
   }
 
   private close(): void {
@@ -912,7 +955,7 @@ export class EditorSession {
         break
       }
       case "closeProject":
-        this.closeProject()
+        await this.closeProject()
         break
       case "reloadProject":
         await this.reloadProject()
@@ -1184,7 +1227,8 @@ export class EditorSession {
   /** A fresh project: straight into the browser's storage under a name when one is given, else through the dialog. */
   private async newProject(name?: string): Promise<void> {
     if (name && this.folders.hasBrowserStorage) {
-      await this.open(await createProject(this.folders, { name, recipe: this.recipe.name, description: "", location: null }))
+      if (!(await this.leave())) return
+      await this.open(await createProject(this.folders, { name, recipe: this.recipe.name, description: "", location: null }), { discarding: true })
       return
     }
     this.openProjectDialog("create")
@@ -1199,10 +1243,11 @@ export class EditorSession {
   }
 
   private async createProject(fields: NewProject): Promise<void> {
+    if (!(await this.leave())) return
     try {
       const folder = await createProject(this.folders, fields)
       if (!(await folder.ensurePermission())) return
-      await this.open(folder)
+      await this.open(folder, { discarding: true })
     } catch (error) {
       this.set("editor:projectDialog", { ...this.app.shared("editor:projectDialog").value, error: error instanceof Error ? error.message : String(error) })
     }
@@ -1247,8 +1292,8 @@ export class EditorSession {
     const prefabs = changed.filter((path) => path.startsWith(`${PREFABS_DIR}/`) && path.endsWith(".json"))
     const project = changed.some((path) => !path.includes("/") && (path.endsWith(PROJECT_EXTENSION) || path === LEGACY_PROJECT_FILE))
     const scene = changed.some((path) => this.recipe.files?.includes(path))
-    if (scene && !this.history.isDirty) {
-      await this.reloadProject()
+    if (scene && !this.hasUnsavedWork) {
+      await this.reloadProject({ discarding: true })
       this.publishProject("reloaded from disk: the scene changed outside")
       return
     }
@@ -1285,7 +1330,7 @@ export class EditorSession {
   private askAboutSceneOnDisk(): void {
     openConfirm("The scene changed on disk", "Another program saved the scene while you have unsaved changes here.\nKeep yours and the next save overwrites the disk, or reload and lose them.", [
       { label: "Keep my changes", run: () => this.publishProject("unsaved changes kept; File → Reload from disk takes the disk's") },
-      { label: "Reload from disk", primary: true, run: () => void this.reloadProject() },
+      { label: "Reload from disk", primary: true, run: () => void this.reloadProject({ discarding: true }) },
     ])
   }
 

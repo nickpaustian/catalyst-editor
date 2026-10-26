@@ -179,10 +179,27 @@ const converter = (): AssetConverter => ({
   },
 })
 
-/** The start window is declared in the Tauri config and only ever shown or hidden; closing the editor window takes it along so the app exits. */
+let mayClose: () => Promise<boolean> = async () => true
+let leaving = false
+
+/**
+ * The start window is declared in the Tauri config and only ever shown or hidden; closing the editor
+ * window takes it along so the app exits. Closing the window or quitting the app asks `mayClose` first.
+ */
 export const tauriShell = (): DesktopShell => {
   const current = getCurrentWindow()
-  if (current.label === MAIN_LABEL) void current.onCloseRequested(async () => void (await startWindow())?.close())
+  if (current.label === MAIN_LABEL) {
+    void current.onCloseRequested(async (event) => {
+      if (!leaving && !(await mayClose())) return event.preventDefault()
+      leaving = true
+      await (await startWindow())?.close()
+    })
+    void listen("catalyst:quit-requested", async () => {
+      if (leaving || !(await mayClose())) return
+      leaving = true
+      shell().quit()
+    })
+  }
   return shell()
 }
 
@@ -214,6 +231,9 @@ const shell = (): DesktopShell => ({
   },
   onStartClosed(listener) {
     void listen("catalyst:start-closed", () => listener())
+  },
+  guardClose(check) {
+    mayClose = check
   },
   quit() {
     void (async () => {
