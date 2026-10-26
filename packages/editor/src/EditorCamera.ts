@@ -1,6 +1,31 @@
-import { DebugShapes, Mat4, Material, Node3D as Node3DClass, Quaternion, Ray, Vector3, Visual, boxGeometry, cylinderGeometry, mergeGeometry, torusGeometry, type Catalyst, type Geometry, type Node3D, type ViewPose } from "@nickpaustian/catalyst"
+import { DebugShapes, Mat4, Material, Node3D as Node3DClass, type Cell, type Grid, Quaternion, Ray, Vector3, Visual, boxGeometry, cylinderGeometry, mergeGeometry, torusGeometry, type Catalyst, type Geometry, type Node3D, type ViewPose } from "@nickpaustian/catalyst"
 import { Mesh as ObeliskMesh, computeBounds, pickMesh } from "@nickpaustian/obelisk"
 import { EditMesh } from "@nickpaustian/catalyst/prefabs"
+
+/** The world box around the meshes a node and its descendants draw; null when none do. */
+const drawnBox = (root: Node3D): { min: Vector3; max: Vector3 } | null => {
+  const min = new Vector3(Infinity, Infinity, Infinity)
+  const max = new Vector3(-Infinity, -Infinity, -Infinity)
+  const corner = new Vector3()
+  const visit = (node: Node3D): void => {
+    if (!node.isVisible) return
+    node.syncObjects()
+    for (const visual of node.attachedObjects) {
+      if (visual.isLines || !visual.visible) continue
+      const mesh = visual.geometry as ObeliskMesh
+      const box = mesh.bounds.radius > 0 ? mesh.bounds : computeBounds(mesh.vertices)
+      for (let i = 0; i < 8; i++) {
+        corner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z)
+        visual.matrix.transformPoint(corner, corner)
+        min.set(Math.min(min.x, corner.x), Math.min(min.y, corner.y), Math.min(min.z, corner.z))
+        max.set(Math.max(max.x, corner.x), Math.max(max.y, corner.y), Math.max(max.z, corner.z))
+      }
+    }
+    for (const child of node.children.values()) if (child instanceof Node3DClass) visit(child)
+  }
+  visit(root)
+  return min.x <= max.x ? { min, max } : null
+}
 
 const CLICK_DISTANCE = 4
 const CLICK_MS = 400
@@ -40,6 +65,10 @@ type Handle = Axis | "all" | Face
 const isFace = (handle: Handle): handle is Face => handle.length === 2
 /** What the viewport's pointer does besides selecting: nothing, or drawing a box or a collider volume on the ground. */
 export type DrawTool = "box" | "collider"
+/** How the paint tool lays a tile type: cell by cell under the pointer, or over the run of like cells it starts on. */
+export type PaintMode = "brush" | "fill"
+/** Where a paint stroke is: its first cell, a cell the drag reached, or the release. */
+export type PaintPhase = "begin" | "move" | "end"
 /** What the vertex tool picks. */
 export type EditMode = "vertex" | "edge" | "face"
 const edgeKey = (a: number, b: number): string => (a < b ? `${a}-${b}` : `${b}-${a}`)
@@ -203,6 +232,12 @@ export class EditorCamera implements ViewPose {
   private drawing: { phase: "footprint" | "height"; a: Vector3; b: Vector3; height: number; floor: number; preview: Visual } | null = null
   /** Called with the box a draw finished. */
   onDrawBox: ((box: DrawnBox) => void) | null = null
+  private paintGrid: Grid | null = null
+  private paintCell: Cell | null = null
+  private painting = false
+  private paintCursor: Visual | null = null
+  /** Called as a paint stroke goes: the cell under the pointer, or null at the release. */
+  onPaint: ((cell: Cell | null, phase: PaintPhase) => void) | null = null
   private _vertexEdit = false
   private editMesh: EditMesh | null = null
   private vertexHandles: Visual[] = []
@@ -220,9 +255,9 @@ export class EditorCamera implements ViewPose {
   private faceFills: Visual[] = []
   private shapeKey = ""
   private placedKey = ""
-  /** In the vertex tool with nothing picked the gizmo has nothing to move, so it stays out of the way of the elements. */
+  /** In the vertex tool with nothing picked the gizmo has nothing to move, so it stays out of the way of the elements; painting leaves no room for it either. */
   private get gizmoHidden(): boolean {
-    return this.editMesh !== null && !this.hasElementSelection
+    return (this.editMesh !== null && !this.hasElementSelection) || this.paintGrid !== null
   }
   private readonly vertexMaterial = new Material({ colour: 0xd8dde6 })
   private readonly vertexHoverMaterial = new Material({ colour: 0xffffff })
@@ -333,8 +368,13 @@ export class EditorCamera implements ViewPose {
     this.updatePose()
   }
 
+  /** Orbit around the node, backed off far enough to show everything it and its children draw. */
   focus(node: Node3D, distance = 2.5): void {
-    this.focusPoint(node.transform.getWorldPosition(), distance)
+    const box = drawnBox(node)
+    if (!box) return this.focusPoint(node.transform.getWorldPosition(), distance)
+    const radius = box.max.clone().subVector(box.min).length() / 2
+    const fitted = radius / Math.sin((this.fov * Math.PI) / 360)
+    this.focusPoint(box.min.clone().addVector(box.max).scale(0.5), Math.min(MAX_DISTANCE, Math.max(distance, fitted)))
   }
 
   /** The wheel zooms; with shift held (or a trackpad's two-finger scroll with shift) it pans. A pinch arrives as a wheel with ctrl and zooms. */
@@ -398,6 +438,12 @@ export class EditorCamera implements ViewPose {
   }
 
   private readonly onPressLost = (): void => {
+    if (this.painting) {
+      this.painting = false
+      this.unlistenPress()
+      this.onPaint?.(null, "end")
+      return
+    }
     if (this.drawing) return this.cancelDraw()
     const dragging = this.drag !== null
     this.press = null
@@ -409,6 +455,17 @@ export class EditorCamera implements ViewPose {
   }
 
   private readonly onPointerDown = (event: PointerEvent): void => {
+    if (this.paintGrid && event.button === 0 && !event.altKey) {
+      event.stopImmediatePropagation()
+      const cell = this.cellUnder(event.clientX, event.clientY)
+      if (!cell) return
+      this.painting = true
+      this.paintCell = cell
+      this.canvas.setPointerCapture(event.pointerId)
+      this.listenPress()
+      this.onPaint?.(cell, "begin")
+      return
+    }
     if (this.drawTool && event.button === 0) {
       event.stopImmediatePropagation()
       if (this.drawing) return this.stepDraw()
@@ -453,6 +510,7 @@ export class EditorCamera implements ViewPose {
   }
 
   private readonly onPointerMove = (event: PointerEvent): void => {
+    if (this.painting) return this.movePaint(event.clientX, event.clientY)
     if (this.drawing) return this.moveDraw(event.clientX, event.clientY)
     if (this.drag) return this.moveDrag(event.clientX, event.clientY)
     const marquee = this.marquee
@@ -478,6 +536,13 @@ export class EditorCamera implements ViewPose {
   }
 
   private readonly onPointerUp = (event: PointerEvent): void => {
+    if (this.painting) {
+      this.painting = false
+      this.unlistenPress()
+      if (this.canvas.hasPointerCapture(event.pointerId)) this.canvas.releasePointerCapture(event.pointerId)
+      this.onPaint?.(null, "end")
+      return
+    }
     // The footprint ends with the release; the height phase keeps hearing moves until the next click.
     if (this.drawing) {
       if (this.drawing.phase === "footprint") this.stepDraw()
@@ -506,6 +571,7 @@ export class EditorCamera implements ViewPose {
   }
 
   private readonly onHover = (event: PointerEvent): void => {
+    if (this.paintGrid && !this.orbiting) return this.placePaintCursor(this.cellUnder(event.clientX, event.clientY))
     if (this.drawTool) return
     if (this.drag || this.orbiting || this.marquee) return
     // The same order a press uses: a vertex cube or an edge line before a gizmo shaft passing by it, a gizmo handle before the face surface behind it.
@@ -1097,6 +1163,78 @@ export class EditorCamera implements ViewPose {
   /** A face's outward normal in world space. */
   private faceNormal(face: Face, out = new Vector3()): Vector3 {
     return out.copy(AXES[faceAxis(face)]).applyQuaternion(this.pivotRotation).scale(faceSign(face))
+  }
+
+  //=========================
+  // Painting a grid
+  //=========================
+
+  /** The grid the paint tool lays tiles on, or null to select and drag as usual. */
+  get paintTarget(): Grid | null {
+    return this.paintGrid
+  }
+
+  set paintTarget(grid: Grid | null) {
+    if (grid === this.paintGrid) return
+    if (this.painting) {
+      this.painting = false
+      this.unlistenPress()
+      this.onPaint?.(null, "end")
+    }
+    this.paintGrid = grid
+    this.paintCell = null
+    this.placePaintCursor(null)
+    if (grid) this.tool = null
+    this.canvas.style.cursor = grid ? "crosshair" : this.drawTool ? "crosshair" : ""
+  }
+
+  /**
+   * The cell under a point on the canvas: the face of the grid's own tiles the pointer is on (stepped
+   * just inside it, so a raised tile's side counts for that tile), or where the ray meets the grid's
+   * floor over an empty cell.
+   */
+  private cellUnder(clientX: number, clientY: number): Cell | null {
+    const grid = this.paintGrid
+    if (!grid) return null
+    const ray = this.rayAt(clientX, clientY)
+    const hit = this.engine.pick(ray, { filter: (node) => node === grid })
+    if (hit) {
+      const cell = grid.cellAt(hit.worldPoint.clone().addScaled(hit.worldNormal, -0.01 * grid.cellSize))
+      if (cell) return cell
+    }
+    const floor = new Vector3()
+    const up = new Vector3(0, 1, 0).applyQuaternion(grid.transform.getWorldRotation())
+    if (ray.intersectPlane(grid.getWorldPosition(), up, floor) === null) return null
+    return grid.cellAt(floor)
+  }
+
+  private movePaint(clientX: number, clientY: number): void {
+    const cell = this.cellUnder(clientX, clientY)
+    this.placePaintCursor(cell)
+    if (!cell || (this.paintCell && cell.column === this.paintCell.column && cell.row === this.paintCell.row)) return
+    this.paintCell = cell
+    this.onPaint?.(cell, "move")
+  }
+
+  /** A thin box on top of the cell the pointer is over, or none. */
+  private placePaintCursor(cell: Cell | null): void {
+    const grid = this.paintGrid
+    if (!grid || !cell) {
+      if (this.paintCursor) {
+        this.engine.scene.remove(this.paintCursor)
+        this.engine.renderer?.release(this.paintCursor.geometry)
+        this.paintCursor = null
+      }
+      return
+    }
+    if (!this.paintCursor) {
+      this.paintCursor = DebugShapes.box({ width: 1, height: 1, depth: 1, colour: HOVER_COLOUR })
+      this.engine.scene.add(this.paintCursor)
+    }
+    const position = new Vector3(), rotation = new Quaternion(), scale = new Vector3()
+    grid.transform.getWorld(position, rotation, scale)
+    const size = grid.cellSize
+    this.paintCursor.matrix.composeTRS(grid.centreOf(cell), rotation, new Vector3(size * scale.x * 0.96, 0.02 * size * scale.y, size * scale.z * 0.96))
   }
 
   //=========================

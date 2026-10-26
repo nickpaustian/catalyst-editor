@@ -93,6 +93,37 @@
         </div>
       </div>
     </section>
+    <section class="section" $if="shared['editor:grid'] && shared['editor:selection'].count === 1">
+      <button class="section-header" type="button" $aria-expanded="state.tilesOpen" @click="state.tilesOpen = !state.tilesOpen"><span class="title">Tiles</span><span class="count">{{ shared['editor:grid'].tiles.length }}</span></button>
+      <div class="section-body tiles" $if="state.tilesOpen">
+        <div class="tile" $for="tile in shared['editor:grid'].tiles" $key="tile.index" $class="{ chosen: shared['editor:grid'].brush === tile.index }">
+          <button class="pick" type="button" $title="'Paint with ' + tile.name" $aria-label="'Paint with ' + tile.name" $aria-pressed="shared['editor:grid'].brush === tile.index" @click="chooseBrush(tile.index)">
+            <span class="dot" $style="'background: ' + tile.colour"></span>
+          </button>
+          <input class="well" type="text" aria-label="Tile name" $value="tile.name" @change="editTile(tile.index, 'name', $event)" />
+          <div class="well height" title="Height: how far the tile stands above the grid's floor">
+            <input type="number" step="0.1" min="0" aria-label="Tile height" $value="tile.height" @change="editTile(tile.index, 'height', $event)" />
+          </div>
+          <input class="swatch" type="color" aria-label="Tile colour" $value="tile.colour" @change="editTile(tile.index, 'colour', $event)" />
+          <span class="cells" $title="tile.cells + ' cells'">{{ tile.cells }}</span>
+          <button class="icon-button small" type="button" $title="'Remove ' + tile.name + ': its cells are cleared'" aria-label="Remove tile type" @click="removeTile(tile.index)">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>
+          </button>
+          <input class="well tags mono" type="text" placeholder="tags: walk, place" aria-label="Tile tags" spellcheck="false" $value="tile.tags" @change="editTile(tile.index, 'tags', $event)" />
+        </div>
+        <div class="tile empty" $class="{ chosen: shared['editor:grid'].brush === -1 }">
+          <button class="pick" type="button" title="Paint empty: clears cells" aria-label="Paint empty" $aria-pressed="shared['editor:grid'].brush === -1" @click="chooseBrush(-1)">
+            <span class="dot"></span>
+          </button>
+          <span class="hint">Empty</span>
+          <span class="cells">{{ shared['editor:grid'].empty }}</span>
+        </div>
+        <div class="tile-actions">
+          <button class="button small" type="button" $disabled="!shared['editor:grid'].canAdd" @click="addTile()">Add tile type</button>
+          <span class="hint">Pick one, then paint with <kbd>P</kbd> in the viewport.</span>
+        </div>
+      </div>
+    </section>
     <section class="section" $class="{ drop: state.dropping }">
       <button class="section-header" type="button" $aria-expanded="state.scriptsOpen" @click="state.scriptsOpen = !state.scriptsOpen"><span class="title">Scripts</span><span class="count">{{ state.scripts.length }}</span></button>
       <div class="section-body" $if="state.scriptsOpen">
@@ -193,6 +224,7 @@ import { scrub } from '../scrub.ts'
 import { DRAGGING_FILE_CELL, accepts, basename, openFilePicker } from '../fileField.ts'
 
 const selection = shared('editor:selection', null)
+shared('editor:grid', null)
 const signals = shared('editor:signals', null)
 const scriptFiles = shared('editor:scripts', SCRIPTS_DEFAULT)
 const dragging = shared(DRAGGING_FILE_CELL, null)
@@ -215,6 +247,7 @@ const state = reactive({
   transformOpen: true,
   propertiesOpen: true,
   scriptsOpen: true,
+  tilesOpen: true,
   layerNumbers: Array.from({ length: 32 }, (_, n) => n),
 })
 
@@ -347,6 +380,22 @@ function send(type: string) {
 // so a rename has to be a deliberate change
 function rename() {
   sendCommand({ type: 'rename', name: state.name })
+}
+
+function chooseBrush(index: number) {
+  sendCommand({ type: 'gridBrush', index })
+}
+
+function editTile(index: number, field: string, event: Event) {
+  sendCommand({ type: 'gridTile', index, field, value: (event.target as HTMLInputElement).value })
+}
+
+function addTile() {
+  sendCommand({ type: 'gridTileAdd' })
+}
+
+function removeTile(index: number) {
+  sendCommand({ type: 'gridTileRemove', index })
 }
 
 function runAction(id: string) {
@@ -533,6 +582,91 @@ function apply() {
 </logic>
 
 <style>
+.tiles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cat-space-1);
+}
+
+.tile {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 52px 22px 26px 22px;
+  align-items: center;
+  gap: var(--cat-space-1);
+  padding: var(--cat-space-1);
+  border-radius: var(--cat-radius-sm);
+}
+
+.tile.chosen {
+  background: var(--cat-bg-active);
+}
+
+.tile .tags {
+  grid-column: 2 / -1;
+}
+
+.tile.empty {
+  grid-template-columns: 22px minmax(0, 1fr) 26px;
+}
+
+.tile .pick {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--cat-radius-xs);
+  cursor: pointer;
+}
+
+.tile .pick[aria-pressed="true"] {
+  border-color: var(--cat-accent);
+}
+
+.tile .dot {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--cat-radius-xs);
+  box-shadow: inset 0 0 0 1px var(--cat-border);
+  background: repeating-linear-gradient(45deg, transparent 0 3px, var(--cat-border) 3px 4px);
+}
+
+.tile .height input {
+  width: 100%;
+}
+
+.tile .swatch {
+  width: 22px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.tile .swatch::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.tile .swatch::-webkit-color-swatch {
+  border: 0;
+  border-radius: var(--cat-radius-xs);
+}
+
+.tile .cells {
+  color: var(--cat-text-tertiary);
+  font-size: var(--cat-text-xs);
+  text-align: right;
+}
+
+.tile-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--cat-space-2);
+  padding: var(--cat-space-1);
+}
 .hint {
   color: var(--cat-text-tertiary);
 }

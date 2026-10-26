@@ -13,6 +13,7 @@ export interface EditorInputHandlers {
   edgeMode: () => void
   faceMode: () => void
   extrude: () => void
+  paintTool: () => void
 }
 
 /** The editor's own key bindings on the engine's Helm, on while orbiting. */
@@ -30,6 +31,7 @@ export class EditorInput {
     edgeMode: ["2"],
     faceMode: ["3"],
     extrude: ["x"],
+    paintTool: ["p"],
   }
 
   private active = false

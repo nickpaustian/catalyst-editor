@@ -1,4 +1,4 @@
-import { Button, Camera, Colour, Html, Label, Light, Model, Node3D, Panel, Path, Picture, Slate, Stack, StreamedSurface, Toggle, type AntiAliasing, type Catalyst, type MetadataLink, type NodeJSON, type RenderSettings, type SceneMetadata } from "@nickpaustian/catalyst"
+import { Button, Camera, Colour, Grid, Html, Label, Light, Model, Node3D, Panel, Path, Picture, Slate, Stack, StreamedSurface, Toggle, type AntiAliasing, type Catalyst, type MetadataLink, type NodeJSON, type RenderSettings, type SceneMetadata } from "@nickpaustian/catalyst"
 import { pickFile } from "../ProjectFolder"
 import { Interactable } from "@nickpaustian/catalyst/interaction"
 import { BoxCollider, CapsuleCollider, MeshCollider, SphereCollider } from "@nickpaustian/catalyst/physics"
@@ -157,6 +157,23 @@ export const sceneRecipe: Recipe = {
         }
         return path
       },
+    },
+    {
+      kind: "Grid",
+      label: "Grid",
+      cls: Grid,
+      description: "A map of square cells, each one of a palette of tile types with tags your scripts read (walk, place…). Paint it in the viewport; scripts ask it for cells, centres and routes.",
+      make: (o) =>
+        new Grid({
+          ...o,
+          columns: 8,
+          rows: 6,
+          tiles: [
+            { name: "floor", colour: 0x7d8a6a, height: 0, tags: ["walk"] },
+            { name: "raised", colour: 0x8b8f99, height: 0.5, tags: [] },
+            { name: "wall", colour: 0x3b3f47, height: 1, tags: [] },
+          ],
+        }),
     },
     { kind: "PlayerStart", label: "Player start", cls: PlayerStart, description: "Where a run puts the player: its position and facing. The first one in the scene is used.", make: (o) => new PlayerStart(o) },
     { kind: "Box", label: "Box", cls: Box, description: "A block with a mesh and a matching collider: floors, walls, crates.", make: (o) => new Box(o) },

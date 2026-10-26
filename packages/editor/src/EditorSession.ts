@@ -1,10 +1,11 @@
-import { Mat4, Model, Node3D, Prefab, Quaternion, Slate, UIElement, Vector3, DebugShapes, Visual, editorIcon, uiLayer, exposedProperties, readExposed, writeExposed, type Catalyst, type ExposedProperty, type NodeClass, type NodeJSON, type Script } from "@nickpaustian/catalyst"
+import { Grid, Mat4, Model, Node3D, Prefab, Quaternion, Slate, UIElement, Vector3, DebugShapes, Visual, editorIcon, uiLayer, exposedProperties, readExposed, writeExposed, type Catalyst, type ExposedProperty, type NodeClass, type NodeJSON, type Script } from "@nickpaustian/catalyst"
 import { Input } from "@nickpaustian/catalyst/input"
 import { BoxCollider, MeshCollider, Physics } from "@nickpaustian/catalyst/physics"
 import { EditMesh, Primitive } from "@nickpaustian/catalyst/prefabs"
 import type { LightspeedRuntime } from "@lightspeed-js/core"
 import { EditorCamera, groupTarget, type GizmoMode, isSized, type DrawTool, type DrawnBox, type EditMode } from "./EditorCamera"
 import { EditorInput } from "./EditorInput"
+import { GridPainter, type GridCommand, type GridPanel } from "./GridPainter"
 import { History } from "./History"
 import { preferences, storage, type SnapSettings, streamingQualityOf, type StreamingPreset } from "./preferences"
 import { browserFolders, folderLoader, pickFile, type FolderSource, type ProjectFolder, type ProjectStorage, type RecentProject } from "./ProjectFolder"
@@ -98,6 +99,8 @@ export interface EditorCells {
   "editor:streamable": typeof STREAMABLE_DEFAULT
   /** The recipes a project may use. */
   "editor:recipes": string[]
+  /** The selected grid's tile types and the paint tool; null when no grid is selected. */
+  "editor:grid": GridPanel | null
   "editor:history": { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
   /** The recipe's project-wide settings, or null when it has none. */
   "editor:settings": { title: string; fields: SelectionProperty[] } | null
@@ -160,6 +163,7 @@ export interface EditorCells {
 }
 
 export type EditorCommand =
+  | GridCommand
   | { type: "newProject"; name?: string }
   | { type: "openFolder" }
   | { type: "reopenLast" }
@@ -354,6 +358,7 @@ export class EditorSession {
   readonly recipe: Recipe
   private readonly app: LightspeedRuntime
   private readonly camera: EditorCamera
+  private readonly grids: GridPainter
   private readonly slateEditor: SlateEditor
   private readonly input: EditorInput | null
   private folder: AssetFolder | null = null
@@ -479,6 +484,12 @@ export class EditorSession {
       unsubscribeReport()
     }
     this.camera = new EditorCamera(this.engine)
+    this.grids = new GridPainter({
+      camera: this.camera,
+      selected: () => this.selected,
+      record: (label, undo, redo, key) => this.record(label, undo, redo, key),
+      publish: (panel) => this.set("editor:grid", panel),
+    })
     uiLayer(this.engine)?.setAttribute("inert", "")
     this.slateEditor = new SlateEditor({
       engine: this.engine,
@@ -496,7 +507,7 @@ export class EditorSession {
     })
     for (const { kind, cls } of this.recipe.kinds) if (!this.engine.registry.has(kind) && typeof cls === "function") this.engine.register({ [kind]: cls as NodeClass })
     const input = this.engine.find(Input)
-    this.input = input ? new EditorInput(input, { focusSelected: () => this.focusSelected(), deleteSelected: () => this.deleteSelected(), moveTool: () => this.setGizmo("translate"), rotateTool: () => this.setGizmo("rotate"), scaleTool: () => this.setGizmo("scale"), boxTool: () => this.setTool("box"), colliderTool: () => this.setTool("collider"), vertexTool: () => this.setVertexEdit(!this.camera.vertexEdit), vertexMode: () => this.setEditMode("vertex"), edgeMode: () => this.setEditMode("edge"), faceMode: () => this.setEditMode("face"), extrude: () => this.extrude() }) : null
+    this.input = input ? new EditorInput(input, { focusSelected: () => this.focusSelected(), deleteSelected: () => this.deleteSelected(), moveTool: () => this.setGizmo("translate"), rotateTool: () => this.setGizmo("rotate"), scaleTool: () => this.setGizmo("scale"), boxTool: () => this.setTool("box"), colliderTool: () => this.setTool("collider"), vertexTool: () => this.setVertexEdit(!this.camera.vertexEdit), vertexMode: () => this.setEditMode("vertex"), edgeMode: () => this.setEditMode("edge"), faceMode: () => this.setEditMode("face"), extrude: () => this.extrude(), paintTool: () => void this.handle({ type: "gridPaint" }) }) : null
     const physics = this.engine.find(Physics)
     if (physics) physics.paused = true
     this.engine.scripts.setRunning(false, this.engine.root, this.engine)
@@ -1116,6 +1127,7 @@ export class EditorSession {
   private publishSelection(): void {
     const node = this.selected
     this.publishSignals()
+    this.grids.follow()
     if (!node) {
       this.set("editor:selection", null)
       return
@@ -1148,6 +1160,7 @@ export class EditorSession {
   //=========================
 
   private async handle(command: EditorCommand): Promise<void> {
+    if (this.grids.command(command)) return this.publishView()
     switch (command.type) {
       case "newProject":
         await this.newProject(command.name)
@@ -2321,12 +2334,16 @@ export class EditorSession {
     this.camera.mode = mode
     // A gizmo key leaves the draw tool.
     this.camera.tool = null
+    this.camera.paintTarget = null
+    this.grids.publish()
     this.publishView()
   }
 
   /** The draw tools stay on between boxes; pressing the same tool's key again, or a gizmo key, leaves them. */
   private setTool(tool: DrawTool | null): void {
     this.camera.tool = this.camera.tool === tool ? null : tool
+    if (this.camera.tool) this.camera.paintTarget = null
+    this.grids.publish()
     this.publishView()
   }
 
@@ -2540,6 +2557,11 @@ export class EditorSession {
     if (JSON.stringify(before) === JSON.stringify(next)) return
     const after = Array.isArray(next) ? [...next] : next
     const previous = Array.isArray(before) ? [...before] : before
+    if (node instanceof Grid && (key === "columns" || key === "rows")) {
+      this.grids.change(property.label ?? key, node, () => writeExposed(node, property, after), `property:${this.idOf(node)}:${key}`)
+      this.publishSelection()
+      return
+    }
     const write = (value: unknown) => {
       const wasSpatial = isSpatial(node)
       writeExposed(node, property, value)
