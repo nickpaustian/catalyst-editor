@@ -243,6 +243,7 @@ export class SignalWiring {
     if (typeof (script as unknown as Record<string, unknown>)[connection.call] !== "function") problem = `${fileName(entry.url)} has no method ${connection.call}`
     else if (from === "") problem = `${field} is not set on ${node.name}`
     else if (from !== undefined && !source && editingFile) note = `"${from}" isn't in this file; the scene that loads it may have it`
+    else if (from !== undefined && !source && connection.later) note = `"${from}" comes later; it is heard once it arrives`
     else if (from !== undefined && !source) problem = `no node "${from}"`
     else if (found.length > 1) problem = `${found.length} nodes are named "${from}"; the first is heard`
     else if (!signalAt(source ? source.signals : this.host.engine.signals, connection.signal)) problem = `no signal ${connection.signal} on ${source ? `"${from}"` : "the engine"}`
