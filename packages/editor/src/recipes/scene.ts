@@ -1,4 +1,4 @@
-import { Button, Camera, Colour, Html, Label, Light, Model, Node3D, Panel, Picture, Slate, Stack, StreamedSurface, Toggle, type AntiAliasing, type Catalyst, type MetadataLink, type NodeJSON, type RenderSettings, type SceneMetadata } from "@nickpaustian/catalyst"
+import { Button, Camera, Colour, Html, Label, Light, Model, Node3D, Panel, Path, Picture, Slate, Stack, StreamedSurface, Toggle, type AntiAliasing, type Catalyst, type MetadataLink, type NodeJSON, type RenderSettings, type SceneMetadata } from "@nickpaustian/catalyst"
 import { pickFile } from "../ProjectFolder"
 import { Interactable } from "@nickpaustian/catalyst/interaction"
 import { BoxCollider, CapsuleCollider, MeshCollider, SphereCollider } from "@nickpaustian/catalyst/physics"
@@ -143,6 +143,21 @@ export const sceneRecipe: Recipe = {
   files: [SCENE_FILE],
   kinds: [
     { kind: "Group", label: "Group", cls: Node3D, description: "An empty spatial node: a place to gather other nodes under one transform.", make: ({ name }) => new Node3D(name) },
+    {
+      kind: "Path",
+      label: "Path",
+      cls: Path,
+      description: "A route through its children, in order: move them with the gizmo and the curve follows. Scripts ask it for a point or direction a distance along, for patrols, rails and enemy routes.",
+      make: (o) => {
+        const path = new Path(o)
+        for (const [name, x] of [["1", -1], ["2", 1]] as const) {
+          const waypoint = new Node3D(name)
+          waypoint.transform.position.set(x, 0, 0)
+          path.addNode(waypoint)
+        }
+        return path
+      },
+    },
     { kind: "PlayerStart", label: "Player start", cls: PlayerStart, description: "Where a run puts the player: its position and facing. The first one in the scene is used.", make: (o) => new PlayerStart(o) },
     { kind: "Box", label: "Box", cls: Box, description: "A block with a mesh and a matching collider: floors, walls, crates.", make: (o) => new Box(o) },
     { kind: "Sphere", label: "Sphere", cls: Sphere, description: "A ball with a mesh and a matching collider.", make: (o) => new Sphere(o) },
