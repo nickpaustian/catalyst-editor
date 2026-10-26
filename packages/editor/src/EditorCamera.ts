@@ -1188,24 +1188,9 @@ export class EditorCamera implements ViewPose {
     this.canvas.style.cursor = grid ? "crosshair" : this.drawTool ? "crosshair" : ""
   }
 
-  /**
-   * The cell under a point on the canvas: the face of the grid's own tiles the pointer is on (stepped
-   * just inside it, so a raised tile's side counts for that tile), or where the ray meets the grid's
-   * floor over an empty cell.
-   */
+  /** The cell under a point on the canvas, as the grid finds it on its own tiles. */
   private cellUnder(clientX: number, clientY: number): Cell | null {
-    const grid = this.paintGrid
-    if (!grid) return null
-    const ray = this.rayAt(clientX, clientY)
-    const hit = this.engine.pick(ray, { filter: (node) => node === grid })
-    if (hit) {
-      const cell = grid.cellAt(hit.worldPoint.clone().addScaled(hit.worldNormal, -0.01 * grid.cellSize))
-      if (cell) return cell
-    }
-    const floor = new Vector3()
-    const up = new Vector3(0, 1, 0).applyQuaternion(grid.transform.getWorldRotation())
-    if (ray.intersectPlane(grid.getWorldPosition(), up, floor) === null) return null
-    return grid.cellAt(floor)
+    return this.paintGrid?.cellOnRay(this.rayAt(clientX, clientY)) ?? null
   }
 
   private movePaint(clientX: number, clientY: number): void {
