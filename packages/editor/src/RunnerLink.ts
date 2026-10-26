@@ -1,6 +1,7 @@
 import type { NodeJSON } from "@nickpaustian/catalyst"
 import type { FolderTransfer } from "./ProjectFolder"
 import type { FiredSignal } from "./signalTap"
+import type { ConsoleEntry } from "./consoleTap"
 
 /** What the editor sends the runner: the scene as it is, and how to open the project it came from. */
 export interface RunMessage {
@@ -17,11 +18,10 @@ export interface RunOptions {
   frequentSignals: boolean
 }
 
-/** What the runner tells the editor while a scene plays: the signals that fired since the last report. */
-export interface RunReport {
-  type: "catalyst:signals"
-  fired: FiredSignal[]
-}
+/** What the runner tells the editor while a scene plays: the signals that fired, or what its console said, since the last report. */
+export type RunReport = { type: "catalyst:signals"; fired: FiredSignal[] } | { type: "catalyst:console"; entries: ConsoleEntry[] }
+
+export const RUN_REPORTS: RunReport["type"][] = ["catalyst:signals", "catalyst:console"]
 
 /** The editor's side of the runner window: open it, hear that it is ready, send it scenes. */
 export interface RunnerLink {
@@ -98,7 +98,7 @@ export const windowRunnerLink = (): RunnerLink => {
     },
     onReport(listener) {
       const onMessage = (event: MessageEvent) => {
-        if (event.origin === location.origin && event.data?.type === "catalyst:signals") listener(event.data as RunReport)
+        if (event.origin === location.origin && RUN_REPORTS.includes(event.data?.type)) listener(event.data as RunReport)
       }
       window.addEventListener("message", onMessage)
       return () => window.removeEventListener("message", onMessage)

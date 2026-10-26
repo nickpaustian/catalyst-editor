@@ -6,6 +6,7 @@ import type { Recipe } from "./recipe"
 import { windowRunnerPageLink, type RunMessage, type RunnerPageLink } from "./RunnerLink"
 import { ScriptCompiler } from "./ScriptCompiler"
 import { SignalTap } from "./signalTap"
+import { ConsoleTap } from "./consoleTap"
 
 export type { RunMessage } from "./RunnerLink"
 
@@ -24,6 +25,8 @@ export class Runner {
   private linked = true
   private readonly link: RunnerPageLink | null
   private tap: SignalTap | null = null
+  /** The page's console, heard for as long as the runner is linked to an editor. */
+  private readonly console: ConsoleTap | null
   private frequentSignals = false
   /** The stats block over the canvas; the backquote key shows and hides it. */
   readonly debug: DebugOverlay
@@ -40,6 +43,8 @@ export class Runner {
     for (const { kind, cls } of recipe.kinds) if (!engine.registry.has(kind) && typeof cls === "function") engine.register({ [kind]: cls as any })
     const link = options.link === null ? null : (options.link ?? windowRunnerPageLink())
     this.link = link
+    const report = link?.report?.bind(link)
+    this.console = report ? new ConsoleTap((entries) => report({ type: "catalyst:console", entries })) : null
     const unsubscribeRun = link?.onRun((message) => void this.play(message)) ?? (() => undefined)
     const unsubscribeOptions =
       link?.onOptions?.((options) => {
@@ -65,6 +70,7 @@ export class Runner {
   /** Play a scene, its names already paths, with the files it names read from `folder`. */
   async playProject(scene: RunMessage["scene"], from: ProjectFolder | null): Promise<void> {
     this.stop()
+    this.console?.restart()
     const folder = from ? await AssetFolder.open(from) : null
     if (folder) this.engine.loader = folderLoader(folder)
     this.engine.scripts.invalidate()
@@ -93,6 +99,7 @@ export class Runner {
 
   dispose(): void {
     this.stop()
+    this.console?.dispose()
     this.unsubscribe()
   }
 }

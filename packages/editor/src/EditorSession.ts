@@ -14,6 +14,7 @@ import { accepts } from "./fileField"
 import { SCRIPTS_DIR, ScriptCompiler, plainScriptTemplate, scriptTemplate } from "./ScriptCompiler"
 import { BROWSER_DEFAULT, CONNECT_DEFAULT, SignalWiring, labelOf, type ConnectDialog, type SignalBrowser, type SignalsView } from "./SignalWiring"
 import type { FiredSignal } from "./signalTap"
+import type { ConsoleEntry } from "./consoleTap"
 import { LEGACY_PROJECT_FILE, PROJECT_EXTENSION, createProject, readProjectImage, readProjectSettings, writeProjectImage, writeProjectSettings, type NewProject, type ProjectSettings } from "./project"
 import { openConfirm } from "./confirm"
 import { capturing, dropRecovery, keepRecovery, overlaid, readRecovery, type Recovery } from "./recovery"
@@ -152,6 +153,8 @@ export interface EditorCells {
   "editor:signalLog": FiredSignal[]
   /** Whether the log shows the signals that fire every frame too. */
   "editor:signalLogFrequent": boolean
+  /** What the run window's console said since the run began, oldest first, the last thousand kept; a line said again in a row is counted. */
+  "editor:console": ConsoleEntry[]
 }
 
 export type EditorCommand =
@@ -166,6 +169,7 @@ export type EditorCommand =
   | { type: "closeConnect" }
   | { type: "clearSignalLog" }
   | { type: "setFrequentSignals"; on: boolean }
+  | { type: "clearConsole" }
   | { type: "connectSignal"; source: number | null; signal: string; target: number; url: string | null; call: string; perNode?: boolean; edit?: { url: string; index: number } | null }
   | { type: "disconnectSignal"; url: string; index: number }
   | { type: "addSignal"; node: number; url: string | null; name: string }
@@ -325,6 +329,7 @@ const confirmed = (title: string, message: string, yes: string): Promise<boolean
 
 const AUTOSAVE_DELAY = 2000
 const SIGNAL_LOG_KEPT = 500
+const CONSOLE_KEPT = 1000
 
 /** How long ago `time` was, as a phrase. */
 const ago = (time: number): string => {
@@ -457,10 +462,13 @@ export class EditorSession {
       if (this.app.shared("editor:project").value?.status === "running") this.publishProject()
     })
     const unsubscribeFailed = this.runner.onFailed?.((reason) => this.publishProject(`the run window could not be opened: ${reason}`)) ?? (() => undefined)
-    const unsubscribeReport = this.runner.onReport?.((report) => {
-      const log = (this.app.shared("editor:signalLog").value as FiredSignal[] | undefined) ?? []
-      this.set("editor:signalLog", [...log, ...report.fired].slice(-SIGNAL_LOG_KEPT))
-    }) ?? (() => undefined)
+    const unsubscribeReport =
+      this.runner.onReport?.((report) => {
+        if (report.type === "catalyst:signals") {
+          const log = (this.app.shared("editor:signalLog").value as FiredSignal[] | undefined) ?? []
+          this.set("editor:signalLog", [...log, ...report.fired].slice(-SIGNAL_LOG_KEPT))
+        } else this.heardConsole(report.entries)
+      }) ?? (() => undefined)
     this.unsubscribeRunner = () => {
       unsubscribeReady()
       unsubscribeClosed()
@@ -554,6 +562,7 @@ export class EditorSession {
     this.set("editor:signalBrowser", BROWSER_DEFAULT)
     this.set("editor:signalLog", [])
     this.set("editor:signalLogFrequent", false)
+    this.set("editor:console", [])
     this.set("editor:codeUnsaved", [])
     this.app.shared("editor:codeUnsaved").subscribe(() => this.autosaveSoon())
     this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
@@ -1132,6 +1141,9 @@ export class EditorSession {
       case "closeConnect":
         this.set("editor:connect", CONNECT_DEFAULT)
         break
+      case "clearConsole":
+        this.set("editor:console", [])
+        break
       case "clearSignalLog":
         this.set("editor:signalLog", [])
         break
@@ -1558,9 +1570,29 @@ export class EditorSession {
     this.set("editor:running", true)
   }
 
+  private runErrorShown = false
+
+  /** Lines from the run window's console, a repeat of the line before counted on it; the run's first error goes on the status line too. */
+  private heardConsole(entries: ConsoleEntry[]): void {
+    const lines = [...((this.app.shared("editor:console").value as ConsoleEntry[] | undefined) ?? [])]
+    for (const entry of entries) {
+      const last = lines[lines.length - 1]
+      if (last && last.level === entry.level && last.text === entry.text && last.stack === entry.stack) lines[lines.length - 1] = { ...last, count: (last.count ?? 1) + 1, at: entry.at }
+      else lines.push(entry)
+    }
+    this.set("editor:console", lines.slice(-CONSOLE_KEPT))
+    const error = entries.find((entry) => entry.level === "error")
+    if (error && !this.runErrorShown) {
+      this.runErrorShown = true
+      this.publishProject(`the run hit an error: ${error.text.split("\n")[0]} · see the Console pane`)
+    }
+  }
+
   private async sendToRunner(): Promise<void> {
     if (!this.runner.isOpen || !this._root) return
     this.set("editor:signalLog", [])
+    this.set("editor:console", [])
+    this.runErrorShown = false
     this.runner.send({ type: "catalyst:options", frequentSignals: Boolean(this.app.shared("editor:signalLogFrequent").value) })
     const live = this.recipe.serialise?.(this._root, this.engine) ?? this.engine.serialise(this._root)
     const scene = this.folder ? await this.folder.toPaths(live) : live
