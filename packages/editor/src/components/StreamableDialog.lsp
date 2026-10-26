@@ -10,7 +10,7 @@
       <label class="dialog-field" $if="state.meshes.length > 1">Mesh
         <span class="well large select">
           <select $model="state.mesh" @change="picked()">
-            <option $for="mesh in state.meshes" $key="mesh.index" $value="String(mesh.index)" $selected="String(mesh.index) === state.mesh" $disabled="!mesh.buildable">{{ mesh.label }}</option>
+            <option $for="mesh in state.meshes" $key="mesh.index" $value="String(mesh.index)" $selected="String(mesh.index) === state.mesh" $disabled="!mesh.buildable" $label="mesh.label">{{ mesh.label }}</option>
           </select>
         </span>
       </label>

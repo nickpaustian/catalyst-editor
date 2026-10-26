@@ -3,7 +3,7 @@
   <div class="bar">
     <span class="well select file"><select aria-label="File" $model="state.path" @change="choose()">
       <option value="">Choose a file…</option>
-      <option $for="file in shared['editor:codeFiles']" $key="file" $value="file">{{ file }}</option>
+      <option $for="file in shared['editor:codeFiles']" $key="file" $value="file" $label="file">{{ file }}</option>
     </select></span>
     <span class="dirty" $if="state.dirty">unsaved</span>
     <span class="status" $class="{ error: state.error }">{{ state.status }}</span>

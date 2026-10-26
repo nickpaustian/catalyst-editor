@@ -24,7 +24,7 @@
                 </label>
                 <select $else-if="field.type === 'select'" class="well" $aria-label="field.label" @change="applySelect($event, field)">
                   <template $for="choice in field.options" $key="choice">
-                    <option $value="choice" $selected="choice === field.value">{{ choice }}</option>
+                    <option $value="choice" $label="choice" $selected="choice === field.value">{{ choice }}</option>
                   </template>
                 </select>
                 <button $else-if="field.type === 'file'" class="well file-pick" type="button" $class="{ missing: field.missing, droppable: field.droppable, over: field.over }" $aria-label="field.label" $title="field.value || 'None'" $disabled="field.readonly" @click="openFile($event, field)" @dragover="fileOver($event, field)" @dragleave="field.over = false" @drop="dropFile($event, field)">

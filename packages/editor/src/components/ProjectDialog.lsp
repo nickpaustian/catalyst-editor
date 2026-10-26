@@ -29,7 +29,7 @@
     <label class="dialog-field" title="What a project is: the node kinds it adds and how its folder becomes a scene." $if="shared['editor:recipes'].length > 1">Recipe
       <span class="well large select">
         <select $model="state.recipe" $disabled="state.mode !== 'create'">
-          <option $for="recipe in shared['editor:recipes']" $key="recipe" $value="recipe">{{ recipe }}</option>
+          <option $for="recipe in shared['editor:recipes']" $key="recipe" $value="recipe" $label="recipe">{{ recipe }}</option>
         </select>
       </span>
     </label>
