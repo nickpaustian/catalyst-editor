@@ -12,7 +12,7 @@ export interface FiredSignal {
 export const FREQUENT_SIGNALS = new Set(["onUpdate", "onIdle", "onRender", "onPostRender", "physics.onStep", "input.onPointerMove", "input.onForceChanged", "input.onActionHold", "onTriggerStay", "onCollisionStay", "onMove"])
 
 const FLUSH_MS = 100
-const RESCAN_MS = 1000
+const RESCAN_MS = 200
 const MOST_PER_FLUSH = 200
 
 const labelOf = (node: Node, root: Node): string => {
@@ -37,14 +37,17 @@ export const describeValue = (value: unknown): string => {
 /**
  * Hears every signal in a running scene (the engine's and each node's) and
  * hands them on in batches, for the editor's signal log. A signal is heard
- * by wrapping its `emit`, so nothing about what it does changes; the tree is
- * looked over again each second for nodes and signals that arrived since.
+ * by wrapping its `emit`, so nothing about what it does changes. New nodes
+ * are heard as they are added and their scripts as they are built; the tree
+ * is also looked over five times a second for anything that slipped past.
  */
 export class SignalTap {
   private readonly root: Node
   private readonly send: (fired: FiredSignal[]) => void
   private readonly started = performance.now()
   private readonly wrapped = new Map<object, unknown>()
+  private readonly watched = new WeakSet<Node>()
+  private readonly unsubscribes: (() => void)[] = []
   private pending: FiredSignal[] = []
   private readonly timers: ReturnType<typeof setInterval>[] = []
   /** Whether the every-frame signals are reported too. */
@@ -65,13 +68,35 @@ export class SignalTap {
   }
 
   private scan(): void {
-    this.root.walk((node) => {
-      const signals = node.signals as unknown as Record<string, unknown>
-      for (const name of Object.keys(signals)) {
-        const signal = signals[name]
-        if (isSignal(signal)) this.wrap(signal, node, name)
-      }
+    this.watchTree(this.root)
+  }
+
+  private watchTree(from: Node): void {
+    from.walk((node) => {
+      if (node.internal) return false
+      this.watch(node)
     })
+  }
+
+  /**
+   * Hear a node's signals, and those its scripts add once they are built; and
+   * hear each child as it is added. Both happen before anything else hears of
+   * the node, so a signal fired the moment it exists is not missed.
+   */
+  private watch(node: Node): void {
+    this.wrapSignalsOf(node)
+    if (this.watched.has(node)) return
+    this.watched.add(node)
+    void node.scriptsReady.then(() => this.wrapSignalsOf(node))
+    this.unsubscribes.push(node.signals.onChildAdded.subscribe(({ child }) => this.watchTree(child), Number.MAX_SAFE_INTEGER))
+  }
+
+  private wrapSignalsOf(node: Node): void {
+    const signals = node.signals as unknown as Record<string, unknown>
+    for (const name of Object.keys(signals)) {
+      const signal = signals[name]
+      if (isSignal(signal)) this.wrap(signal, node, name)
+    }
   }
 
   private wrap(signal: { emit(value: unknown): void }, node: Node | null, name: string): void {
@@ -97,6 +122,7 @@ export class SignalTap {
   dispose(): void {
     this.flush()
     for (const timer of this.timers) clearInterval(timer)
+    for (const unsubscribe of this.unsubscribes) unsubscribe()
     for (const [signal, own] of this.wrapped) {
       const target = signal as { emit?: unknown }
       if (own === undefined) delete target.emit
