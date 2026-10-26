@@ -40,6 +40,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       environment: { title: "Environment", element: document.getElementById("environment-panel")! },
       code: { title: "Code", element: document.getElementById("code-panel")! },
       preview: { title: "Preview", element: document.getElementById("preview-panel")! },
+      signals: { title: "Signals", element: document.getElementById("signals-panel")! },
       files: {
         title: "Files",
         element: document.getElementById("files-panel")!,
@@ -72,6 +73,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!(await app.mount("streamabledialog", "#streamable-dialog"))) throw new Error("StreamableDialog did not mount")
   if (!(await app.mount("connectdialog", "#connect-dialog"))) throw new Error("ConnectDialog did not mount")
   if (!(await app.mount("previewpane", "#preview-panel"))) throw new Error("PreviewPane did not mount")
+  if (!(await app.mount("signalspane", "#signals-panel"))) throw new Error("SignalsPane did not mount")
   if (!(await app.mount("filepicker", "#file-picker"))) throw new Error("FilePicker did not mount")
   if (!(await app.mount("viewporttools", "#viewport-tools"))) throw new Error("ViewportTools did not mount")
   app.shared("editor:code").subscribe((code: { path: string | null } | undefined) => {

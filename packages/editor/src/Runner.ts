@@ -5,6 +5,7 @@ import { browserFolders, folderLoader, type FolderSource, type ProjectFolder } f
 import type { Recipe } from "./recipe"
 import { windowRunnerPageLink, type RunMessage, type RunnerPageLink } from "./RunnerLink"
 import { ScriptCompiler } from "./ScriptCompiler"
+import { SignalTap } from "./signalTap"
 
 export type { RunMessage } from "./RunnerLink"
 
@@ -21,6 +22,8 @@ export class Runner {
   private readonly folders: FolderSource
   private readonly unsubscribe: () => void
   private linked = true
+  private readonly link: RunnerPageLink | null
+  private tap: SignalTap | null = null
   /** The stats block over the canvas; the backquote key shows and hides it. */
   readonly debug: DebugOverlay
 
@@ -35,6 +38,7 @@ export class Runner {
     })
     for (const { kind, cls } of recipe.kinds) if (!engine.registry.has(kind) && typeof cls === "function") engine.register({ [kind]: cls as any })
     const link = options.link === null ? null : (options.link ?? windowRunnerPageLink())
+    this.link = link
     this.unsubscribe = link?.onRun((message) => void this.play(message)) ?? (() => undefined)
     link?.ready()
     this.linked = link !== null
@@ -59,11 +63,15 @@ export class Runner {
     const root = made instanceof Node3DClass ? made : (new Node3DClass("scene").addNode(made).parent as Node3D)
     this.root = root
     this.engine.add(root)
+    const report = this.link?.report?.bind(this.link)
+    if (report) this.tap = new SignalTap(this.engine, root, (fired) => report({ type: "catalyst:signals", fired }))
     this.teardown = await this.recipe.run({ engine: this.engine, root, scene, folder })
     if (this.linked) document.title = `${folder?.name ?? "untitled"} · running`
   }
 
   stop(): void {
+    this.tap?.dispose()
+    this.tap = null
     this.teardown?.()
     this.teardown = null
     this.root?.dispose()

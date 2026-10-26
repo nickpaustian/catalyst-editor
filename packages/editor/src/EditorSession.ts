@@ -12,7 +12,8 @@ import { windowRunnerLink, type RunnerLink } from "./RunnerLink"
 import { AssetFolder } from "./AssetFolder"
 import { accepts } from "./fileField"
 import { SCRIPTS_DIR, ScriptCompiler, plainScriptTemplate, scriptTemplate } from "./ScriptCompiler"
-import { CONNECT_DEFAULT, SignalWiring, type ConnectDialog, type SignalsView } from "./SignalWiring"
+import { BROWSER_DEFAULT, CONNECT_DEFAULT, SignalWiring, type ConnectDialog, type SignalBrowser, type SignalsView } from "./SignalWiring"
+import type { FiredSignal } from "./signalTap"
 import { LEGACY_PROJECT_FILE, PROJECT_EXTENSION, createProject, readProjectImage, readProjectSettings, writeProjectImage, writeProjectSettings, type NewProject, type ProjectSettings } from "./project"
 import { openConfirm } from "./confirm"
 import { capturing, dropRecovery, keepRecovery, overlaid, readRecovery, type Recovery } from "./recovery"
@@ -146,6 +147,9 @@ export interface EditorCells {
   /** The selected node's signals, who hears them, and what its scripts listen to. */
   "editor:signals": SignalsView | null
   "editor:connect": ConnectDialog
+  "editor:signalBrowser": SignalBrowser
+  /** The signals that fired in the run window since the run began, oldest first, the last few hundred kept. */
+  "editor:signalLog": FiredSignal[]
 }
 
 export type EditorCommand =
@@ -158,6 +162,7 @@ export type EditorCommand =
   | { type: "closeProject" }
   | { type: "openConnect"; mode: "emit" | "listen"; signal?: string }
   | { type: "closeConnect" }
+  | { type: "clearSignalLog" }
   | { type: "connectSignal"; source: number | null; signal: string; target: number; url: string | null; call: string }
   | { type: "disconnectSignal"; url: string; index: number }
   | { type: "addSignal"; node: number; url: string | null; name: string }
@@ -316,6 +321,7 @@ const confirmed = (title: string, message: string, yes: string): Promise<boolean
   new Promise((resolve) => openConfirm(title, message, [{ label: "Cancel", run: () => resolve(false) }, { label: yes, primary: true, run: () => resolve(true) }], () => resolve(false)))
 
 const AUTOSAVE_DELAY = 2000
+const SIGNAL_LOG_KEPT = 500
 
 /** How long ago `time` was, as a phrase. */
 const ago = (time: number): string => {
@@ -448,10 +454,15 @@ export class EditorSession {
       if (this.app.shared("editor:project").value?.status === "running") this.publishProject()
     })
     const unsubscribeFailed = this.runner.onFailed?.((reason) => this.publishProject(`the run window could not be opened: ${reason}`)) ?? (() => undefined)
+    const unsubscribeReport = this.runner.onReport?.((report) => {
+      const log = (this.app.shared("editor:signalLog").value as FiredSignal[] | undefined) ?? []
+      this.set("editor:signalLog", [...log, ...report.fired].slice(-SIGNAL_LOG_KEPT))
+    }) ?? (() => undefined)
     this.unsubscribeRunner = () => {
       unsubscribeReady()
       unsubscribeClosed()
       unsubscribeFailed()
+      unsubscribeReport()
     }
     this.camera = new EditorCamera(this.engine)
     uiLayer(this.engine)?.setAttribute("inert", "")
@@ -536,6 +547,8 @@ export class EditorSession {
     this.set("editor:codeFile", null)
     this.set("editor:signals", null)
     this.set("editor:connect", CONNECT_DEFAULT)
+    this.set("editor:signalBrowser", BROWSER_DEFAULT)
+    this.set("editor:signalLog", [])
     this.set("editor:codeUnsaved", [])
     this.app.shared("editor:codeUnsaved").subscribe(() => this.autosaveSoon())
     this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
@@ -568,6 +581,7 @@ export class EditorSession {
     const root = await this.recipe.load(folder && recovery ? overlaid(folder, recovery.files) : folder, this.engine)
     this._root = root
     this.engine.add(root)
+    void this.whenScriptsBuilt(root)
     this.setVisualised(this.visualised)
     await this.loadPrefabs()
     await this.loadScriptFiles()
@@ -599,6 +613,16 @@ export class EditorSession {
     if (!discarding && !(await this.leave())) return
     await this.open(folder, { discarding: true })
     this.publishProject("reloaded from disk")
+  }
+
+  /** Once the scene's scripts are built (they load after the project opens), show the signals they add and connect. */
+  private async whenScriptsBuilt(root: Node3D): Promise<void> {
+    const loading: Promise<void>[] = []
+    root.walk((node) => void loading.push(node.scriptsReady))
+    await Promise.allSettled(loading)
+    if (this._root !== root) return
+    this.signalsShown.stale = true
+    this.publishSelection()
   }
 
   /** Take the project out of the viewport and show the start screen again. */
@@ -919,9 +943,11 @@ export class EditorSession {
 
   private publishSignals(): void {
     const node = this.selected
-    if (!this.signalsShown.stale && this.signalsShown.node === node) return
+    const stale = this.signalsShown.stale
+    if (!stale && this.signalsShown.node === node) return
     this.signalsShown = { node, stale: false }
     this.set("editor:signals", node ? this.wiring.view(node) : null)
+    if (stale) this.set("editor:signalBrowser", this.wiring.browser())
   }
 
   private publishTree(): void {
@@ -1085,6 +1111,9 @@ export class EditorSession {
         break
       case "closeConnect":
         this.set("editor:connect", CONNECT_DEFAULT)
+        break
+      case "clearSignalLog":
+        this.set("editor:signalLog", [])
         break
       case "connectSignal":
         try {
@@ -1507,6 +1536,7 @@ export class EditorSession {
 
   private async sendToRunner(): Promise<void> {
     if (!this.runner.isOpen || !this._root) return
+    this.set("editor:signalLog", [])
     const live = this.recipe.serialise?.(this._root, this.engine) ?? this.engine.serialise(this._root)
     const scene = this.folder ? await this.folder.toPaths(live) : live
     this.runner.send({ type: "catalyst:run", recipe: this.recipe.name, scene, folder: this.folder?.transfer() ?? null })

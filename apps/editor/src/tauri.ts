@@ -1,4 +1,4 @@
-import { nativeFolders, type AssetConverter, type FolderTransfer, type NativeFs, type RunMessage, type RunnerLink, type RunnerPageLink, type StreamableMesh, type StreamableProgress, type StreamableResult } from "@nickpaustian/catalyst-editor"
+import { nativeFolders, type AssetConverter, type FolderTransfer, type NativeFs, type RunMessage, type RunReport, type RunnerLink, type RunnerPageLink, type StreamableMesh, type StreamableProgress, type StreamableResult } from "@nickpaustian/catalyst-editor"
 import { open } from "@tauri-apps/plugin-dialog"
 import { SeekMode, exists, mkdir, open as openFile, readDir, readFile, readTextFile, remove, rename, stat, watch, writeFile, writeTextFile } from "@tauri-apps/plugin-fs"
 import { invoke } from "@tauri-apps/api/core"
@@ -129,6 +129,10 @@ const runnerLink = (): RunnerLink => {
       failed.add(listener)
       return () => failed.delete(listener)
     },
+    onReport(listener) {
+      const pending = listen<RunReport>("catalyst:signals", (event) => listener(event.payload))
+      return () => void pending.then((unlisten) => unlisten())
+    },
   }
 }
 
@@ -139,6 +143,9 @@ const runnerPageLink = (): RunnerPageLink => ({
   onRun(listener) {
     const pending = listen<RunMessage>("catalyst:run", (event) => listener(event.payload))
     return () => void pending.then((unlisten) => unlisten())
+  },
+  report(report) {
+    void emitTo(MAIN_LABEL, "catalyst:signals", report)
   },
 })
 

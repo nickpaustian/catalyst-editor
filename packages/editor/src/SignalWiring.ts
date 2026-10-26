@@ -38,6 +38,15 @@ export interface SignalsView {
   scripts: { url: string; name: string }[]
 }
 
+/** Every connection and declared signal in the scene, and the engine's signals with who hears them, for the signals pane. */
+export interface SignalBrowser {
+  connections: ConnectionRow[]
+  declared: { node: number; nodeName: string; name: string; url: string; listeners: number }[]
+  engine: { group: string | null; signals: { name: string; description?: string; payload?: string; listeners: ConnectionRow[] }[] }[]
+}
+
+export const BROWSER_DEFAULT: SignalBrowser = { connections: [], declared: [], engine: [] }
+
 /** A node the connect dialog offers, with its signals and its scripts' methods. */
 export interface ConnectNode {
   id: number
@@ -169,6 +178,31 @@ export class SignalWiring {
       listens: all.filter((entry) => entry.node === node).map((entry) => this.row(entry)),
       scripts: node.scripts.map((script) => ({ url: script.url, name: fileName(script.url) })),
     }
+  }
+
+  browser(): SignalBrowser {
+    const root = this.host.root()
+    if (!root) return BROWSER_DEFAULT
+    const rows = this.connections().map((entry) => ({ entry, row: this.row(entry) }))
+    const declared: SignalBrowser["declared"] = []
+    root.walk((node) => {
+      if (!(node instanceof Node3D)) return
+      for (const script of node.scripts) {
+        const own = Object.prototype.hasOwnProperty.call(script.constructor, "signals") ? ((script.constructor as typeof Script).signals ?? []) : []
+        for (const info of own) {
+          const listeners = rows.filter(({ entry, row }) => row.signal === info.name && entry.connection.from !== undefined && nodesNamed(root, entry.connection.from, entry.node)[0] === node).length
+          declared.push({ node: this.host.idOf(node), nodeName: labelOf(node, root), name: info.name, url: script.url, listeners })
+        }
+      }
+    })
+    const engine = this.host.engine.signalCatalog().map((group) => ({
+      group: group.group,
+      signals: group.signals.map((info) => {
+        const name = group.group ? `${group.group}.${info.name}` : info.name
+        return { ...info, listeners: rows.filter(({ entry, row }) => entry.connection.from === undefined && row.signal === name).map(({ row }) => row) }
+      }),
+    }))
+    return { connections: rows.map(({ row }) => row), declared, engine }
   }
 
   /** The Connect dialog's choices: every node with its signals and scripts, and the engine's signals. */

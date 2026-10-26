@@ -1,5 +1,6 @@
 import type { NodeJSON } from "@nickpaustian/catalyst"
 import type { FolderTransfer } from "./ProjectFolder"
+import type { FiredSignal } from "./signalTap"
 
 /** What the editor sends the runner: the scene as it is, and how to open the project it came from. */
 export interface RunMessage {
@@ -7,6 +8,12 @@ export interface RunMessage {
   recipe: string
   scene: NodeJSON
   folder: FolderTransfer | null
+}
+
+/** What the runner tells the editor while a scene plays: the signals that fired since the last report. */
+export interface RunReport {
+  type: "catalyst:signals"
+  fired: FiredSignal[]
 }
 
 /** The editor's side of the runner window: open it, hear that it is ready, send it scenes. */
@@ -22,12 +29,16 @@ export interface RunnerLink {
   onClosed(listener: () => void): () => void
   /** Hear that the host could not make the runner window, with its reason. */
   onFailed?(listener: (reason: string) => void): () => void
+  /** Hear what the runner reports while it plays. */
+  onReport?(listener: (report: RunReport) => void): () => void
 }
 
 /** The runner's side: say it is ready, hear scenes. */
 export interface RunnerPageLink {
   ready(): void
   onRun(listener: (message: RunMessage) => void): () => void
+  /** Tell the editor what happened while playing. */
+  report?(report: RunReport): void
 }
 
 const RUNNER_NAME = "catalyst-run"
@@ -76,12 +87,22 @@ export const windowRunnerLink = (): RunnerLink => {
       closed.add(listener)
       return () => closed.delete(listener)
     },
+    onReport(listener) {
+      const onMessage = (event: MessageEvent) => {
+        if (event.origin === location.origin && event.data?.type === "catalyst:signals") listener(event.data as RunReport)
+      }
+      window.addEventListener("message", onMessage)
+      return () => window.removeEventListener("message", onMessage)
+    },
   }
 }
 
 export const windowRunnerPageLink = (): RunnerPageLink => ({
   ready() {
     window.opener?.postMessage({ type: "catalyst:ready" }, location.origin)
+  },
+  report(report) {
+    window.opener?.postMessage(report, location.origin)
   },
   onRun(listener) {
     const onMessage = (event: MessageEvent) => {

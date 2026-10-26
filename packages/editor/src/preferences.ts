@@ -77,7 +77,7 @@ export class Preference<T> {
 import { defaultStreamingQuality, type StreamingQuality } from "@nickpaustian/catalyst"
 import { addTabs, emptyFloating, isSingleKindLayout, isValidFloating, isValidLayout, leafOf, pane, split, upgradeLayout, type FloatingState, type LayoutNode, type PaneKind } from "./panes/layout"
 
-export const PANE_KINDS: PaneKind[] = ["scene", "viewport", "inspector", "environment", "code", "files", "preview"]
+export const PANE_KINDS: PaneKind[] = ["scene", "viewport", "inspector", "environment", "code", "files", "preview", "signals"]
 
 /** Scene on the left, inspector on the right, the viewport between, as Godot lays it out. */
 export const defaultLayout = (): LayoutNode =>
