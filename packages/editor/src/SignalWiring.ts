@@ -1,4 +1,4 @@
-import { Node, Node3D, connectableMethods, declaredConnections, declaredSignals, exposedProperties, nodesNamed, readExposed, signalAt, signalsOf, writeExposed, type Catalyst, type Connection, type ExposedProperty, type Script } from "@nickpaustian/catalyst"
+import { Node, Node3D, connectableMethods, declaredConnections, declaredSignals, exposedProperties, groupTag, nodesNamed, readExposed, signalAt, signalsOf, writeExposed, type Catalyst, type Connection, type ExposedProperty, type NodeJSON, type Script } from "@nickpaustian/catalyst"
 import { addEntry, addField, addMethod, changeEntry, hasMethod, readEntry, staticArray, writeEntry } from "./scriptSource"
 
 /** A connection as the inspector lists it: who listens, to what, and why it doesn't work, if it doesn't. */
@@ -13,6 +13,8 @@ export interface ConnectionRow {
   from?: string
   /** The script's `node` field that names the node, for a connection each node chooses for itself. */
   field?: string
+  /** The tag of a connection that hears every node with it. */
+  group: string | null
   /** The node `from` finds, when it finds one. */
   source: number | null
   signal: string
@@ -57,8 +59,16 @@ export const BROWSER_DEFAULT: SignalBrowser = { connections: [], declared: [], e
 export interface ConnectNode {
   id: number
   label: string
+  tags: string[]
   signals: string[]
   scripts: { url: string; name: string; methods: string[]; shared: number }[]
+}
+
+/** A tag the dialog offers as a source: the nodes with it in the scene, and those its prefab files would make while the game runs. */
+export interface ConnectTag {
+  tag: string
+  label: string
+  signals: string[]
 }
 
 /** What the Connect dialog shows: a signal from a node (or the engine) to a method on a node's script, one side chosen already. */
@@ -73,13 +83,16 @@ export interface ConnectDialog {
   script: string | null
   /** The connection being changed, when the dialog edits one: where it is written, and what it calls and how it names its node now. */
   edit: { url: string; index: number; call: string; perNode: boolean } | null
+  /** The tag of the group source, when the dialog edits a connection that hears one. */
+  group: string | null
   nodes: ConnectNode[]
+  tags: ConnectTag[]
   /** The engine's signals, dotted for a group. */
   engine: { name: string; description?: string }[]
   error: string
 }
 
-export const CONNECT_DEFAULT: ConnectDialog = { open: false, mode: "emit", source: null, signal: "", target: null, script: null, edit: null, nodes: [], engine: [], error: "" }
+export const CONNECT_DEFAULT: ConnectDialog = { open: false, mode: "emit", source: null, signal: "", target: null, script: null, edit: null, group: null, nodes: [], tags: [], engine: [], error: "" }
 
 /** What the wiring needs from the session. */
 export interface WiringHost {
@@ -93,6 +106,8 @@ export interface WiringHost {
   newScriptFor(node: Node3D): Promise<string | null>
   /** Set a field of the script from `url` on `node`, as the inspector would, undoably. */
   setScriptField(node: Node3D, url: string, key: string, value: unknown): void
+  /** The project's prefab files, read as scene entries, for the tags and signals of what the game makes while it runs. */
+  prefabFiles(): Promise<{ path: string; json: NodeJSON }[]>
 }
 
 /** A connection written in a script that names its node, and the node it finds, to name it again once names or paths change. */
@@ -156,6 +171,8 @@ export class SignalWiring {
   private hears(entry: { node: Node3D; script: Script; connection: Connection }, node: Node): boolean {
     const root = this.host.root()
     const from = entry.script.fromOf(entry.connection)
+    const group = groupTag(from)
+    if (group !== null) return node.hasTag(group)
     return Boolean(root && from) && nodesNamed(root!, from!, entry.node)[0] === node
   }
 
@@ -209,6 +226,11 @@ export class SignalWiring {
     const root = this.host.root()
     const from = script.fromOf(connection)
     const field = connection.from?.startsWith("$") ? connection.from.slice(1) : undefined
+    const group = groupTag(from)
+    if (group !== null) {
+      const problem = typeof (script as unknown as Record<string, unknown>)[connection.call] !== "function" ? `${fileName(entry.url)} has no method ${connection.call}` : null
+      return { url: entry.url, index: entry.index, node: this.host.idOf(node), nodeName: node.name, from, field, group, source: null, signal: connection.signal, call: connection.call, problem }
+    }
     const found = !from || !root ? [] : nodesNamed(root, from, node)
     const source = found[0] ?? null
     let problem: string | null = null
@@ -217,7 +239,7 @@ export class SignalWiring {
     else if (from !== undefined && !source) problem = `no node "${from}"`
     else if (found.length > 1) problem = `${found.length} nodes are named "${from}"; the first is heard`
     else if (!signalAt(source ? source.signals : this.host.engine.signals, connection.signal)) problem = `no signal ${connection.signal} on ${source ? `"${from}"` : "the engine"}`
-    return { url: entry.url, index: entry.index, node: this.host.idOf(node), nodeName: node.name, from, field, source: source ? this.host.idOf(source) : null, signal: connection.signal, call: connection.call, problem }
+    return { url: entry.url, index: entry.index, node: this.host.idOf(node), nodeName: node.name, from, field, group: null, source: source ? this.host.idOf(source) : null, signal: connection.signal, call: connection.call, problem }
   }
 
   view(node: Node3D): SignalsView {
@@ -283,8 +305,52 @@ export class SignalWiring {
     return { connections: rows.map(({ row }) => row), declared, engine }
   }
 
-  /** The Connect dialog's choices: every node with its signals and scripts, and the engine's signals. */
-  dialog(mode: ConnectDialog["mode"], node: Node3D, signal: string, script: string | null = null, editing: { url: string; index: number } | null = null): ConnectDialog {
+  /**
+   * The tags a group source can hear: those on the scene's nodes, and those
+   * the project's prefabs carry, with the signals their nodes and scripts
+   * would have, since spawned things aren't in the scene to look at.
+   */
+  private async tags(): Promise<ConnectTag[]> {
+    const root = this.host.root()
+    const found = new Map<string, { inScene: number; prefabs: Set<string>; signals: Set<string> }>()
+    const entry = (tag: string) => {
+      let at = found.get(tag)
+      if (!at) found.set(tag, (at = { inScene: 0, prefabs: new Set(), signals: new Set() }))
+      return at
+    }
+    root?.walk((node) => {
+      if (node === root) return
+      for (const tag of node.tags) {
+        const at = entry(tag)
+        at.inScene++
+        for (const info of signalsOf(node)) at.signals.add(info.name)
+      }
+    })
+    const engine = this.host.engine
+    for (const { path, json } of await this.host.prefabFiles().catch(() => [])) {
+      const visit = async (node: NodeJSON) => {
+        for (const tag of node.tags ?? []) {
+          const at = entry(tag)
+          at.prefabs.add(fileName(path))
+          const cls = engine.registry.get(node.type)
+          if (cls) for (const info of declaredSignals(cls)) at.signals.add(info.name)
+          for (const script of node.scripts ?? []) {
+            const module = await engine.scripts.load(script.url).catch(() => null)
+            if (module) for (const info of declaredSignals(module.default)) at.signals.add(info.name)
+          }
+        }
+        for (const child of node.children ?? []) await visit(child)
+      }
+      await visit(json)
+    }
+    return [...found].map(([tag, at]) => {
+      const where = [at.inScene ? `${at.inScene} in the scene` : "", at.prefabs.size ? `made by ${[...at.prefabs].join(", ")}` : ""].filter(Boolean).join(", ")
+      return { tag, label: `Every node tagged ${tag}${where ? ` (${where})` : ""}`, signals: [...at.signals].sort() }
+    })
+  }
+
+  /** The Connect dialog's choices: every node with its signals and scripts, the tags a group source can hear, and the engine's signals. */
+  async dialog(mode: ConnectDialog["mode"], node: Node3D, signal: string, script: string | null = null, editing: { url: string; index: number } | null = null): Promise<ConnectDialog> {
     const root = this.host.root()
     const uses = new Map<string, number>()
     root?.walk((each) => {
@@ -296,22 +362,25 @@ export class SignalWiring {
       nodes.push({
         id: this.host.idOf(each),
         label: labelOf(each, root),
+        tags: each.tags,
         signals: signalsOf(each).map((info) => info.name),
         scripts: each.scripts.map((script) => ({ url: script.url, name: fileName(script.url), methods: connectableMethods(script), shared: uses.get(script.url) ?? 1 })),
       })
     })
     const engine = this.host.engine.signalCatalog().flatMap((group) => group.signals.map((info) => ({ name: group.group ? `${group.group}.${info.name}` : info.name, description: info.description })))
     const id = this.host.idOf(node)
+    const tags = await this.tags()
     const existing = editing ? this.ownConnection(node, editing.url, editing.index) : null
     if (editing && existing) {
       const from = existing.script.fromOf(existing.connection)
-      const source = from && root ? nodesNamed(root, from, node)[0] : undefined
+      const group = groupTag(from)
+      const source = from && root && group === null ? nodesNamed(root, from, node)[0] : undefined
       const edit = { ...editing, call: existing.connection.call, perNode: existing.connection.from?.startsWith("$") ?? false }
-      return { open: true, mode: "listen", source: source ? this.host.idOf(source) : null, signal: existing.connection.signal, target: id, script: editing.url, edit, nodes, engine, error: "" }
+      return { open: true, mode: "listen", source: source ? this.host.idOf(source) : null, signal: existing.connection.signal, target: id, script: editing.url, edit, group, nodes, tags, engine, error: "" }
     }
     return mode === "emit"
-      ? { open: true, mode, source: id, signal, target: null, script, edit: null, nodes, engine, error: "" }
-      : { open: true, mode, source: null, signal: "", target: id, script, edit: null, nodes, engine, error: "" }
+      ? { open: true, mode, source: id, signal, target: null, script, edit: null, group: null, nodes, tags, engine, error: "" }
+      : { open: true, mode, source: null, signal: "", target: id, script, edit: null, group: null, nodes, tags, engine, error: "" }
   }
 
   /** The connection a script on `node` writes at `index` of its own `static connections`. */
@@ -327,7 +396,7 @@ export class SignalWiring {
    * `perNode` names the source through a `node` field on the script instead, set on this node, so each node with the
    * script can hear a node of its own. With `edit`, the connection written there is changed in place instead.
    */
-  async connect(choice: { source: number | null; signal: string; target: number; url: string | null; call: string; perNode?: boolean; edit?: { url: string; index: number } | null }): Promise<void> {
+  async connect(choice: { source: number | null; signal: string; target: number; url: string | null; call: string; perNode?: boolean; group?: string | null; edit?: { url: string; index: number } | null }): Promise<void> {
     const target = this.host.nodeById(choice.target)
     if (!target) throw new Error("the listening node is gone")
     const source = choice.source === null ? null : this.host.nodeById(choice.source)
@@ -341,8 +410,9 @@ export class SignalWiring {
     if (!url) throw new Error("no script could be made for the node")
     const root = this.host.root()
     const keptField = existing?.connection.from?.startsWith("$") ? existing.connection.from.slice(1) : null
-    const field = source && choice.perNode ? (keptField ? { key: keptField, exists: true } : this.fieldFor(target, url, source)) : null
-    const from = source ? (field ? `$${field.key}` : this.fromFor(source, target)) : undefined
+    const group = choice.group?.trim() || null
+    const field = source && choice.perNode && !group ? (keptField ? { key: keptField, exists: true } : this.fieldFor(target, url, source)) : null
+    const from = group ? `tag:${group}` : source ? (field ? `$${field.key}` : this.fromFor(source, target)) : undefined
     await this.host.editScript(url, (text) => {
       let next: string | null = text
       if (field && !field.exists) {

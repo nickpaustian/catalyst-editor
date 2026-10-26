@@ -20,7 +20,7 @@
       <p class="hint" $if="!state.browser.connections.length">No connections yet. Select a node and use + beside one of its signals in the inspector, or write <span class="mono">static connections</span> in a script.</p>
       <div class="row" $for="row in state.connections" $key="row.url + ':' + row.index + ':' + row.node + ':' + row.signal + ':' + row.call" $class="{ broken: row.problem }">
         <button class="link" type="button" $if="row.source !== null" @click="select(row.source)">{{ row.from === '.' ? row.nodeName : row.from }}</button>
-        <span class="dim" $else>{{ row.from === undefined ? 'engine' : row.from }}</span>
+        <span class="dim" $else>{{ row.group ? 'every ' + row.group : row.from === undefined ? 'engine' : row.from }}</span>
         <span class="mono signal">{{ row.signal }}</span>
         <span class="dim">→</span>
         <button class="link" type="button" @click="select(row.node)">{{ row.nodeName }}</button>

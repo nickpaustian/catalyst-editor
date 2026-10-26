@@ -119,6 +119,7 @@
             <div class="wire" $for="row in script.connections" $key="row.index + ':' + row.signal + ':' + row.call" $class="{ broken: row.problem }">
               <span class="dim mono" $if="row.field" $title="'Each node with ' + script.name + ' chooses this in its ' + row.field + ' field'">{{ row.field }}:</span>
               <button class="link" type="button" $if="row.source !== null && row.from !== '.'" $title="'Select ' + row.from" @click="selectNode(row.source)">{{ row.from }}</button>
+              <span class="dim" $else-if="row.group" $title="'Every node tagged ' + row.group + ', as each comes and goes'">every {{ row.group }}</span>
               <span class="dim" $else>{{ row.from === '.' ? 'itself' : row.from === undefined ? 'engine' : row.from || 'not set' }}</span>
               <span class="mono wire-signal">{{ row.signal }}</span>
               <span class="dim" aria-hidden="true">→</span>
@@ -198,7 +199,7 @@ const dragging = shared(DRAGGING_FILE_CELL, null)
 // Local copies of the fields, so typing doesn't fight the scene publishing
 // the same values back on every gizmo move
 interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number; options?: string[]; readonly?: boolean; hex?: string; ranged?: boolean; choices?: string[]; display?: string; missing?: boolean; droppable?: boolean; over?: boolean }
-interface Connection { url: string; index: number | null; from?: string; field?: string; source: number | null; signal: string; call: string; problem: string | null }
+interface Connection { url: string; index: number | null; from?: string; field?: string; group: string | null; source: number | null; signal: string; call: string; problem: string | null }
 interface ScriptEntry { index: number; url: string; name: string; built: boolean; fields: Field[]; connections: Connection[]; shared: number; fixed: boolean }
 interface SignalsView { listens: Connection[]; scripts: { url: string; shared: number }[] }
 

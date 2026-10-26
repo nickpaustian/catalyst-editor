@@ -8,8 +8,8 @@ export interface FiredSignal {
   value: string
 }
 
-/** Signals that fire every frame or step, left out of the log unless asked for so the rest can be read. */
-export const FREQUENT_SIGNALS = new Set(["onUpdate", "onIdle", "onRender", "onPostRender", "physics.onStep", "input.onPointerMove", "input.onForceChanged", "input.onActionHold", "onTriggerStay", "onCollisionStay", "onMove"])
+/** Signals that fire every frame or step, or once for every node, left out of the log unless asked for so the rest can be read. */
+export const FREQUENT_SIGNALS = new Set(["onUpdate", "onIdle", "onRender", "onPostRender", "physics.onStep", "input.onPointerMove", "input.onForceChanged", "input.onActionHold", "onTriggerStay", "onCollisionStay", "onMove", "onNodeEntered", "onNodeExited", "onNodeTagsChanged"])
 
 const FLUSH_MS = 100
 const RESCAN_MS = 200

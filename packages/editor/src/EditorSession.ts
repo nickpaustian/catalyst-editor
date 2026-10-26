@@ -170,7 +170,7 @@ export type EditorCommand =
   | { type: "clearSignalLog" }
   | { type: "setFrequentSignals"; on: boolean }
   | { type: "clearConsole" }
-  | { type: "connectSignal"; source: number | null; signal: string; target: number; url: string | null; call: string; perNode?: boolean; edit?: { url: string; index: number } | null }
+  | { type: "connectSignal"; source: number | null; signal: string; target: number; url: string | null; call: string; perNode?: boolean; group?: string | null; edit?: { url: string; index: number } | null }
   | { type: "disconnectSignal"; url: string; index: number }
   | { type: "addSignal"; node: number; url: string | null; name: string }
   | { type: "removeSignal"; url: string; index: number }
@@ -505,6 +505,7 @@ export class EditorSession {
       editScript: (url, edit) => this.editScript(url, edit),
       newScriptFor: (node) => this.newScriptFor(node),
       setScriptField: (node, url, key, value) => this.setScriptField(node, url, key, value),
+      prefabFiles: () => this.prefabFiles(),
     })
     this.history.onChange = () => {
       this.publishHistory()
@@ -1135,7 +1136,7 @@ export class EditorSession {
         break
       case "openConnect": {
         const node = command.node === undefined ? this.selected : (this.nodesById.get(command.node) ?? null)
-        if (node) this.set("editor:connect", this.wiring.dialog(command.mode, node, command.signal ?? "", command.url ?? null, command.edit ?? null))
+        if (node) this.set("editor:connect", await this.wiring.dialog(command.mode, node, command.signal ?? "", command.url ?? null, command.edit ?? null))
         break
       }
       case "closeConnect":
@@ -1950,6 +1951,19 @@ export class EditorSession {
     const next = edit(text)
     if (next === null) throw new Error(`${url} declares its connections or signals in a way the editor can't change; edit it in the code pane`)
     if (next !== text) await this.saveScript(url, next)
+  }
+
+  /** Every prefab file in the project, read as a scene entry; one that can't be read is left out. */
+  private async prefabFiles(): Promise<{ path: string; json: NodeJSON }[]> {
+    const folder = this.folder
+    if (!folder) return []
+    const out: { path: string; json: NodeJSON }[] = []
+    for (const { path } of this.prefabs) {
+      try {
+        out.push({ path, json: await folder.readJSON<NodeJSON>(path) })
+      } catch {}
+    }
+    return out
   }
 
   /** A script of its own for a node, named after it, attached to it. */

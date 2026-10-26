@@ -9,6 +9,7 @@
         <span class="well large select">
           <select $model="state.source" @change="pickedSource()">
             <option value="engine" $selected="state.source === 'engine'">The engine</option>
+            <option $for="tag in state.tags" $key="tag.tag" $value="'tag:' + tag.tag" $selected="'tag:' + tag.tag === state.source" $label="tag.label">{{ tag.label }}</option>
             <option $for="node in state.nodes" $key="node.id" $value="String(node.id)" $selected="String(node.id) === state.source" $label="node.label">{{ node.label }}</option>
           </select>
         </span>
@@ -21,6 +22,18 @@
         </span>
       </label>
     </template>
+
+    <fieldset class="scope" $if="state.mode === 'emit' && state.sourceTags.length">
+      <legend>Hear</legend>
+      <label class="check">
+        <input type="radio" name="group" value="" $checked="!state.group" @change="pickGroup('')" />
+        <span>Only {{ state.sourceName }}</span>
+      </label>
+      <label class="check" $for="tag in state.sourceTags" $key="tag">
+        <input type="radio" name="group" $value="tag" $checked="state.group === tag" @change="pickGroup(tag)" />
+        <span>Every node tagged {{ tag }} <span class="dim">· as each comes and goes, with the one that sent it</span></span>
+      </label>
+    </fieldset>
 
     <label class="dialog-field" $if="state.mode === 'emit'">Listener
       <span class="well large select">
@@ -78,9 +91,10 @@ import { reactive, shared, onMounted } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { CONNECT_DEFAULT } from '../SignalWiring.ts'
 
-interface ConnectNode { id: number; label: string; signals: string[]; scripts: { url: string; name: string; methods: string[]; shared: number }[] }
+interface ConnectNode { id: number; label: string; tags: string[]; signals: string[]; scripts: { url: string; name: string; methods: string[]; shared: number }[] }
 interface Edit { url: string; index: number; call: string; perNode: boolean }
-interface Dialog { open: boolean; mode: 'emit' | 'listen'; source: number | null; signal: string; target: number | null; script: string | null; edit: Edit | null; nodes: ConnectNode[]; engine: { name: string }[]; error: string }
+interface ConnectTag { tag: string; label: string; signals: string[] }
+interface Dialog { open: boolean; mode: 'emit' | 'listen'; source: number | null; signal: string; target: number | null; script: string | null; edit: Edit | null; group: string | null; nodes: ConnectNode[]; tags: ConnectTag[]; engine: { name: string }[]; error: string }
 
 const cell = shared('editor:connect', CONNECT_DEFAULT)
 const state = reactive({
@@ -105,6 +119,9 @@ const state = reactive({
   editing: false,
   hasSourceNode: false,
   sourceName: '',
+  tags: [] as ConnectTag[],
+  sourceTags: [] as string[],
+  group: '',
 })
 
 let engineSignals: string[] = []
@@ -115,7 +132,7 @@ const lastPart = (label: string) => label.replace(/^.*\//, '')
 
 // A method name from where the signal comes from and what it says: "Front button" and onPressed give frontButtonPressed.
 function suggest() {
-  const from = state.mode === 'listen' ? (state.source === 'engine' ? '' : lastPart(nodeOf(state.source)?.label ?? '')) : lastPart(nodeOf(String(shownFor?.source))?.label ?? '')
+  const from = state.group || (state.mode === 'listen' ? (state.source === 'engine' ? '' : lastPart(nodeOf(state.source)?.label ?? '')) : lastPart(nodeOf(String(shownFor?.source))?.label ?? ''))
   const words = `${from} ${state.signal.replace(/^.*\./, '').replace(/^on(?=[A-Z])/, '')}`.trim().split(/[^A-Za-z0-9]+|(?=[A-Z])/).filter(Boolean)
   const name = words.map((word, i) => (i ? word[0].toUpperCase() + word.slice(1) : word.toLowerCase())).join('').replace(/^[^A-Za-z_$]+/, '')
   state.newMethod = name || 'onSignal'
@@ -124,14 +141,24 @@ function suggest() {
 // A connection from a node can be the script's for every node it is on, or chosen per node through a field; a script on several nodes leans to the second.
 function scope() {
   const sourceId = state.mode === 'emit' ? String(shownFor?.source ?? '') : state.source
-  const source = sourceId && sourceId !== 'engine' ? nodeOf(sourceId) : null
-  state.hasSourceNode = source !== null
+  const source = sourceId && sourceId !== 'engine' && !sourceId.startsWith('tag:') ? nodeOf(sourceId) : null
+  state.sourceTags = state.mode === 'emit' ? source?.tags ?? [] : []
+  if (state.mode === 'listen') state.group = sourceId.startsWith('tag:') ? sourceId.slice(4) : ''
+  state.hasSourceNode = source !== null && !state.group
   state.sourceName = source ? lastPart(source.label) : ''
   state.perNode = state.shared > 1
 }
 
+function pickGroup(tag: string) {
+  state.group = tag
+  const source = nodeOf(String(shownFor?.source ?? ''))
+  state.hasSourceNode = source !== null && !tag
+  suggest()
+}
+
 function pickedSource() {
-  state.signals = state.source === 'engine' ? engineSignals : nodeOf(state.source)?.signals ?? []
+  const tag = state.source.startsWith('tag:') ? state.tags.find((each) => 'tag:' + each.tag === state.source) : null
+  state.signals = state.source === 'engine' ? engineSignals : tag ? tag.signals : nodeOf(state.source)?.signals ?? []
   if (!state.signals.includes(state.signal)) state.signal = state.signals[0] ?? ''
   scope()
   suggest()
@@ -166,6 +193,8 @@ cell.subscribe((next: Dialog | undefined) => {
   engineSignals = next.engine.map((info) => info.name)
   state.mode = next.mode
   state.nodes = next.nodes
+  state.tags = next.tags
+  state.group = ''
   if (next.mode === 'emit') {
     const source = next.nodes.find((node) => node.id === next.source)
     state.title = `Connect ${next.signal}${source ? ` from ${lastPart(source.label)}` : ''}`
@@ -175,7 +204,7 @@ cell.subscribe((next: Dialog | undefined) => {
     const target = next.nodes.find((node) => node.id === next.target)
     state.title = next.edit ? `Edit a connection of ${target ? lastPart(target.label) : 'a node'}` : `Listen from ${target ? lastPart(target.label) : 'a node'}`
     state.target = String(next.target ?? '')
-    state.source = next.edit && next.source !== null ? String(next.source) : 'engine'
+    state.source = next.group ? `tag:${next.group}` : next.edit && next.source !== null ? String(next.source) : 'engine'
     pickedSource()
     if (next.edit) state.signal = next.signal
   }
@@ -201,12 +230,13 @@ function submit(event: Event) {
   if (!state.signal || !state.target) return
   sendCommand({
     type: 'connectSignal',
-    source: state.mode === 'emit' ? shownFor?.source ?? null : state.source === 'engine' ? null : Number(state.source),
+    source: state.mode === 'emit' ? shownFor?.source ?? null : state.source === 'engine' || state.group ? null : Number(state.source),
     signal: state.signal,
     target: Number(state.target),
     url: state.script || null,
     call: state.method || state.newMethod.trim(),
     perNode: state.hasSourceNode && Boolean(state.script) && state.perNode,
+    group: state.group || null,
     edit: shownFor?.edit ? { url: shownFor.edit.url, index: shownFor.edit.index } : null,
   })
 }
