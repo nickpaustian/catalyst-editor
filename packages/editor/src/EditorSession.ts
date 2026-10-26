@@ -1,4 +1,4 @@
-import { Grid, Mat4, Model, Node3D, Prefab, Quaternion, Slate, UIElement, Vector3, DebugShapes, Visual, editorIcon, uiLayer, exposedProperties, readExposed, writeExposed, type Catalyst, type ExposedProperty, type NodeClass, type NodeJSON, type Script } from "@nickpaustian/catalyst"
+import { Grid, Mat4, Model, Node3D, Prefab, Quaternion, Slate, UIElement, Vector3, DebugShapes, Visual, editorIcon, uiLayer, exposedProperties, readExposed, writeExposed, type Catalyst, type ExposedProperty, type NodeClass, type NodeJSON, type Script, type VariantJSON, isVariant } from "@nickpaustian/catalyst"
 import { Input } from "@nickpaustian/catalyst/input"
 import { BoxCollider, MeshCollider, Physics } from "@nickpaustian/catalyst/physics"
 import { EditMesh, Primitive } from "@nickpaustian/catalyst/prefabs"
@@ -6,6 +6,7 @@ import type { LightspeedRuntime } from "@lightspeed-js/core"
 import { EditorCamera, groupTarget, type GizmoMode, isSized, type DrawTool, type DrawnBox, type EditMode } from "./EditorCamera"
 import { EditorInput } from "./EditorInput"
 import { GridPainter, type GridCommand, type GridPanel } from "./GridPainter"
+import { VariantEditing, type VariantView } from "./VariantEditing"
 import { History } from "./History"
 import { preferences, storage, type SnapSettings, streamingQualityOf, type StreamingPreset } from "./preferences"
 import { browserFolders, folderLoader, pickFile, type FolderSource, type ProjectFolder, type ProjectStorage, type RecentProject } from "./ProjectFolder"
@@ -99,6 +100,10 @@ export interface EditorCells {
   "editor:streamable": typeof STREAMABLE_DEFAULT
   /** The recipes a project may use. */
   "editor:recipes": string[]
+  /** The base file when the file being edited is a variant of one, or null. */
+  "editor:variantBase": string | null
+  /** In a variant, the tree's nodes the base gives, and those of them this file changes. */
+  "editor:variantMarks": { inherited: number[]; overridden: number[] } | null
   /** The selected grid's tile types and the paint tool; null when no grid is selected. */
   "editor:grid": GridPanel | null
   "editor:history": { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
@@ -147,6 +152,8 @@ export interface EditorCells {
     rotation: { x: number; y: number; z: number }
     properties: SelectionProperty[]
     scripts: SelectionScript[]
+    /** In a variant: whether the base has the node, and the fields and scripts this file changes over it. */
+    variant: VariantView | null
   } | null
   /** The selected node's signals, who hears them, and what its scripts listen to. */
   "editor:signals": SignalsView | null
@@ -174,6 +181,9 @@ export type EditorCommand =
   | { type: "openConnect"; mode: "emit" | "listen"; signal?: string; url?: string; node?: number; edit?: { url: string; index: number } }
   | { type: "closeConnect" }
   | { type: "openScene"; path: string | null }
+  | { type: "newVariant"; path: string }
+  /** Put a field back to the value the variant's base gives it: `transform`, a node field, or a field of the script at `script`. */
+  | { type: "resetOverride"; key: string; script?: number }
   | { type: "clearSignalLog" }
   | { type: "setFrequentSignals"; on: boolean }
   | { type: "clearConsole" }
@@ -359,6 +369,7 @@ export class EditorSession {
   private readonly app: LightspeedRuntime
   private readonly camera: EditorCamera
   private readonly grids: GridPainter
+  private readonly variants: VariantEditing
   private readonly slateEditor: SlateEditor
   private readonly input: EditorInput | null
   private folder: AssetFolder | null = null
@@ -484,6 +495,7 @@ export class EditorSession {
       unsubscribeReport()
     }
     this.camera = new EditorCamera(this.engine)
+    this.variants = new VariantEditing(this.engine)
     this.grids = new GridPainter({
       camera: this.camera,
       selected: () => this.selected,
@@ -523,6 +535,8 @@ export class EditorSession {
       sceneFile: () => this.sceneFile,
     })
     this.history.onChange = () => {
+      this.variants.stale()
+      this.publishVariantMarks()
       this.publishHistory()
       this.publishProject()
       this.autosaveSoon()
@@ -669,8 +683,12 @@ export class EditorSession {
 
   /** The scene tree's root: the project's scene through the recipe, or the open node-tree file as it is. */
   private async loadRoot(folder: ProjectFolder | null): Promise<Node3D> {
+    this.variants.close()
+    this.set("editor:variantBase", null)
     if (!this.sceneFile || !folder) return this.recipe.load(folder, this.engine)
-    const json = await folder.readJSON<NodeJSON>(this.sceneFile)
+    const file = await folder.readJSON<NodeJSON | VariantJSON>(this.sceneFile)
+    const json = await this.variants.open(file, this.sceneFile, (path) => folder.readJSON<NodeJSON | VariantJSON>(path))
+    this.set("editor:variantBase", this.variants.base)
     this.sceneFileHasTransform = json.transform !== undefined
     const made = this.engine.create(json)
     if (made instanceof Node3D) return made
@@ -682,8 +700,9 @@ export class EditorSession {
   /** Write the tree back where it came from; gives back what was written. */
   private async writeRoot(folder: ProjectFolder, root: Node3D): Promise<string[]> {
     if (!this.sceneFile) return this.recipe.save(folder, root, this.engine)
-    const json = this.engine.serialise(root)
-    if (!this.sceneFileHasTransform) delete json.transform
+    const variant = this.variants.save(root)
+    const json = variant ?? this.engine.serialise(root)
+    if (!variant && !this.sceneFileHasTransform) delete (json as NodeJSON).transform
     await folder.writeJSON(this.sceneFile, json)
     this.engine.prefabs.invalidate(this.sceneFile)
     return [this.sceneFile]
@@ -699,7 +718,7 @@ export class EditorSession {
     await this.autosave()
     if (path !== null) {
       const json = await folder.readJSON<{ type?: unknown }>(path).catch(() => null)
-      if (typeof json?.type !== "string") return this.publishProject(`${path} isn't a node tree to edit`)
+      if (typeof json?.type !== "string" && !isVariant(json)) return this.publishProject(`${path} isn't a node tree to edit`)
     }
     await this.open(folder, { discarding: true, scene: path })
     this.publishProject(path ? `editing ${path}` : "editing the project's scene")
@@ -829,6 +848,7 @@ export class EditorSession {
     this.select(null)
     this._root?.dispose()
     this._root = null
+    this.variants.close()
     this.ids.clear()
     this.nodesById.clear()
     this.collapsed.clear()
@@ -1063,6 +1083,13 @@ export class EditorSession {
     )
     this.treeNodes = this.sceneNodes()
     this.publishTreeSelection()
+    this.publishVariantMarks()
+  }
+
+  private publishVariantMarks(): void {
+    const root = this._root
+    const marks = root ? this.variants.marks(root, this.sceneNodes()) : null
+    this.set("editor:variantMarks", marks && { inherited: marks.inherited.map((node) => this.idOf(node as Node3D)), overridden: marks.overridden.map((node) => this.idOf(node as Node3D)) })
   }
 
   /** Every scene node in tree order, collapsed or not. */
@@ -1152,6 +1179,7 @@ export class EditorSession {
         .filter((property) => !property.hidden && (!property.shownWhen || property.shownWhen(node)))
         .map((property) => this.field(property, readExposed(node, property)))
         .sort((a, b) => Number(LIST_TYPES.includes(a.type)) - Number(LIST_TYPES.includes(b.type))),
+      variant: this._root ? this.variants.view(node, this._root) : null,
     })
   }
 
@@ -1442,6 +1470,12 @@ export class EditorSession {
         break
       case "openScene":
         await this.openScene(command.path)
+        break
+      case "newVariant":
+        await this.newVariant(command.path)
+        break
+      case "resetOverride":
+        this.resetOverride(command.key, command.script)
         break
       case "draftFile":
         await this.draftFile(command.path, command.text)
@@ -1820,6 +1854,7 @@ export class EditorSession {
     this.signalsShown.stale = true
     const node = this.selected
     if (!node) return
+    if (this._root && this.variants.isInheritedScript(node, index, this._root)) return this.publishProject(`the script comes from ${this.variants.base}: detach it there`)
     if (index < node.scripts.length) {
       const script = node.scripts[index]
       node.detachScript(script)
@@ -2241,6 +2276,59 @@ export class EditorSession {
     this.publishKinds()
   }
 
+  /** A new file made from the node-tree file at `path`, changing nothing yet, beside it; opened to edit. */
+  private async newVariant(path: string): Promise<void> {
+    const folder = this.folder
+    if (!folder) return
+    const json = await folder.readJSON<{ type?: unknown }>(path).catch(() => null)
+    if (typeof json?.type !== "string" && !isVariant(json)) return this.publishProject(`${path} isn't a node tree to make a variant of`)
+    const stem = path.replace(/\.json$/i, "")
+    let made = `${stem}-variant.json`
+    for (let n = 2; await folder.exists(made); n++) made = `${stem}-variant-${n}.json`
+    await folder.writeJSON(made, { base: path } satisfies VariantJSON)
+    await this.publishFiles()
+    await this.openScene(made)
+  }
+
+  private resetOverride(key: string, scriptIndex?: number): void {
+    const node = this.selected
+    const root = this._root
+    if (!node || !root) return
+    const base = this.variants.baseNode(node, root)
+    if (!base) return
+    if (scriptIndex !== undefined) {
+      const script = node.scripts[scriptIndex]
+      const property = script && exposedProperties(script).find((p) => p.key === key)
+      const given = property && this.variants.baseScriptValue(node, scriptIndex, property, root)
+      if (!script || !property || !given) return
+      const before = structuredClone(readExposed(script, property))
+      writeExposed(script, property, given.value)
+      this.record(`reset ${property.label ?? key}`, () => writeExposed(script, property, before), () => writeExposed(script, property, structuredClone(given.value)))
+    } else if (key === "transform") {
+      if (!(base instanceof Node3D)) return
+      const before = { position: node.transform.position.clone(), rotation: node.transform.rotation.clone(), scale: node.transform.scale.clone() }
+      const after = { position: base.transform.position.clone(), rotation: base.transform.rotation.clone(), scale: base.transform.scale.clone() }
+      const place = (to: typeof before) => () => {
+        node.transform.position.copy(to.position)
+        node.transform.rotation.copy(to.rotation)
+        node.transform.scale.copy(to.scale)
+        this.camera.syncFromTarget()
+      }
+      place(after)()
+      this.record("reset transform", place(before), place(after))
+    } else {
+      const property = exposedProperties(node).find((p) => p.key === key)
+      if (!property) return
+      const before = structuredClone(readExposed(node, property))
+      const after = structuredClone(readExposed(base, property))
+      writeExposed(node, property, after)
+      this.record(`reset ${property.label ?? key}`, () => writeExposed(node, property, before), () => writeExposed(node, property, structuredClone(after)))
+      if (key === "active" || key === "visible") this.publishTree()
+    }
+    this.grids.publish()
+    this.publishSelection()
+  }
+
   /**
    * Save the selected node's tree as a prefab file named after it, and put
    * an instance of the file in its place. Saving over a prefab of the same
@@ -2517,6 +2605,7 @@ export class EditorSession {
     const node = this.selected
     const clean = name.trim()
     if (!node || !clean || clean === node.name) return
+    if (node !== this._root && this.inheritedAmong([node], "renamed")) return this.publishSelection()
     const before = node.name
     const references = this.wiring.referencesTo([node])
     const fields = this.wiring.nodeReferences()
@@ -3065,6 +3154,7 @@ export class EditorSession {
     }
     const nodes = this.selectionRoots()
     if (nodes.length === 0) return
+    if (this.inheritedAmong(nodes, "deleted")) return
     this.camera.detach()
     const places = nodes.map((node) => ({ node, parent: node.parent as Node3D, index: (node.parent as Node3D).indexOf(node) })).sort((a, b) => a.index - b.index)
     const remove = () => {
@@ -3076,6 +3166,15 @@ export class EditorSession {
     remove()
     this.record(places.length > 1 ? `delete ${places.length} nodes` : `delete ${places[0].node.name}`, restore, remove)
     this.select(null)
+  }
+
+  /** In a variant, the nodes its base gives stay where the base has them: says so and gives true when any of `nodes` is one. */
+  private inheritedAmong(nodes: Node3D[], done: string): boolean {
+    const root = this._root
+    const inherited = root ? nodes.find((node) => this.variants.isInherited(node, root)) : undefined
+    if (!inherited) return false
+    this.publishProject(`${inherited.name} comes from ${this.variants.base}, so it can't be ${done} here; turn it off with Active, or change it in the base`)
+    return true
   }
 
   /** Reparent or reorder nodes, keeping their world transforms and tree order. */
@@ -3090,6 +3189,7 @@ export class EditorSession {
       .filter((node, _, all) => !all.some((other) => other !== node && other.contains(node)))
       .sort((a, b) => order.indexOf(a) - order.indexOf(b))
     if (nodes.length === 0 || nodes.some((node) => node.contains(target))) return
+    if (this.inheritedAmong(nodes, "moved")) return
     const newParent = place === "inside" ? target : target.parent
     if (!(newParent instanceof Node3D)) return
     this.reparent(nodes, newParent, place === "inside" ? newParent.children.size : newParent.indexOf(target) + (place === "after" ? 1 : 0))

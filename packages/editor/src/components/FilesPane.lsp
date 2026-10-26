@@ -460,6 +460,7 @@ function itemsFor(row: Row): MenuItem[] {
   } else {
     if (CODE.test(row.name)) items.push({ label: 'Open in code pane', run: () => sendCommand({ type: 'openFile', path: row.path }) })
     if (/\.json$/i.test(row.name)) items.push({ label: 'Edit in the scene tree', run: () => sendCommand({ type: 'openScene', path: row.path }) })
+    if (/\.json$/i.test(row.name)) items.push({ label: 'New variant', run: () => sendCommand({ type: 'newVariant', path: row.path }) })
     if (PREVIEWABLE.test(row.name)) items.push({ label: 'Preview', kbd: 'Space', run: () => sendCommand({ type: 'preview', path: row.path }) })
     if (MODEL.test(row.name)) items.push({ label: 'Add to scene', run: () => sendCommand({ type: 'addModel', path: row.path }) })
     if (GLB.test(row.name) && streamable.value?.available) items.push({ label: 'Make streamable…', run: () => sendCommand({ type: 'streamable', path: row.path }) })

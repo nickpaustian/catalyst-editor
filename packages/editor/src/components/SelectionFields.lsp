@@ -10,11 +10,16 @@
       <input class="node-name" type="text" aria-label="Node name" $model="state.name" @change="rename" />
       <span class="type">{{ shared['editor:selection'].type }}<span $if="shared['editor:selection'].count > 1"> · {{ shared['editor:selection'].count }} selected</span></span>
     </div>
+    <p class="variant-note" $if="shared['editor:selection'].variant">
+      <template $if="shared['editor:selection'].variant.inherited">From <span class="mono">{{ shared['editor:selection'].variant.base }}</span>: what this file changes is marked, and resets to the base.</template>
+      <template $else>Added in this file, over <span class="mono">{{ shared['editor:selection'].variant.base }}</span>.</template>
+    </p>
     <div class="actions" $if="shared['editor:selection'].actions && shared['editor:selection'].actions.length && shared['editor:selection'].count === 1">
       <button class="button small" type="button" $for="action in shared['editor:selection'].actions" $key="action.id" $title="action.title" @click="runAction(action.id)">{{ action.label }}</button>
     </div>
     <section class="section" $if="shared['editor:selection'].spatial">
-      <button class="section-header" type="button" $aria-expanded="state.transformOpen" @click="state.transformOpen = !state.transformOpen"><span class="title">Transform</span></button>
+      <button class="section-header" type="button" $aria-expanded="state.transformOpen" @click="state.transformOpen = !state.transformOpen"><span class="title" $class="{ overridden: shared['editor:selection'].variant && shared['editor:selection'].variant.transform }">Transform</span></button>
+      <button class="icon-button small reset transform-reset" type="button" $if="shared['editor:selection'].variant && shared['editor:selection'].variant.transform" title="Changed from the base: put back the base's value" aria-label="Reset to the base's value" @click="resetOverride('transform')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a5 5 0 1 0 1.5-3.5"/><path d="M3 2.5v3h3"/></svg></button>
       <div class="section-body" $if="state.transformOpen">
         <div class="properties">
           <span class="label">Position</span>
@@ -37,8 +42,9 @@
       <div class="section-body" $if="state.propertiesOpen">
         <div class="properties">
           <template $for="field in state.fields" $key="field.key">
-            <label class="label" $class="{ scrub: field.type === 'number' }" $title="field.label" @pointerdown="scrubField($event, field)">{{ field.label }}</label>
+            <label class="label" $class="{ scrub: field.type === 'number', overridden: field.overridden }" $title="field.label" @pointerdown="scrubField($event, field)">{{ field.label }}</label>
             <div class="control">
+              <button class="icon-button small reset" type="button" $if="field.overridden" title="Changed from the base: put back the base's value" aria-label="Reset to the base's value" @click="resetOverride(field.key)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a5 5 0 1 0 1.5-3.5"/><path d="M3 2.5v3h3"/></svg></button>
               <div class="well" $if="field.type === 'number'">
                 <span class="fill" $if="field.ranged" $style="'width: ' + Math.min(100, Math.max(0, (field.value - field.min) / (field.max - field.min) * 100)) + '%'"></span>
                 <input type="number" $aria-label="field.label" $step="field.step" $min="field.min" $max="field.max" $model="field.value" @change="applyField(field)" />
@@ -132,10 +138,11 @@
             <svg class="slot-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M3.5 1.5h6l3 3v10h-9z"/><path d="m7 8-1.5 1.5L7 11M9 8l1.5 1.5L9 11"/></svg>
             <span class="script-name mono" $title="script.url">{{ script.name }}</span>
             <span class="hint" $if="!script.built">not built</span>
+            <span class="hint" $if="script.inherited" $title="'Given by ' + shared['editor:selection'].variant.base">from base</span>
             <button class="icon-button small" type="button" title="Open in the code pane" aria-label="Open in the code pane" @click="editScript(script)">
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2.5h4.5V7M13.5 2.5 7 9M11 9.5v4H2.5V5h4"/></svg>
             </button>
-            <button class="icon-button small" type="button" title="Detach script" aria-label="Detach script" @click="detachScript(script)">
+            <button class="icon-button small" type="button" $if="!script.inherited" title="Detach script" aria-label="Detach script" @click="detachScript(script)">
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>
             </button>
           </div>
@@ -167,8 +174,9 @@
           </div>
           <div class="properties">
             <template $for="field in script.fields" $key="field.key">
-              <label class="label" $class="{ scrub: field.type === 'number' }" $title="field.label" @pointerdown="scrubScriptField($event, script, field)">{{ field.label }}</label>
+              <label class="label" $class="{ scrub: field.type === 'number', overridden: field.overridden }" $title="field.label" @pointerdown="scrubScriptField($event, script, field)">{{ field.label }}</label>
               <div class="control">
+                <button class="icon-button small reset" type="button" $if="field.overridden" title="Changed from the base: put back the base's value" aria-label="Reset to the base's value" @click="resetOverride(field.key, script.index)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a5 5 0 1 0 1.5-3.5"/><path d="M3 2.5v3h3"/></svg></button>
                 <div class="well" $if="field.type === 'number'">
                   <span class="fill" $if="field.ranged" $style="'width: ' + Math.min(100, Math.max(0, (field.value - field.min) / (field.max - field.min) * 100)) + '%'"></span>
                   <input type="number" $aria-label="field.label" $step="field.step" $min="field.min" $max="field.max" $model="field.value" @change="applyScriptField(script, field)" />
@@ -231,9 +239,9 @@ const dragging = shared(DRAGGING_FILE_CELL, null)
 
 // Local copies of the fields, so typing doesn't fight the scene publishing
 // the same values back on every gizmo move
-interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number; options?: string[]; readonly?: boolean; hex?: string; ranged?: boolean; choices?: string[]; display?: string; missing?: boolean; droppable?: boolean; over?: boolean }
+interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number; options?: string[]; readonly?: boolean; hex?: string; ranged?: boolean; choices?: string[]; display?: string; missing?: boolean; droppable?: boolean; over?: boolean; overridden?: boolean }
 interface Connection { url: string; index: number | null; from?: string; field?: string; group: string | null; source: number | null; signal: string; call: string; problem: string | null; note: string | null }
-interface ScriptEntry { index: number; url: string; name: string; built: boolean; fields: Field[]; connections: Connection[]; shared: number; fixed: boolean }
+interface ScriptEntry { index: number; url: string; name: string; built: boolean; inherited?: boolean; fields: Field[]; connections: Connection[]; shared: number; fixed: boolean }
 interface SignalsView { listens: Connection[]; scripts: { url: string; shared: number }[] }
 
 const state = reactive({
@@ -271,8 +279,12 @@ selection.subscribe((next: any) => {
   state.rx = next.rotation.x
   state.ry = next.rotation.y
   state.rz = next.rotation.z
-  state.fields = (next.properties ?? []).map(local)
-  state.scripts = (next.scripts ?? []).map((script: ScriptEntry) => withConnections({ ...script, fields: script.fields.map(local) }, signals.value as SignalsView | null))
+  const variant = next.variant as { fields: string[]; scripts: { index: number; inherited: boolean; fields: string[] }[] } | null
+  state.fields = (next.properties ?? []).map((field: Field) => ({ ...local(field), overridden: Boolean(variant?.fields.includes(field.key)) }))
+  state.scripts = (next.scripts ?? []).map((script: ScriptEntry) => {
+    const view = variant?.scripts.find((entry) => entry.index === script.index)
+    return withConnections({ ...script, inherited: Boolean(view?.inherited), fields: script.fields.map((field) => ({ ...local(field), overridden: Boolean(view?.fields.includes(field.key)) })) }, signals.value as SignalsView | null)
+  })
   markAllDroppable(dragging.value ?? null)
 })
 
@@ -380,6 +392,10 @@ function send(type: string) {
 // so a rename has to be a deliberate change
 function rename() {
   sendCommand({ type: 'rename', name: state.name })
+}
+
+function resetOverride(key: string, script?: number) {
+  sendCommand({ type: 'resetOverride', key, script })
 }
 
 function chooseBrush(index: number) {
@@ -582,6 +598,38 @@ function apply() {
 </logic>
 
 <style>
+.variant-note {
+  margin: 0;
+  padding: var(--cat-space-1-5) var(--cat-space-3);
+  border-bottom: 1px solid var(--cat-border-subtle);
+  color: var(--cat-text-tertiary);
+  font-size: var(--cat-text-xs);
+}
+
+.variant-note .mono {
+  font-family: var(--cat-font-mono);
+  color: var(--cat-text-secondary);
+}
+
+.overridden {
+  color: var(--cat-accent) !important;
+}
+
+.reset {
+  flex: 0 0 auto;
+  order: 1;
+}
+
+.section:has(> .transform-reset) {
+  position: relative;
+}
+
+.transform-reset {
+  position: absolute;
+  top: 4px;
+  right: var(--cat-space-2);
+}
+
 .tiles {
   display: flex;
   flex-direction: column;

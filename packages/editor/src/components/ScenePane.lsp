@@ -3,6 +3,7 @@
   <div class="editing" $if="shared['editor:sceneFile']">
     <span class="what">Editing <span class="mono">{{ shared['editor:sceneFile'] }}</span></span>
     <button class="button small" type="button" title="Edit the project's own scene again" @click="back()">Back to the scene</button>
+    <span class="what base" $if="shared['editor:variantBase']">Made from <button class="link mono" type="button" title="Edit the base: what changes there reaches this file" @click="openBase()">{{ shared['editor:variantBase'] }}</button></span>
   </div>
   <SceneTree />
 </aside>
@@ -15,6 +16,11 @@ import { shared } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 
 shared('editor:sceneFile', null)
+const variantBase = shared('editor:variantBase', null)
+
+function openBase() {
+  if (variantBase.value) sendCommand({ type: 'openScene', path: variantBase.value })
+}
 
 function back() {
   sendCommand({ type: 'openScene', path: null })
@@ -46,6 +52,14 @@ function back() {
   font: var(--cat-text-xs) / var(--cat-leading-tight) var(--cat-font-ui);
 }
 
+.editing {
+  flex-wrap: wrap;
+}
+
+.editing .what.base {
+  flex-basis: 100%;
+}
+
 .editing .what {
   flex: 1 1 auto;
   min-width: 0;
@@ -57,5 +71,19 @@ function back() {
 .mono {
   font-family: var(--cat-font-mono);
   color: var(--cat-text-primary);
+}
+
+.link {
+  padding: 0;
+  background: none;
+  border: 0;
+  font-size: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
+.link:hover {
+  color: var(--cat-accent);
 }
 </style>

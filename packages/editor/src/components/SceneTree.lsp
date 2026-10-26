@@ -7,7 +7,7 @@
     $for="row in state.shown"
     $key="row.id"
     $data-id="row.id"
-    $class="{ selected: shared['editor:treeSelection'].ids.includes(row.id), active: shared['editor:treeSelection'].active === row.id, root: row.isRoot, concealed: row.hiddenInEditor || row.hiddenAbove }"
+    $class="{ selected: shared['editor:treeSelection'].ids.includes(row.id), active: shared['editor:treeSelection'].active === row.id, root: row.isRoot, concealed: row.hiddenInEditor || row.hiddenAbove, inherited: shared['editor:variantMarks'] && shared['editor:variantMarks'].inherited.includes(row.id) }"
     $style="'--depth: ' + row.depth"
     $aria-selected="shared['editor:treeSelection'].ids.includes(row.id)"
     $aria-expanded="row.hasChildren ? row.expanded : null"
@@ -33,6 +33,7 @@
       @click="$event.stopPropagation()"
     />
     <span $else class="name" @dblclick="startRename($event, row)">{{ row.name }}</span>
+    <span class="changed" $if="shared['editor:variantMarks'] && shared['editor:variantMarks'].overridden.includes(row.id)" title="Changed from the base" aria-label="Changed from the base"></span>
     <span class="type">{{ row.type }}</span>
     <button
       $if="!row.isRoot"
@@ -68,6 +69,7 @@ const tree = shared('editor:tree', [])
 const treeSelection = shared('editor:treeSelection', { ids: [], active: null })
 const addDialog = shared('editor:addDialog', false)
 const selection = shared('editor:selection', null)
+shared('editor:variantMarks', null)
 const state = reactive({ renaming: null as number | null, shown: [] as Row[], before: 0, height: 0 })
 const refs = defineRefs<{ list: HTMLElement }>()
 
@@ -365,6 +367,18 @@ function release() {
 
 .row.selected .type {
   color: var(--cat-text-secondary);
+}
+
+.row.inherited .name {
+  color: var(--cat-text-secondary);
+}
+
+.changed {
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cat-accent);
 }
 
 .row.active .name {
