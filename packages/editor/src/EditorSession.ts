@@ -162,11 +162,11 @@ export type EditorCommand =
   | { type: "forgetRecent"; id: string }
   | { type: "locateRecent"; id: string }
   | { type: "closeProject" }
-  | { type: "openConnect"; mode: "emit" | "listen"; signal?: string; url?: string }
+  | { type: "openConnect"; mode: "emit" | "listen"; signal?: string; url?: string; node?: number; edit?: { url: string; index: number } }
   | { type: "closeConnect" }
   | { type: "clearSignalLog" }
   | { type: "setFrequentSignals"; on: boolean }
-  | { type: "connectSignal"; source: number | null; signal: string; target: number; url: string | null; call: string; perNode?: boolean }
+  | { type: "connectSignal"; source: number | null; signal: string; target: number; url: string | null; call: string; perNode?: boolean; edit?: { url: string; index: number } | null }
   | { type: "disconnectSignal"; url: string; index: number }
   | { type: "addSignal"; node: number; url: string | null; name: string }
   | { type: "removeSignal"; url: string; index: number }
@@ -1124,9 +1124,11 @@ export class EditorSession {
       case "closeProject":
         await this.closeProject()
         break
-      case "openConnect":
-        if (this.selected) this.set("editor:connect", this.wiring.dialog(command.mode, this.selected, command.signal ?? "", command.url ?? null))
+      case "openConnect": {
+        const node = command.node === undefined ? this.selected : (this.nodesById.get(command.node) ?? null)
+        if (node) this.set("editor:connect", this.wiring.dialog(command.mode, node, command.signal ?? "", command.url ?? null, command.edit ?? null))
         break
+      }
       case "closeConnect":
         this.set("editor:connect", CONNECT_DEFAULT)
         break
@@ -1141,7 +1143,7 @@ export class EditorSession {
         try {
           await this.wiring.connect(command)
           this.set("editor:connect", CONNECT_DEFAULT)
-          this.publishProject(`connected ${command.signal} to ${command.call}`)
+          this.publishProject(`${command.edit ? "changed the connection to" : "connected"} ${command.signal} → ${command.call}`)
         } catch (error) {
           this.set("editor:connect", { ...(this.app.shared("editor:connect").value as ConnectDialog), error: error instanceof Error ? error.message : String(error) })
         }

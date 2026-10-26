@@ -21,6 +21,9 @@
           <button class="link" type="button" $title="'Select ' + row.nodeName" @click="select(row.node)">{{ row.nodeName }}</button>
           <button class="link mono" type="button" $title="'Open ' + row.url" @click="open(row.url)">{{ row.call }}()</button>
           <span class="problem" $if="row.problem">{{ row.problem }}</span>
+          <button class="icon-button small edit" type="button" $if="row.index !== null" title="Change the connection" aria-label="Change the connection" @click="editConnection(row)">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 2.5l3 3-8 8H2.5v-3z"/></svg>
+          </button>
           <button class="icon-button small" type="button" $if="row.index !== null" title="Disconnect" aria-label="Disconnect" @click="disconnect(row)">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>
           </button>
@@ -62,6 +65,10 @@ function select(id: number) {
 
 function open(url: string) {
   sendCommand({ type: 'openScript', path: url })
+}
+
+function editConnection(row: Row) {
+  if (row.index !== null) sendCommand({ type: 'openConnect', mode: 'listen', node: row.node, edit: { url: row.url, index: row.index } })
 }
 
 function disconnect(row: Row) {
@@ -182,7 +189,7 @@ function addSignal(event: Event) {
   font-size: var(--cat-text-xs);
 }
 
-.wire .icon-button {
+.wire .edit {
   margin-left: auto;
 }
 

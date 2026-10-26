@@ -32,7 +32,7 @@
 
     <label class="dialog-field">Script
       <span class="well large select">
-        <select $model="state.script" @change="pickedScript()">
+        <select $model="state.script" $disabled="state.editing" @change="pickedScript()">
           <option $for="script in state.scripts" $key="script.url" $value="script.url" $selected="script.url === state.script" $label="script.name">{{ script.name }}</option>
           <option value="" $selected="state.script === ''">New script for {{ state.targetName }}</option>
         </select>
@@ -65,9 +65,9 @@
     <p class="error" $if="state.error">{{ state.error }}</p>
 
     <footer class="dialog-actions">
-      <span class="dialog-keys">↵ connect · Esc cancel</span>
+      <span class="dialog-keys">↵ {{ state.editing ? 'save' : 'connect' }} · Esc cancel</span>
       <button class="button large" type="button" @click="close()">Cancel</button>
-      <button class="button large primary" type="submit" $disabled="!state.signal || !state.target || (state.method === '' && !state.newMethod.trim())">Connect</button>
+      <button class="button large primary" type="submit" $disabled="!state.signal || !state.target || (state.method === '' && !state.newMethod.trim())">{{ state.editing ? 'Save' : 'Connect' }}</button>
     </footer>
   </form>
 </div>
@@ -79,7 +79,8 @@ import { sendCommand } from '../commands.ts'
 import { CONNECT_DEFAULT } from '../SignalWiring.ts'
 
 interface ConnectNode { id: number; label: string; signals: string[]; scripts: { url: string; name: string; methods: string[]; shared: number }[] }
-interface Dialog { open: boolean; mode: 'emit' | 'listen'; source: number | null; signal: string; target: number | null; script: string | null; nodes: ConnectNode[]; engine: { name: string }[]; error: string }
+interface Edit { url: string; index: number; call: string; perNode: boolean }
+interface Dialog { open: boolean; mode: 'emit' | 'listen'; source: number | null; signal: string; target: number | null; script: string | null; edit: Edit | null; nodes: ConnectNode[]; engine: { name: string }[]; error: string }
 
 const cell = shared('editor:connect', CONNECT_DEFAULT)
 const state = reactive({
@@ -101,6 +102,7 @@ const state = reactive({
   newMethod: '',
   error: '',
   perNode: false,
+  editing: false,
   hasSourceNode: false,
   sourceName: '',
 })
@@ -159,7 +161,7 @@ cell.subscribe((next: Dialog | undefined) => {
     return
   }
   state.error = next.error
-  if (shownFor && shownFor.source === next.source && shownFor.target === next.target && shownFor.mode === next.mode && shownFor.signal === next.signal) return
+  if (shownFor && shownFor.source === next.source && shownFor.target === next.target && shownFor.mode === next.mode && shownFor.signal === next.signal && shownFor.edit?.index === next.edit?.index) return
   shownFor = next
   engineSignals = next.engine.map((info) => info.name)
   state.mode = next.mode
@@ -171,17 +173,25 @@ cell.subscribe((next: Dialog | undefined) => {
     state.target = String(next.target ?? next.nodes.find((node) => node.scripts.length && node.id !== next.source)?.id ?? next.source ?? '')
   } else {
     const target = next.nodes.find((node) => node.id === next.target)
-    state.title = `Listen from ${target ? lastPart(target.label) : 'a node'}`
+    state.title = next.edit ? `Edit a connection of ${target ? lastPart(target.label) : 'a node'}` : `Listen from ${target ? lastPart(target.label) : 'a node'}`
     state.target = String(next.target ?? '')
-    state.source = 'engine'
+    state.source = next.edit && next.source !== null ? String(next.source) : 'engine'
     pickedSource()
+    if (next.edit) state.signal = next.signal
   }
+  state.editing = next.edit !== null
   pickedTarget()
   if (next.script && state.scripts.some((script) => script.url === next.script)) {
     state.script = next.script
     pickedScript()
   }
   suggest()
+  // An edit starts from what the connection does now: its method, and how it names its node.
+  if (next.edit) {
+    if (state.methods.includes(next.edit.call)) state.method = next.edit.call
+    else state.newMethod = next.edit.call
+    state.perNode = next.edit.perNode
+  }
   state.open = true
   setTimeout(() => (document.querySelector('#connect-dialog select') as HTMLSelectElement | null)?.focus(), 0)
 })
@@ -197,6 +207,7 @@ function submit(event: Event) {
     url: state.script || null,
     call: state.method || state.newMethod.trim(),
     perNode: state.hasSourceNode && Boolean(state.script) && state.perNode,
+    edit: shownFor?.edit ? { url: shownFor.edit.url, index: shownFor.edit.index } : null,
   })
 }
 

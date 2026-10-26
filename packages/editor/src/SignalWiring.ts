@@ -71,13 +71,15 @@ export interface ConnectDialog {
   target: number | null
   /** The listening script, when the dialog was opened from one. */
   script: string | null
+  /** The connection being changed, when the dialog edits one: where it is written, and what it calls and how it names its node now. */
+  edit: { url: string; index: number; call: string; perNode: boolean } | null
   nodes: ConnectNode[]
   /** The engine's signals, dotted for a group. */
   engine: { name: string; description?: string }[]
   error: string
 }
 
-export const CONNECT_DEFAULT: ConnectDialog = { open: false, mode: "emit", source: null, signal: "", target: null, script: null, nodes: [], engine: [], error: "" }
+export const CONNECT_DEFAULT: ConnectDialog = { open: false, mode: "emit", source: null, signal: "", target: null, script: null, edit: null, nodes: [], engine: [], error: "" }
 
 /** What the wiring needs from the session. */
 export interface WiringHost {
@@ -282,7 +284,7 @@ export class SignalWiring {
   }
 
   /** The Connect dialog's choices: every node with its signals and scripts, and the engine's signals. */
-  dialog(mode: ConnectDialog["mode"], node: Node3D, signal: string, script: string | null = null): ConnectDialog {
+  dialog(mode: ConnectDialog["mode"], node: Node3D, signal: string, script: string | null = null, editing: { url: string; index: number } | null = null): ConnectDialog {
     const root = this.host.root()
     const uses = new Map<string, number>()
     root?.walk((each) => {
@@ -300,27 +302,46 @@ export class SignalWiring {
     })
     const engine = this.host.engine.signalCatalog().flatMap((group) => group.signals.map((info) => ({ name: group.group ? `${group.group}.${info.name}` : info.name, description: info.description })))
     const id = this.host.idOf(node)
+    const existing = editing ? this.ownConnection(node, editing.url, editing.index) : null
+    if (editing && existing) {
+      const from = existing.script.fromOf(existing.connection)
+      const source = from && root ? nodesNamed(root, from, node)[0] : undefined
+      const edit = { ...editing, call: existing.connection.call, perNode: existing.connection.from?.startsWith("$") ?? false }
+      return { open: true, mode: "listen", source: source ? this.host.idOf(source) : null, signal: existing.connection.signal, target: id, script: editing.url, edit, nodes, engine, error: "" }
+    }
     return mode === "emit"
-      ? { open: true, mode, source: id, signal, target: null, script, nodes, engine, error: "" }
-      : { open: true, mode, source: null, signal: "", target: id, script, nodes, engine, error: "" }
+      ? { open: true, mode, source: id, signal, target: null, script, edit: null, nodes, engine, error: "" }
+      : { open: true, mode, source: null, signal: "", target: id, script, edit: null, nodes, engine, error: "" }
+  }
+
+  /** The connection a script on `node` writes at `index` of its own `static connections`. */
+  private ownConnection(node: Node3D, url: string, index: number): { script: Script; connection: Connection } | null {
+    const script = node.scripts.find((each) => each.url === url)
+    const cls = script?.constructor as typeof Script | undefined
+    const own = cls && Object.prototype.hasOwnProperty.call(cls, "connections") ? cls.connections : []
+    return script && own[index] ? { script, connection: own[index] } : null
   }
 
   /**
    * Write a connection into the listening script: made for the node when it has none, and the method added when it is new.
    * `perNode` names the source through a `node` field on the script instead, set on this node, so each node with the
-   * script can hear a node of its own.
+   * script can hear a node of its own. With `edit`, the connection written there is changed in place instead.
    */
-  async connect(choice: { source: number | null; signal: string; target: number; url: string | null; call: string; perNode?: boolean }): Promise<void> {
+  async connect(choice: { source: number | null; signal: string; target: number; url: string | null; call: string; perNode?: boolean; edit?: { url: string; index: number } | null }): Promise<void> {
     const target = this.host.nodeById(choice.target)
     if (!target) throw new Error("the listening node is gone")
     const source = choice.source === null ? null : this.host.nodeById(choice.source)
     if (choice.source !== null && !source) throw new Error("the node with the signal is gone")
     const call = choice.call.trim()
     if (!/^[A-Za-z_$][\w$]*$/.test(call)) throw new Error(`"${call}" is not a method name`)
-    const url = choice.url ?? (await this.host.newScriptFor(target))
+    const editing = choice.edit ?? null
+    const existing = editing ? this.ownConnection(target, editing.url, editing.index) : null
+    if (editing && !existing) throw new Error("that connection is gone from the script")
+    const url = editing?.url ?? choice.url ?? (await this.host.newScriptFor(target))
     if (!url) throw new Error("no script could be made for the node")
     const root = this.host.root()
-    const field = source && choice.perNode ? this.fieldFor(target, url, source) : null
+    const keptField = existing?.connection.from?.startsWith("$") ? existing.connection.from.slice(1) : null
+    const field = source && choice.perNode ? (keptField ? { key: keptField, exists: true } : this.fieldFor(target, url, source)) : null
     const from = source ? (field ? `$${field.key}` : this.fromFor(source, target)) : undefined
     await this.host.editScript(url, (text) => {
       let next: string | null = text
@@ -328,7 +349,8 @@ export class SignalWiring {
         next = addEntry(next, "exposed", `{ key: ${JSON.stringify(field.key)}, type: "node" as const }`)
         next = next && addField(next, `${field.key} = ""`)
       }
-      const connected = next && addEntry(next, "connections", writeEntry({ from, signal: choice.signal, call }))
+      const entry = writeEntry({ from, signal: choice.signal, call })
+      const connected = next && (editing ? changeEntry(next, "connections", editing.index, entry) : addEntry(next, "connections", entry))
       if (!connected) return null
       return hasMethod(connected, call) ? connected : addMethod(connected, call)
     })
@@ -339,7 +361,11 @@ export class SignalWiring {
   private fieldFor(target: Node3D, url: string, source: Node): { key: string; exists: boolean } {
     const script = target.scripts.find((each) => each.url === url)
     const properties = script ? exposedProperties(script) : []
-    const pointing = properties.find((property) => property.type === "node" && script!.nodeNamed(String(readExposed(script!, property) ?? "")) === source)
+    const root = this.host.root()
+    const pointing = properties.find((property) => {
+      const value = script ? readExposed(script, property) : ""
+      return property.type === "node" && typeof value === "string" && value !== "" && root !== null && nodesNamed(root, value, target)[0] === source
+    })
     if (pointing) return { key: pointing.key, exists: true }
     const base = camel(source.name)
     let key = base

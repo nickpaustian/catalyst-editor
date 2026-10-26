@@ -124,6 +124,9 @@
               <span class="dim" aria-hidden="true">→</span>
               <span class="mono">{{ row.call }}()</span>
               <span class="problem" $if="row.problem" $title="row.problem">{{ row.problem }}</span>
+              <button class="icon-button small edit" type="button" $if="row.index !== null" title="Change the connection" aria-label="Change the connection" @click="editConnection(script, row)">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 2.5l3 3-8 8H2.5v-3z"/></svg>
+              </button>
               <button class="icon-button small" type="button" $if="row.index !== null" title="Disconnect" aria-label="Disconnect" @click="disconnect(script, row)">
                 <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>
               </button>
@@ -252,6 +255,10 @@ signals.subscribe((view: SignalsView | null | undefined) => {
 
 function listen(script: ScriptEntry) {
   sendCommand({ type: 'openConnect', mode: 'listen', url: script.url })
+}
+
+function editConnection(script: ScriptEntry, row: Connection) {
+  if (row.index !== null) sendCommand({ type: 'openConnect', mode: 'listen', edit: { url: script.url, index: row.index } })
 }
 
 function disconnect(script: ScriptEntry, row: Connection) {
@@ -740,7 +747,7 @@ function apply() {
   color: var(--cat-text-secondary);
 }
 
-.wire .icon-button {
+.wire .edit {
   margin-left: auto;
 }
 
