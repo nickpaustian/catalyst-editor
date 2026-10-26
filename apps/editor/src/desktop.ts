@@ -4,6 +4,9 @@ export interface DesktopShell {
   folders: FolderSource
   runnerLink: RunnerLink
   runnerPageLink: RunnerPageLink
+  /** Show a file or folder, by absolute path, in the system's file manager, as `revealLabel` names it. */
+  reveal(path: string): Promise<void>
+  revealLabel: string
   /** Iapetus, run by the app, for making models streamable. */
   converter: AssetConverter
   /** The editor window: shown while a project is open, hidden behind the start window otherwise. */

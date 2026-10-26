@@ -35,12 +35,31 @@ fn init_git(path: String) -> Result<String, String> {
   }
 }
 
+/// Show a file or folder in the system's file manager: selected in Finder or Explorer, or its folder opened elsewhere.
+#[tauri::command]
+fn reveal_in_file_manager(path: String) -> Result<(), String> {
+  if !std::path::Path::new(&path).exists() {
+    return Err(format!("{path} is not there"));
+  }
+  #[cfg(target_os = "macos")]
+  let spawned = std::process::Command::new("open").arg("-R").arg(&path).spawn();
+  // Explorer wants backslashes, and the selection as part of the one argument.
+  #[cfg(target_os = "windows")]
+  let spawned = std::process::Command::new("explorer").arg(format!("/select,{}", path.replace('/', "\\"))).spawn();
+  #[cfg(all(unix, not(target_os = "macos")))]
+  let spawned = {
+    let folder = std::path::Path::new(&path).parent().map(|p| p.to_path_buf()).unwrap_or_else(|| path.clone().into());
+    std::process::Command::new("xdg-open").arg(folder).spawn()
+  };
+  spawned.map(|_| ()).map_err(|error| format!("the file manager could not be opened: {error}"))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   let app = tauri::Builder::default()
     .manage(OpenedFiles(Mutex::new(project_files(std::env::args().skip(1)))))
     .manage(iapetus::Jobs::default())
-    .invoke_handler(tauri::generate_handler![init_git, take_opened_files, iapetus::iapetus_describe, iapetus::iapetus_streamable, iapetus::iapetus_cancel])
+    .invoke_handler(tauri::generate_handler![init_git, take_opened_files, reveal_in_file_manager, iapetus::iapetus_describe, iapetus::iapetus_streamable, iapetus::iapetus_cancel])
     .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_dialog::init())
     // The project window comes back at the size, place and maximised state it was left in; the launcher keeps its own.

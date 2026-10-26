@@ -86,6 +86,8 @@ export interface EditorCells {
   "editor:startMode": "overlay" | "window" | "off"
   /** The new-project or project-settings dialog: closed when `mode` is null. */
   "editor:projectDialog": typeof PROJECT_DIALOG_DEFAULT
+  /** What the files pane's "show in the file manager" item is called, or null where there is none. */
+  "editor:reveal": string | null
   /** The file shown in the floating preview window. */
   "editor:preview": typeof PREVIEW_DEFAULT
   /** Making a model streamable: the dialog's choices, the build's progress and its outcome. */
@@ -204,6 +206,7 @@ export type EditorCommand =
   | { type: "openFile"; path: string }
   | { type: "addModel"; path: string }
   | { type: "useEnvironment"; path: string }
+  | { type: "revealFile"; path: string }
   | { type: "preview"; path: string }
   | { type: "closePreview" }
   | { type: "streamable"; path: string }
@@ -348,6 +351,8 @@ export class EditorSession {
   private readonly folders: FolderSource
   private readonly runner: RunnerLink
   private readonly converter: AssetConverter | null
+  /** The desktop app's way to show a file in Finder or Explorer; null in the browser, which has none. */
+  private readonly reveal: { label: string; run: (path: string) => Promise<void> } | null
   private streamJob: StreamableJob | null = null
   private streamCancelled = false
   private readonly previews = new Previews()
@@ -397,13 +402,14 @@ export class EditorSession {
     }
   }
 
-  constructor(options: { app: LightspeedRuntime; engine: Catalyst; recipe: Recipe; folders?: FolderSource; runner?: RunnerLink; converter?: AssetConverter }) {
+  constructor(options: { app: LightspeedRuntime; engine: Catalyst; recipe: Recipe; folders?: FolderSource; runner?: RunnerLink; converter?: AssetConverter; reveal?: { label: string; run: (path: string) => Promise<void> } }) {
     this.app = options.app
     this.engine = options.engine
     this.recipe = options.recipe
     this.folders = options.folders ?? browserFolders
     this.runner = options.runner ?? windowRunnerLink()
     this.converter = options.converter ?? null
+    this.reveal = options.reveal ?? null
     const unsubscribeReady = this.runner.onReady(() => {
       this.runnerReady = true
       void this.sendToRunner()
@@ -493,6 +499,7 @@ export class EditorSession {
     this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
     this.set("editor:streamable", { ...STREAMABLE_DEFAULT, available: this.converter !== null })
     this.set("editor:preview", PREVIEW_DEFAULT)
+    this.set("editor:reveal", this.reveal ? this.reveal.label : null)
     this.set("editor:recipes", [this.recipe.name])
     this.setView("orbit")
     void this.publishRecent()
@@ -1114,6 +1121,11 @@ export class EditorSession {
       case "useEnvironment":
         this.writeSetting("environment", command.path)
         break
+      case "revealFile": {
+        const absolute = this.absolutePath(command.path)
+        if (this.reveal && absolute) await this.reveal.run(absolute.replace(/\/+$/, "")).catch((error: unknown) => this.publishProject(`${command.path} could not be shown: ${error instanceof Error ? error.message : error}`))
+        break
+      }
       case "preview":
         await this.openPreview(command.path)
         break

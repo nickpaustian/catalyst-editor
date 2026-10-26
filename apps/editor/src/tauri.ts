@@ -191,6 +191,8 @@ const shell = (): DesktopShell => ({
   runnerLink: runnerLink(),
   runnerPageLink: runnerPageLink(),
   converter: converter(),
+  reveal: (path) => invoke("reveal_in_file_manager", { path }),
+  revealLabel: navigator.userAgent.includes("Mac") ? "Reveal in Finder" : navigator.userAgent.includes("Windows") ? "Show in Explorer" : "Open containing folder",
   showEditor(open) {
     const editor = getCurrentWindow()
     if (open) {

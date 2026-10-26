@@ -91,6 +91,7 @@ shared('editor:project', PROJECT_DEFAULT)
 shared('editor:fileInfo', null)
 const streamable = shared('editor:streamable', STREAMABLE_DEFAULT)
 const preview = shared('editor:preview', PREVIEW_DEFAULT)
+const revealer = shared('editor:reveal', null)
 const state = reactive({ shown: [] as Row[], count: 0, before: 0, height: 0, selected: null as string | null, filter: '', renaming: null as string | null, creating: null as Creating | null, dropTarget: null as string | null })
 // Folders closed by hand; every folder starts open
 const collapsed = new Set<string>()
@@ -442,6 +443,7 @@ function itemsFor(row: Row): MenuItem[] {
   items.push({ separator: true })
   items.push({ label: 'Rename', kbd: '↵', run: () => startRename(row) })
   items.push({ label: 'Copy path', run: () => void navigator.clipboard?.writeText(row.path) })
+  if (revealer.value) items.push({ label: revealer.value, run: () => sendCommand({ type: 'revealFile', path: row.path }) })
   items.push({ label: 'Delete', kbd: '⌫', danger: true, run: () => remove(row) })
   items.push({ separator: true })
   items.push({ label: 'Refresh', run: () => sendCommand({ type: 'refreshFiles' }) })
@@ -465,13 +467,15 @@ function context(event: MouseEvent, row: Row) {
 
 function contextEmpty(event: MouseEvent) {
   event.preventDefault()
-  openContextMenu(event.clientX, event.clientY, [
+  const items: MenuItem[] = [
     { label: 'Import file…', run: () => sendCommand({ type: 'importAsset' }) },
     { label: 'New folder…', run: () => startCreate('', 'folder') },
     { label: 'New script…', run: () => startCreate(SCRIPTS_DIR, 'script') },
     { separator: true },
-    { label: 'Refresh', run: () => sendCommand({ type: 'refreshFiles' }) },
-  ])
+  ]
+  if (revealer.value) items.push({ label: revealer.value, run: () => sendCommand({ type: 'revealFile', path: '' }) })
+  items.push({ label: 'Refresh', run: () => sendCommand({ type: 'refreshFiles' }) })
+  openContextMenu(event.clientX, event.clientY, items)
 }
 </logic>
 
