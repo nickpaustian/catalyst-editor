@@ -160,7 +160,7 @@ export type EditorCommand =
   | { type: "forgetRecent"; id: string }
   | { type: "locateRecent"; id: string }
   | { type: "closeProject" }
-  | { type: "openConnect"; mode: "emit" | "listen"; signal?: string }
+  | { type: "openConnect"; mode: "emit" | "listen"; signal?: string; url?: string }
   | { type: "closeConnect" }
   | { type: "clearSignalLog" }
   | { type: "connectSignal"; source: number | null; signal: string; target: number; url: string | null; call: string }
@@ -1107,7 +1107,7 @@ export class EditorSession {
         await this.closeProject()
         break
       case "openConnect":
-        if (this.selected) this.set("editor:connect", this.wiring.dialog(command.mode, this.selected, command.signal ?? ""))
+        if (this.selected) this.set("editor:connect", this.wiring.dialog(command.mode, this.selected, command.signal ?? "", command.url ?? null))
         break
       case "closeConnect":
         this.set("editor:connect", CONNECT_DEFAULT)

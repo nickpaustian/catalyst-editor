@@ -69,7 +69,7 @@ import { sendCommand } from '../commands.ts'
 import { CONNECT_DEFAULT } from '../SignalWiring.ts'
 
 interface ConnectNode { id: number; label: string; signals: string[]; scripts: { url: string; name: string; methods: string[]; shared: number }[] }
-interface Dialog { open: boolean; mode: 'emit' | 'listen'; source: number | null; signal: string; target: number | null; nodes: ConnectNode[]; engine: { name: string }[]; error: string }
+interface Dialog { open: boolean; mode: 'emit' | 'listen'; source: number | null; signal: string; target: number | null; script: string | null; nodes: ConnectNode[]; engine: { name: string }[]; error: string }
 
 const cell = shared('editor:connect', CONNECT_DEFAULT)
 const state = reactive({
@@ -153,6 +153,10 @@ cell.subscribe((next: Dialog | undefined) => {
     pickedSource()
   }
   pickedTarget()
+  if (next.script && state.scripts.some((script) => script.url === next.script)) {
+    state.script = next.script
+    pickedScript()
+  }
   suggest()
   state.open = true
   setTimeout(() => (document.querySelector('#connect-dialog select') as HTMLSelectElement | null)?.focus(), 0)

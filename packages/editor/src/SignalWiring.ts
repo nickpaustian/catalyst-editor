@@ -26,6 +26,8 @@ export interface SignalRow {
   index: number | null
   /** One every node has (`onEnter`, `onChildAdded`…), listed last. */
   common: boolean
+  /** Where the node gets it: a script file's name, the node's type, or "every node". */
+  origin: string
   listeners: ConnectionRow[]
 }
 
@@ -35,7 +37,8 @@ export interface SignalsView {
   name: string
   signals: SignalRow[]
   listens: ConnectionRow[]
-  scripts: { url: string; name: string }[]
+  /** The node's scripts, each with how many nodes in the scene carry the same file (its connections apply to all of them). */
+  scripts: { url: string; name: string; shared: number }[]
 }
 
 /** Every connection and declared signal in the scene, and the engine's signals with who hears them, for the signals pane. */
@@ -63,13 +66,15 @@ export interface ConnectDialog {
   source: number | null
   signal: string
   target: number | null
+  /** The listening script, when the dialog was opened from one. */
+  script: string | null
   nodes: ConnectNode[]
   /** The engine's signals, dotted for a group. */
   engine: { name: string; description?: string }[]
   error: string
 }
 
-export const CONNECT_DEFAULT: ConnectDialog = { open: false, mode: "emit", source: null, signal: "", target: null, nodes: [], engine: [], error: "" }
+export const CONNECT_DEFAULT: ConnectDialog = { open: false, mode: "emit", source: null, signal: "", target: null, script: null, nodes: [], engine: [], error: "" }
 
 /** What the wiring needs from the session. */
 export interface WiringHost {
@@ -156,6 +161,7 @@ export class SignalWiring {
       return nodesNamed(root, entry.connection.from, entry.node)[0] === node
     })
     const common = new Set(declaredSignals(Node).map((info) => info.name))
+    const type = this.host.engine.registry.typeOf(node) ?? "this node"
     const signals: SignalRow[] = signalsOf(node).map((info) => {
       const declaring = node.scripts.find((script) => declaredSignals(script).some((declared) => declared.name === info.name) && !declaredSignals(node).some((own) => own.name === info.name))
       const own = declaring && Object.prototype.hasOwnProperty.call(declaring.constructor, "signals") ? ((declaring.constructor as typeof Script).signals ?? []) : []
@@ -167,6 +173,7 @@ export class SignalWiring {
         url: declaring?.url ?? null,
         index: declaring && index >= 0 ? index : null,
         common: common.has(info.name) && !declaring,
+        origin: declaring ? fileName(declaring.url) : common.has(info.name) ? "every node" : type,
         listeners: heard.filter((entry) => entry.connection.signal === info.name).map((entry) => this.row(entry)),
       }
     })
@@ -176,8 +183,16 @@ export class SignalWiring {
       name: node.name,
       signals: signals.sort((a, b) => rank(a) - rank(b)),
       listens: all.filter((entry) => entry.node === node).map((entry) => this.row(entry)),
-      scripts: node.scripts.map((script) => ({ url: script.url, name: fileName(script.url) })),
+      scripts: node.scripts.map((script) => ({ url: script.url, name: fileName(script.url), shared: this.usesOf(script.url) })),
     }
+  }
+
+  private usesOf(url: string): number {
+    let uses = 0
+    this.host.root()?.walk((node) => {
+      if (node.scripts.some((script) => script.url === url)) uses++
+    })
+    return uses
   }
 
   browser(): SignalBrowser {
@@ -206,7 +221,7 @@ export class SignalWiring {
   }
 
   /** The Connect dialog's choices: every node with its signals and scripts, and the engine's signals. */
-  dialog(mode: ConnectDialog["mode"], node: Node3D, signal: string): ConnectDialog {
+  dialog(mode: ConnectDialog["mode"], node: Node3D, signal: string, script: string | null = null): ConnectDialog {
     const root = this.host.root()
     const uses = new Map<string, number>()
     root?.walk((each) => {
@@ -225,8 +240,8 @@ export class SignalWiring {
     const engine = this.host.engine.signalCatalog().flatMap((group) => group.signals.map((info) => ({ name: group.group ? `${group.group}.${info.name}` : info.name, description: info.description })))
     const id = this.host.idOf(node)
     return mode === "emit"
-      ? { open: true, mode, source: id, signal, target: null, nodes, engine, error: "" }
-      : { open: true, mode, source: null, signal: "", target: id, nodes, engine, error: "" }
+      ? { open: true, mode, source: id, signal, target: null, script, nodes, engine, error: "" }
+      : { open: true, mode, source: null, signal: "", target: id, script, nodes, engine, error: "" }
   }
 
   /** Write a connection into the listening script: made for the node when it has none, and the method added when it is new. */

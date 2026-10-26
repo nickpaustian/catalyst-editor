@@ -101,6 +101,26 @@
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>
             </button>
           </div>
+          <div class="connections" $if="script.built">
+            <div class="connections-head">
+              <span class="connections-title">Connections</span>
+              <span class="shared" $if="script.shared > 1" $title="'Connections are written in ' + script.url + ', so every node with it hears the same signals'">on {{ script.shared }} nodes: they share these</span>
+              <button class="icon-button small" type="button" title="Call one of its methods from a signal" $aria-label="'Listen to a signal in ' + script.name" @click="listen(script)">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"/></svg>
+              </button>
+            </div>
+            <div class="wire" $for="row in script.connections" $key="row.index + ':' + row.signal + ':' + row.call" $class="{ broken: row.problem }">
+              <button class="link" type="button" $if="row.source !== null && row.from !== '.'" $title="'Select ' + row.from" @click="selectNode(row.source)">{{ row.from }}</button>
+              <span class="dim" $else>{{ row.from === '.' ? 'itself' : row.from === undefined ? 'engine' : row.from }}</span>
+              <span class="mono wire-signal">{{ row.signal }}</span>
+              <span class="dim" aria-hidden="true">→</span>
+              <span class="mono">{{ row.call }}()</span>
+              <span class="problem" $if="row.problem" $title="row.problem">{{ row.problem }}</span>
+              <button class="icon-button small" type="button" $if="row.index !== null" title="Disconnect" aria-label="Disconnect" @click="disconnect(script, row)">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>
+              </button>
+            </div>
+          </div>
           <div class="properties">
             <template $for="field in script.fields" $key="field.key">
               <label class="label" $class="{ scrub: field.type === 'number' }" $title="field.label" @pointerdown="scrubScriptField($event, script, field)">{{ field.label }}</label>
@@ -153,13 +173,16 @@ import { scrub } from '../scrub.ts'
 import { DRAGGING_FILE_CELL, accepts, basename, openFilePicker } from '../fileField.ts'
 
 const selection = shared('editor:selection', null)
+const signals = shared('editor:signals', null)
 const scriptFiles = shared('editor:scripts', SCRIPTS_DEFAULT)
 const dragging = shared(DRAGGING_FILE_CELL, null)
 
 // Local copies of the fields, so typing doesn't fight the scene publishing
 // the same values back on every gizmo move
 interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number; options?: string[]; readonly?: boolean; hex?: string; ranged?: boolean; choices?: string[]; display?: string; missing?: boolean; droppable?: boolean; over?: boolean }
-interface ScriptEntry { index: number; url: string; name: string; built: boolean; fields: Field[] }
+interface Connection { url: string; index: number | null; from?: string; source: number | null; signal: string; call: string; problem: string | null }
+interface ScriptEntry { index: number; url: string; name: string; built: boolean; fields: Field[]; connections: Connection[]; shared: number }
+interface SignalsView { listens: Connection[]; scripts: { url: string; shared: number }[] }
 
 const state = reactive({
   dropping: false,
@@ -196,9 +219,32 @@ selection.subscribe((next: any) => {
   state.ry = next.rotation.y
   state.rz = next.rotation.z
   state.fields = (next.properties ?? []).map(local)
-  state.scripts = (next.scripts ?? []).map((script: ScriptEntry) => ({ ...script, fields: script.fields.map(local) }))
+  state.scripts = (next.scripts ?? []).map((script: ScriptEntry) => withConnections({ ...script, fields: script.fields.map(local) }, signals.value as SignalsView | null))
   markAllDroppable(dragging.value ?? null)
 })
+
+// A script's connections come with the signals view, worked out less often than the selection is published.
+function withConnections(script: ScriptEntry, view: SignalsView | null): ScriptEntry {
+  script.connections = view?.listens.filter((row) => row.url === script.url) ?? []
+  script.shared = view?.scripts.find((each) => each.url === script.url)?.shared ?? 1
+  return script
+}
+
+signals.subscribe((view: SignalsView | null | undefined) => {
+  state.scripts = state.scripts.map((script) => withConnections({ ...script }, view ?? null))
+})
+
+function listen(script: ScriptEntry) {
+  sendCommand({ type: 'openConnect', mode: 'listen', url: script.url })
+}
+
+function disconnect(script: ScriptEntry, row: Connection) {
+  if (row.index !== null) sendCommand({ type: 'disconnectSignal', url: script.url, index: row.index })
+}
+
+function selectNode(id: number) {
+  sendCommand({ type: 'select', id })
+}
 
 function applyScriptField(script: ScriptEntry, field: Field) {
   sendCommand({ type: 'setScriptProperty', index: script.index, key: field.key, value: field.value })
@@ -624,6 +670,86 @@ function apply() {
   width: var(--cat-icon-sm);
   height: var(--cat-icon-sm);
   color: var(--cat-text-secondary);
+}
+
+.connections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cat-space-0-5);
+  padding-left: var(--cat-space-2);
+}
+
+.connections-head {
+  display: flex;
+  align-items: center;
+  gap: var(--cat-space-1-5);
+  min-height: 22px;
+}
+
+.connections-title {
+  color: var(--cat-text-secondary);
+  font-size: var(--cat-text-xs);
+}
+
+.shared {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--cat-warning);
+  font-size: var(--cat-text-xs);
+}
+
+.connections-head .icon-button {
+  margin-left: auto;
+}
+
+.wire {
+  display: flex;
+  align-items: center;
+  gap: var(--cat-space-1-5);
+  min-width: 0;
+  min-height: 22px;
+  white-space: nowrap;
+  color: var(--cat-text-secondary);
+}
+
+.wire .icon-button {
+  margin-left: auto;
+}
+
+.wire .dim {
+  color: var(--cat-text-tertiary);
+}
+
+.wire-signal {
+  color: var(--cat-text-primary);
+}
+
+.wire.broken .wire-signal,
+.problem {
+  color: var(--cat-danger);
+}
+
+.problem {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--cat-text-xs);
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cat-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.link:hover {
+  color: var(--cat-text-primary);
+  text-decoration: underline;
 }
 
 .script-name {

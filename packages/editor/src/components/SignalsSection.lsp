@@ -3,11 +3,12 @@
   <section class="section">
     <button class="section-header" type="button" $aria-expanded="state.signalsOpen" @click="state.signalsOpen = !state.signalsOpen"><span class="title">Signals</span><span class="count">{{ shared['editor:signals'].signals.length }}</span></button>
     <div class="section-body" $if="state.signalsOpen">
-      <div class="signal" $for="signal in shared['editor:signals'].signals" $key="signal.name" $class="{ common: signal.common && !signal.listeners.length }">
+      <p class="lead">Signals belong to the node: anything can hear them. Its scripts can add more.</p>
+      <div class="signal" $for="signal in state.signals" $key="signal.name" $class="{ common: signal.common && !signal.listeners.length }">
+        <h4 class="origin" $if="signal.first">{{ signal.origin === 'every node' ? 'Every node has' : 'From ' + signal.origin }}</h4>
         <div class="signal-head">
           <span class="signal-name mono" $title="signal.description || signal.name">{{ signal.name }}</span>
           <span class="payload mono" $if="signal.payload">{{ signal.payload }}</span>
-          <span class="from-script mono" $if="signal.url" $title="'Declared in ' + signal.url">{{ fileName(signal.url) }}</span>
           <button class="icon-button small" type="button" title="Connect to a method" $aria-label="'Connect ' + signal.name" @click="connect(signal.name)">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"/></svg>
           </button>
@@ -31,28 +32,6 @@
       </form>
     </div>
   </section>
-  <section class="section">
-    <button class="section-header" type="button" $aria-expanded="state.listensOpen" @click="state.listensOpen = !state.listensOpen"><span class="title">Listens to</span><span class="count">{{ shared['editor:signals'].listens.length }}</span></button>
-    <div class="section-body" $if="state.listensOpen">
-      <span class="hint" $if="!shared['editor:signals'].listens.length">Nothing yet: its scripts' methods can be called by signals from other nodes or the engine.</span>
-      <div class="wire" $for="row in shared['editor:signals'].listens" $key="row.url + ':' + row.index + ':' + row.signal + ':' + row.call" $class="{ broken: row.problem }">
-        <button class="link" type="button" $if="row.source !== null && row.from !== '.'" $title="'Select ' + row.from" @click="select(row.source)">{{ row.from }}</button>
-        <span class="source" $else-if="row.from === '.'">itself</span>
-        <span class="source" $else-if="row.from === undefined">engine</span>
-        <span class="source missing" $else>{{ row.from }}</span>
-        <span class="signal-name mono">{{ row.signal }}</span>
-        <span class="arrow" aria-hidden="true">→</span>
-        <button class="link mono" type="button" $title="'Open ' + row.url" @click="open(row.url)">{{ row.call }}()</button>
-        <span class="problem" $if="row.problem">{{ row.problem }}</span>
-        <button class="icon-button small" type="button" $if="row.index !== null" title="Disconnect" aria-label="Disconnect" @click="disconnect(row)">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>
-        </button>
-      </div>
-      <div class="buttons">
-        <button class="button small" type="button" @click="listen()">Listen to…</button>
-      </div>
-    </div>
-  </section>
 </template>
 </view>
 
@@ -63,20 +42,18 @@ import { sendCommand } from '../commands.ts'
 interface Row { url: string; index: number | null; node: number; call: string }
 
 const view = shared('editor:signals', null)
-const state = reactive({ signalsOpen: true, listensOpen: true, newSignal: '', addTitle: '' })
+interface SignalRow { name: string; origin: string; first?: boolean }
+const state = reactive({ signalsOpen: true, newSignal: '', addTitle: '', signals: [] as SignalRow[] })
 
-view.subscribe((next: { scripts: { url: string }[] } | null | undefined) => {
+view.subscribe((next: { scripts: { url: string }[]; signals: SignalRow[] } | null | undefined) => {
   state.addTitle = next?.scripts.length ? `Declared in ${next.scripts[0].url}` : 'A script is made for the node to declare it in'
+  state.signals = (next?.signals ?? []).map((signal, i, all) => ({ ...signal, first: i === 0 || all[i - 1].origin !== signal.origin }))
 })
 
 const fileName = (url: string) => url.replace(/^.*\//, '')
 
 function connect(signal: string) {
   sendCommand({ type: 'openConnect', mode: 'emit', signal })
-}
-
-function listen() {
-  sendCommand({ type: 'openConnect', mode: 'listen' })
 }
 
 function select(id: number) {
@@ -106,6 +83,18 @@ function addSignal(event: Event) {
 </logic>
 
 <style>
+.lead {
+  margin: 0;
+  color: var(--cat-text-tertiary);
+  font-size: var(--cat-text-xs);
+}
+
+.origin {
+  margin: var(--cat-space-1) 0 0;
+  color: var(--cat-text-tertiary);
+  font: 500 var(--cat-text-xs) / var(--cat-leading-tight) var(--cat-font-ui);
+}
+
 .signal {
   display: flex;
   flex-direction: column;
@@ -137,8 +126,7 @@ function addSignal(event: Event) {
   color: var(--cat-text-tertiary);
 }
 
-.payload,
-.from-script {
+.payload {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -146,10 +134,6 @@ function addSignal(event: Event) {
   white-space: nowrap;
   color: var(--cat-text-tertiary);
   font-size: var(--cat-text-xs);
-}
-
-.from-script {
-  flex: 0 1 auto;
 }
 
 .signal-head .icon-button:first-of-type {
@@ -188,10 +172,6 @@ function addSignal(event: Event) {
   text-decoration: underline;
 }
 
-.source {
-  color: var(--cat-text-tertiary);
-}
-
 .problem {
   flex: 1 1 auto;
   min-width: 0;
@@ -206,13 +186,8 @@ function addSignal(event: Event) {
   margin-left: auto;
 }
 
-.wire.broken .signal-name,
-.source.missing {
+.wire.broken .signal-name {
   color: var(--cat-danger);
-}
-
-.hint {
-  color: var(--cat-text-tertiary);
 }
 
 .attach {
@@ -222,10 +197,5 @@ function addSignal(event: Event) {
 
 .attach > .well {
   flex: 1 1 auto;
-}
-
-.buttons {
-  display: flex;
-  gap: var(--cat-space-1);
 }
 </style>
