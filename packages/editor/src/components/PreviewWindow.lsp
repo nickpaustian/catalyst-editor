@@ -2,17 +2,19 @@
 <section class="preview-window" $if="shared['editor:preview'].open" $ref="frame" role="dialog" aria-label="Preview" tabindex="-1" $style="'left: ' + state.left + 'px; top: ' + state.top + 'px; width: ' + state.width + 'px; height: ' + state.height + 'px'" @keydown="keyDown($event)">
   <header class="bar" @pointerdown="startMove($event)" @dblclick="fit()">
     <span class="title mono" $title="shared['editor:preview'].path">{{ state.name }}</span>
-    <span class="meta mono" $if="state.natural">{{ state.natural }} · {{ state.zoomLabel }}</span>
+    <span class="meta mono" $if="state.natural">{{ state.natural }}{{ state.kind === 'image' ? ' · ' + state.zoomLabel : '' }}</span>
     <span class="actions">
-      <button type="button" class="tool" title="Fit to the window (double-click the bar)" $class="{ on: state.fitted }" @click="fit()">Fit</button>
-      <button type="button" class="tool" title="Actual size" $class="{ on: !state.fitted && state.zoom === 1 }" @click="actualSize()">1:1</button>
+      <button type="button" class="tool" title="Fit to the window (double-click the bar)" $class="{ on: state.kind === 'image' && state.fitted }" @click="fit()">Fit</button>
+      <button type="button" class="tool" title="Actual size" $if="state.kind === 'image'" $class="{ on: !state.fitted && state.zoom === 1 }" @click="actualSize()">1:1</button>
       <button type="button" class="tool close" title="Close (Esc)" aria-label="Close" @click="close()">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
       </button>
     </span>
   </header>
   <div class="stage" $ref="stage" @wheel="wheel($event)" @pointerdown="startPan($event)" @dblclick="toggleZoom($event)">
-    <img $if="shared['editor:preview'].url" $src="shared['editor:preview'].url" alt="" draggable="false" @load="loaded($event)" $style="'transform: translate(' + state.x + 'px, ' + state.y + 'px) scale(' + state.zoom + ')'" />
+    <div class="model" $if="state.kind === 'model'" $ref="viewport"></div>
+    <p class="hint" $if="state.kind === 'model' && state.natural">drag turns · right-drag pans · wheel zooms · F frames</p>
+    <img $if="state.kind === 'image' && shared['editor:preview'].url" $src="shared['editor:preview'].url" alt="" draggable="false" @load="loaded($event)" $style="'transform: translate(' + state.x + 'px, ' + state.y + 'px) scale(' + state.zoom + ')'" />
     <p class="error" $if="shared['editor:preview'].error">{{ shared['editor:preview'].error }}</p>
   </div>
   <div class="edge n" @pointerdown="startResize($event, 'n')"></div>
@@ -31,6 +33,7 @@ import { reactive, shared, defineRefs, onMounted } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { PREVIEW_DEFAULT } from '../cells.ts'
 import { storage } from '../preferences.ts'
+import { ModelViewer } from '../previews.ts'
 
 const RECT_KEY = 'previewWindow'
 const MIN_WIDTH = 240
@@ -42,7 +45,7 @@ const KEEP = 48
 interface Rect { left: number; top: number; width: number; height: number }
 
 const cell = shared('editor:preview', PREVIEW_DEFAULT)
-const refs = defineRefs<{ frame: HTMLElement; stage: HTMLElement }>()
+const refs = defineRefs<{ frame: HTMLElement; stage: HTMLElement; viewport: HTMLElement }>()
 const saved = storage.get<Rect | null>(RECT_KEY, null)
 const state = reactive({
   left: saved?.left ?? Math.max(16, window.innerWidth - 640),
@@ -50,6 +53,7 @@ const state = reactive({
   width: saved?.width ?? 560,
   height: saved?.height ?? 440,
   name: '',
+  kind: 'image',
   natural: '',
   imageWidth: 0,
   imageHeight: 0,
@@ -61,20 +65,43 @@ const state = reactive({
 })
 
 let shownPath = ''
+let viewer: ModelViewer | null = null
+
+function dropViewer() {
+  viewer?.dispose()
+  viewer = null
+}
+
+// A model is shown once its viewport is on the page; the viewer is made for that element and let go with it.
+function showModel(next: typeof PREVIEW_DEFAULT) {
+  const host = refs.viewport
+  if (!host?.isConnected || !next.loader) return void requestAnimationFrame(() => cell.value?.path === next.path && showModel(next))
+  if (viewer && viewer.host !== host) dropViewer()
+  viewer ??= new ModelViewer(host)
+  void viewer.show(next.loader, next.path).then((held) => {
+    if (cell.value?.path !== next.path) return
+    state.natural = held ? `${held.meshes === 1 ? '1 mesh' : `${held.meshes} meshes`} · ${held.triangles.toLocaleString()} triangles` : 'nothing to show'
+  })
+}
+
 cell.subscribe((next: typeof PREVIEW_DEFAULT | undefined) => {
   if (!next?.open) {
     shownPath = ''
     loadedSrc = ''
+    dropViewer()
     return
   }
   if (next.path !== shownPath) {
     shownPath = next.path
+    state.kind = next.kind
     state.name = next.path.replace(/^.*\//, '')
     state.natural = ''
     state.imageWidth = 0
     state.imageHeight = 0
     state.fitted = true
     clampWindow()
+    if (next.kind === 'model') showModel(next)
+    else dropViewer()
     setTimeout(() => refs.frame?.focus({ preventScroll: true }), 0)
   }
 })
@@ -108,6 +135,7 @@ function place(zoom: number, x: number, y: number) {
 
 // Fitted, the image is centred and as large as the stage allows, but never past its own size.
 function fit() {
+  if (state.kind === 'model') return viewer?.fit()
   if (!state.imageWidth) return
   const { width, height } = stageSize()
   const zoom = Math.min(1, width / state.imageWidth, height / state.imageHeight)
@@ -146,7 +174,7 @@ function local(event: MouseEvent): { x: number; y: number } {
 }
 
 function wheel(event: WheelEvent) {
-  if (!state.imageWidth) return
+  if (state.kind !== 'image' || !state.imageWidth) return
   event.preventDefault()
   const at = local(event)
   const zoom = Math.min(MAX_ZOOM, Math.max(0.01, state.zoom * Math.exp(-event.deltaY * (event.ctrlKey ? 0.01 : 0.0015))))
@@ -156,6 +184,7 @@ function wheel(event: WheelEvent) {
 }
 
 function toggleZoom(event: MouseEvent) {
+  if (state.kind !== 'image') return
   if (state.fitted || state.zoom !== 1) actualSize(local(event))
   else fit()
 }
@@ -180,6 +209,7 @@ function follow(event: PointerEvent, target: HTMLElement, move: (dx: number, dy:
 }
 
 function startPan(event: PointerEvent) {
+  if (state.kind !== 'image') return
   const x = state.x
   const y = state.y
   follow(event, event.currentTarget as HTMLElement, (dx, dy) => {
@@ -358,6 +388,22 @@ onMounted(() => {
   transform-origin: 0 0;
   image-rendering: auto;
   user-select: none;
+  pointer-events: none;
+}
+
+.model {
+  position: absolute;
+  inset: 0;
+  cursor: default;
+}
+
+.hint {
+  position: absolute;
+  left: var(--cat-space-2);
+  bottom: var(--cat-space-1-5);
+  margin: 0;
+  color: var(--cat-text-tertiary);
+  font-size: var(--cat-text-sm);
   pointer-events: none;
 }
 

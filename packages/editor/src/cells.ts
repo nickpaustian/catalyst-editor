@@ -3,6 +3,7 @@ export const PROJECT_DEFAULT = { open: false, name: null, recipe: "", storage: n
 export const VIEW_DEFAULT = { view: "orbit", visualised: true, gizmo: "translate", tool: null as "box" | "collider" | null, vertexEdit: false, editMode: "vertex" as "vertex" | "edge" | "face", physics: false, scripts: false, snap: { enabled: true, move: 0.25, rotate: 15 }, slateEditing: false }
 export const HISTORY_DEFAULT = { canUndo: false, canRedo: false, undoLabel: null, redoLabel: null }
 export const SCRIPTS_DEFAULT: { path: string; name: string }[] = []
+import type { Loader } from "@nickpaustian/catalyst"
 import type { StreamableMesh } from "./converter"
 
 /** The make-streamable dialog: closed when `open` is false; `available` once there is a converter to run. */
@@ -26,12 +27,13 @@ export const STREAMABLE_DEFAULT = {
   rebuild: null as { permissive: boolean; partition: boolean; maxTexture: number; maps: { role: string; path: string }[] } | null,
 }
 
-/** The preview window: closed when `open` is false; `url` is the file's object url while it shows. */
+/** The preview window: closed when `open` is false. An image shows from `url`, its object url; a model is read through `loader`, the project's. */
 export const PREVIEW_DEFAULT = {
   open: false,
   path: "",
-  kind: "image" as "image",
+  kind: "image" as "image" | "model",
   url: "",
+  loader: null as Loader | null,
   error: "",
 }
 

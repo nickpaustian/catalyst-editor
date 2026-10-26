@@ -1,4 +1,5 @@
 import { Catalyst, Model, Node3D, type Loader } from "@nickpaustian/catalyst"
+import { Input } from "@nickpaustian/catalyst/input"
 import { OrbitCamera } from "@nickpaustian/catalyst/prefabs"
 import { Vector3, computeBounds, parseHdr, type Mesh } from "@nickpaustian/obelisk"
 import { color } from "./tokens/tokens"
@@ -17,6 +18,37 @@ export interface ModelPreview {
 }
 
 const hex = (css: string): number => parseInt(css.replace("#", ""), 16)
+
+/**
+ * Put the orbit about the loaded model's sphere (each placed mesh's box, carried through its
+ * placement), with clip planes that follow its size, and frame it. Null when nothing drew.
+ */
+const frameModel = (model: Model, orbit: OrbitCamera): { meshes: number; triangles: number } | null => {
+  const visuals = model.meshes.filter((visual) => !visual.isLines)
+  if (!visuals.length) return null
+  const min = new Vector3(Infinity, Infinity, Infinity)
+  const max = new Vector3(-Infinity, -Infinity, -Infinity)
+  const corner = new Vector3()
+  let triangles = 0
+  for (const visual of visuals) {
+    const mesh = visual.geometry as Mesh
+    triangles += mesh.triangleCount
+    const box = computeBounds(mesh.vertices)
+    for (let i = 0; i < 8; i++) {
+      corner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z)
+      if (visual.offset) visual.offset.transformPoint(corner, corner)
+      min.set(Math.min(min.x, corner.x), Math.min(min.y, corner.y), Math.min(min.z, corner.z))
+      max.set(Math.max(max.x, corner.x), Math.max(max.y, corner.y), Math.max(max.z, corner.z))
+    }
+  }
+  orbit.transform.position.set((min.x + max.x) / 2, (min.y + max.y) / 2, (min.z + max.z) / 2)
+  orbit.radius = Math.max(1e-6, Math.hypot(max.x - min.x, max.y - min.y, max.z - min.z) / 2)
+  // The clip planes follow the model's size, so a small object is not cut away by the default near plane.
+  orbit.camera.near = orbit.radius * 0.01
+  orbit.camera.far = orbit.radius * 100
+  orbit.fit(true)
+  return { meshes: visuals.length, triangles }
+}
 
 const toDataUrl = (rgba: Uint8ClampedArray<ArrayBuffer>, width: number, height: number): string => {
   const canvas = document.createElement("canvas")
@@ -95,35 +127,13 @@ export class Previews {
     engine.add(root)
     try {
       await model.ready
-      const visuals = model.meshes.filter((visual) => !visual.isLines)
-      if (!visuals.length) return null
-      // The model's sphere: each placed mesh's box, carried through its placement.
-      const min = new Vector3(Infinity, Infinity, Infinity)
-      const max = new Vector3(-Infinity, -Infinity, -Infinity)
-      const corner = new Vector3()
-      let triangles = 0
-      for (const visual of visuals) {
-        const mesh = visual.geometry as Mesh
-        triangles += mesh.triangleCount
-        const box = computeBounds(mesh.vertices)
-        for (let i = 0; i < 8; i++) {
-          corner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z)
-          if (visual.offset) visual.offset.transformPoint(corner, corner)
-          min.set(Math.min(min.x, corner.x), Math.min(min.y, corner.y), Math.min(min.z, corner.z))
-          max.set(Math.max(max.x, corner.x), Math.max(max.y, corner.y), Math.max(max.z, corner.z))
-        }
-      }
-      orbit.transform.position.set((min.x + max.x) / 2, (min.y + max.y) / 2, (min.z + max.z) / 2)
-      orbit.radius = Math.max(1e-6, Math.hypot(max.x - min.x, max.y - min.y, max.z - min.z) / 2)
-      // The clip planes follow the model's size, so a small object is not cut away by the default near plane.
-      orbit.camera.near = orbit.radius * 0.01
-      orbit.camera.far = orbit.radius * 100
       engine.camera.target = orbit.camera
-      orbit.fit(true)
+      const framed = frameModel(model, orbit)
+      if (!framed) return null
       engine.step(1 / 60)
       engine.step(1 / 60)
       const pixels = await engine.renderer.snapshot(SIZE, SIZE)
-      return { image: toDataUrl(Uint8ClampedArray.from(pixels), SIZE, SIZE), meshes: visuals.length, triangles }
+      return { image: toDataUrl(Uint8ClampedArray.from(pixels), SIZE, SIZE), ...framed }
     } finally {
       engine.camera.target = null
       root.dispose()
@@ -141,5 +151,62 @@ export class Previews {
     this.engine = engine
     await engine.ready
     return engine
+  }
+}
+
+/**
+ * A model to turn over in the preview window: a live engine of its own in `host`, with an orbit
+ * camera (drag turns, right-drag or shift-drag pans, the wheel zooms, F frames). It runs only
+ * while it is shown; `dispose` lets its GPU device go.
+ */
+export class ModelViewer {
+  private engine: Catalyst | null = null
+  private root: Node3D | null = null
+  private orbit: OrbitCamera | null = null
+  private generation = 0
+  /** The element the viewer draws in. */
+  readonly host: HTMLElement
+
+  constructor(host: HTMLElement) {
+    this.host = host
+  }
+
+  /** Show the model at `path`, read through `loader`; what it holds, or null when nothing drew. */
+  async show(loader: Loader, path: string): Promise<{ meshes: number; triangles: number } | null> {
+    const generation = ++this.generation
+    if (!this.engine) {
+      this.engine = new Catalyst({ container: this.host, background: hex(color.bg.panel), render: { pixelRatio: Math.min(2, window.devicePixelRatio || 1) }, modules: [new Input()], log: () => undefined })
+      this.engine.start()
+    }
+    const engine = this.engine
+    await engine.ready
+    if (generation !== this.generation || this.engine !== engine) return null
+    this.root?.dispose()
+    engine.loader = loader
+    const root = new Node3D("preview")
+    const model = new Model({ url: path })
+    const orbit = new OrbitCamera({ yaw: (YAW * 180) / Math.PI, pitch: (PITCH * 180) / Math.PI, autoTurn: 0 })
+    root.addNode(model)
+    root.addNode(orbit)
+    engine.add(root)
+    engine.camera.target = orbit.camera
+    this.root = root
+    this.orbit = orbit
+    await model.ready
+    if (generation !== this.generation) return null
+    return frameModel(model, orbit)
+  }
+
+  fit(): void {
+    this.orbit?.fit()
+  }
+
+  dispose(): void {
+    this.generation++
+    this.root?.dispose()
+    this.root = null
+    this.orbit = null
+    this.engine?.dispose()
+    this.engine = null
   }
 }

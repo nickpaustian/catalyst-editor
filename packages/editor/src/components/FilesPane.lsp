@@ -116,6 +116,7 @@ const icons = {
 const MODEL = /\.(glb|gltf)$/i
 const GLB = /\.glb$/i
 const THECA = /\.theca$/i
+const PREVIEWABLE = /\.(png|jpe?g|webp|gif|avif|svg|glb|gltf)$/i
 const IMAGE = /\.(png|jpe?g|webp|gif|avif|svg)$/i
 const SCRIPT = /\.(ts|js)$/i
 const HDR = /\.hdr$/i
@@ -321,7 +322,7 @@ function keyDown(event: KeyboardEvent) {
     // Space shows the chosen file in the preview window, or puts it away, as Quick Look does.
     event.preventDefault()
     if (preview.value?.open) sendCommand({ type: 'closePreview' })
-    else if (row.kind === 'file' && IMAGE.test(row.name)) sendCommand({ type: 'preview', path: row.path })
+    else if (row.kind === 'file' && PREVIEWABLE.test(row.name)) sendCommand({ type: 'preview', path: row.path })
   } else if (event.key === 'Enter' || event.key === 'F2') {
     event.preventDefault()
     startRename(row)
@@ -350,7 +351,7 @@ function step(from: Row, by: number) {
   const next = steps[steps.indexOf(from) + by]
   if (next) choose(next)
   // An open preview follows the chosen file while it is one the window can show.
-  if (next && preview.value?.open && next.kind === 'file' && IMAGE.test(next.name)) sendCommand({ type: 'preview', path: next.path })
+  if (next && preview.value?.open && next.kind === 'file' && PREVIEWABLE.test(next.name)) sendCommand({ type: 'preview', path: next.path })
 }
 
 function choose(row: Row) {
@@ -431,7 +432,7 @@ function itemsFor(row: Row): MenuItem[] {
     items.push({ label: 'Show contents', run: () => showContents(row.path, true) })
   } else {
     if (SCRIPT.test(row.name)) items.push({ label: 'Open in code pane', run: () => sendCommand({ type: 'openFile', path: row.path }) })
-    if (IMAGE.test(row.name)) items.push({ label: 'Preview', kbd: 'Space', run: () => sendCommand({ type: 'preview', path: row.path }) })
+    if (PREVIEWABLE.test(row.name)) items.push({ label: 'Preview', kbd: 'Space', run: () => sendCommand({ type: 'preview', path: row.path }) })
     if (MODEL.test(row.name)) items.push({ label: 'Add to scene', run: () => sendCommand({ type: 'addModel', path: row.path }) })
     if (GLB.test(row.name) && streamable.value?.available) items.push({ label: 'Make streamable…', run: () => sendCommand({ type: 'streamable', path: row.path }) })
     if (HDR.test(row.name)) items.push({ label: 'Use as environment', run: () => sendCommand({ type: 'useEnvironment', path: row.path }) })

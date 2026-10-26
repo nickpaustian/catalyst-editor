@@ -222,8 +222,9 @@ const round = (n: number, places = 4) => Number(n.toFixed(places))
 const toStrings = (value: unknown): string[] => (Array.isArray(value) ? value.map(String) : String(value ?? "").split(","))
 const LIST_TYPES: ExposedProperty["type"][] = ["tags", "layers"]
 export const PREFABS_DIR = "prefabs"
-/** Files the preview window can show. */
-const PREVIEWED = /\.(png|jpe?g|webp|gif|avif|svg)$/i
+/** Files the preview window can show: images, and models it turns over. */
+const PREVIEWED = /\.(png|jpe?g|webp|gif|avif|svg|glb|gltf)$/i
+const PREVIEWED_MODEL = /\.(glb|gltf)$/i
 
 /** A streamed surface's package, as Iapetus writes it: a folder that stands as one asset. */
 const THECA = /\.theca$/i
@@ -2268,14 +2269,19 @@ export class EditorSession {
     this.select(collider)
   }
 
-  /** Show a file in the preview window; only images so far. */
+  /** Show a file in the preview window: an image, or a model to turn over. */
   private async openPreview(path: string): Promise<void> {
     const folder = this.folder
     if (!folder || !PREVIEWED.test(path)) return
     try {
+      if (PREVIEWED_MODEL.test(path)) {
+        this.releasePreview()
+        this.set("editor:preview", { ...PREVIEW_DEFAULT, open: true, path, kind: "model", loader: folderLoader(folder) })
+        return
+      }
       const url = URL.createObjectURL(await folder.readFile(path))
       this.releasePreview()
-      this.set("editor:preview", { open: true, path, kind: "image", url, error: "" })
+      this.set("editor:preview", { ...PREVIEW_DEFAULT, open: true, path, kind: "image", url })
     } catch (error) {
       this.set("editor:preview", { ...PREVIEW_DEFAULT, open: true, path, error: `${path} could not be read: ${error instanceof Error ? error.message : error}` })
     }
