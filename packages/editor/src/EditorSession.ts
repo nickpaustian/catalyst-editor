@@ -677,6 +677,8 @@ export class EditorSession {
     await Promise.allSettled(loading)
     if (this._root !== root) return
     this.signalsShown.stale = true
+    this.variants.stale()
+    this.publishVariantMarks()
     this.publishSelection()
   }
 
