@@ -3,19 +3,38 @@
   <header class="bar" $if="shared['editor:preview'].open">
     <span class="title mono" $title="shared['editor:preview'].path">{{ state.name }}</span>
     <span class="meta mono" $if="state.natural">{{ state.natural }}{{ state.kind === 'image' ? ' · ' + state.zoomLabel : '' }}</span>
+    <span class="sheet well select" $if="state.kind === 'component'"><select aria-label="Stylesheet" title="The slate stylesheet the component is styled by" $model="state.stylesheet" @change="chooseSheet()">
+      <option value="" label="No stylesheet">No stylesheet</option>
+      <option $for="sheet in shared['editor:preview'].stylesheets" $key="sheet" $value="sheet" $label="sheet">{{ sheet }}</option>
+    </select></span>
     <span class="actions">
-      <button type="button" class="tool" title="Fit to the pane" $class="{ on: state.kind === 'image' && state.fitted }" @click="fit()">Fit</button>
+      <button type="button" class="tool" title="Mount it again with its cells as it starts them" $if="state.kind === 'component'" @click="resetComponent()">Reset</button>
+      <button type="button" class="tool" title="Fit to the pane" $if="state.kind !== 'component'" $class="{ on: state.kind === 'image' && state.fitted }" @click="fit()">Fit</button>
       <button type="button" class="tool" title="Actual size" $if="state.kind === 'image'" $class="{ on: !state.fitted && state.zoom === 1 }" @click="actualSize()">1:1</button>
     </span>
   </header>
   <div class="stage" $ref="stage" $class="{ empty: !shared['editor:preview'].open }" @wheel="wheel($event)" @pointerdown="startPan($event)" @dblclick="toggleZoom($event)">
     <div class="model" $if="state.kind === 'model' && shared['editor:preview'].open" $ref="viewport"></div>
+    <div class="component-view" $if="state.kind === 'component' && shared['editor:preview'].open">
+      <div class="component-host" $ref="componentHost"></div>
+      <aside class="inputs" $if="state.inputs.length">
+        <div class="inputs-title">Cells and props</div>
+        <label class="input" $for="input in state.inputs" $key="input.key" $title="input.kind === 'cell' ? 'a shared cell: what scripts and other components set' : 'a prop, passed when the component mounts'">
+          <span class="input-name mono">{{ input.name }}<span class="input-kind">{{ input.kind }}</span></span>
+          <input class="checkbox" type="checkbox" $if="input.type === 'boolean'" $checked="input.value === true" @change="setInput(input, $event)" />
+          <input class="well" type="number" $if="input.type === 'number'" $value="input.text" @change="setInput(input, $event)" @keydown="$event.stopPropagation()" />
+          <input class="well" type="text" $if="input.type === 'string'" $value="input.text" spellcheck="false" @change="setInput(input, $event)" @keydown="$event.stopPropagation()" />
+          <input class="well mono json" type="text" $if="input.type === 'json'" spellcheck="false" title="JSON" $class="{ invalid: input.invalid }" $value="input.text" @change="setInput(input, $event)" @keydown="$event.stopPropagation()" />
+        </label>
+      </aside>
+    </div>
     <p class="hint" $if="state.kind === 'model' && state.natural && shared['editor:preview'].open">drag turns · right-drag pans · wheel zooms · F frames</p>
     <img $if="state.kind === 'image' && shared['editor:preview'].url" $src="shared['editor:preview'].url" alt="" draggable="false" @load="loaded($event)" $style="'transform: translate(' + state.x + 'px, ' + state.y + 'px) scale(' + state.zoom + ')'" />
     <p class="error" $if="shared['editor:preview'].error">{{ shared['editor:preview'].error }}</p>
+    <p class="error component-error mono" $if="state.kind === 'component' && state.componentError">{{ state.componentError }}</p>
     <div class="nothing" $if="!shared['editor:preview'].open">
       <span class="what">Nothing to preview</span>
-      <span class="how">Choose an image or a model in the files pane and press Space.</span>
+      <span class="how">Choose an image, a model or a component in the files pane and press Space.</span>
     </div>
   </div>
 </section>
@@ -26,14 +45,20 @@ import { reactive, shared, defineRefs, onMounted } from '@lightspeed-js/core'
 import { sendCommand } from '../commands.ts'
 import { PREVIEW_DEFAULT } from '../cells.ts'
 import { ModelViewer } from '../previews.ts'
+import { ComponentPreview, cellsOf, propsOf } from '../componentPreview.ts'
+
+interface Input { key: string; kind: 'cell' | 'prop'; name: string; type: 'boolean' | 'number' | 'string' | 'json'; value: unknown; text: string; invalid: boolean }
 
 const MAX_ZOOM = 32
 
 const cell = shared('editor:preview', PREVIEW_DEFAULT)
-const refs = defineRefs<{ frame: HTMLElement; stage: HTMLElement; viewport: HTMLElement }>()
+const refs = defineRefs<{ frame: HTMLElement; stage: HTMLElement; viewport: HTMLElement; componentHost: HTMLElement }>()
 const state = reactive({
   name: '',
   kind: 'image',
+  stylesheet: '',
+  inputs: [] as Input[],
+  componentError: '',
   natural: '',
   imageWidth: 0,
   imageHeight: 0,
@@ -46,6 +71,101 @@ const state = reactive({
 
 let shownPath = ''
 let viewer: ModelViewer | null = null
+let component: ComponentPreview | null = null
+let shownSource = ''
+let shownSheet = ''
+// Props set by hand outlive an edit of the source; they go when another file is shown.
+let propValues: Record<string, unknown> = {}
+let cellWatchers: (() => void)[] = []
+
+const typeOf = (value: unknown): Input['type'] => (typeof value === 'boolean' ? 'boolean' : typeof value === 'number' ? 'number' : typeof value === 'string' || value === undefined ? 'string' : 'json')
+const textOf = (value: unknown, type: Input['type']) => (type === 'json' ? JSON.stringify(value) : value === undefined ? '' : String(value))
+const inputOf = (kind: Input['kind'], name: string, value: unknown): Input => {
+  const type = typeOf(value)
+  return { key: `${kind}:${name}`, kind, name, type, value, text: textOf(value, type), invalid: false }
+}
+
+function dropComponent() {
+  for (const stop of cellWatchers.splice(0)) stop()
+  component?.dispose()
+  component = null
+  shownSource = ''
+  shownSheet = ''
+  state.inputs = []
+}
+
+// The component is mounted once its host is on the page, and again when its text changes; its cells keep their values.
+function showComponent(next: typeof PREVIEW_DEFAULT) {
+  const host = refs.componentHost
+  if (!host?.isConnected) return void requestAnimationFrame(() => cell.value?.path === next.path && showComponent(cell.value))
+  if (component && component.host !== host) dropComponent()
+  component ??= new ComponentPreview(host)
+  const view = component
+  if (next.source === shownSource) {
+    if (next.stylesheetText !== shownSheet) view.restyle((shownSheet = next.stylesheetText))
+    return
+  }
+  shownSource = next.source
+  shownSheet = next.stylesheetText
+  const declared = propsOf(next.source)
+  const props = Object.fromEntries(Object.entries(declared).map(([name, initial]) => [name, name in propValues ? propValues[name] : initial]))
+  void view.show(next.source, next.stylesheetText, props).then((error) => {
+    if (component !== view || cell.value?.path !== next.path) return
+    state.natural = error ? '' : describeInputs(declared)
+    if (error) return void (state.componentError = error)
+    state.componentError = ''
+    for (const stop of cellWatchers.splice(0)) stop()
+    const inputs: Input[] = []
+    for (const name of cellsOf(next.source)) {
+      const shared = view.cell(name)
+      inputs.push(inputOf('cell', name, shared.value))
+      // A cell the component itself changes shows its new value.
+      cellWatchers.push(shared.subscribe((value: unknown) => {
+        const at = state.inputs.findIndex((input) => input.key === `cell:${name}`)
+        if (at >= 0) state.inputs[at] = inputOf('cell', name, value)
+      }))
+    }
+    for (const [name, value] of Object.entries(props)) inputs.push(inputOf('prop', name, value))
+    state.inputs = inputs
+  })
+}
+
+function describeInputs(props: Record<string, unknown>): string {
+  const cells = cellsOf(shownSource).length
+  const count = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
+  return `${count(cells, 'cell')} · ${count(Object.keys(props).length, 'prop')}`
+}
+
+function setInput(input: Input, event: Event) {
+  const field = event.target as HTMLInputElement
+  let value: unknown
+  if (input.type === 'boolean') value = (field as HTMLInputElement).checked
+  else if (input.type === 'number') value = Number(field.value)
+  else if (input.type === 'string') value = field.value
+  else {
+    try {
+      value = JSON.parse(field.value)
+    } catch {
+      const at = state.inputs.findIndex((each) => each.key === input.key)
+      if (at >= 0) state.inputs[at] = { ...input, text: field.value, invalid: true }
+      return
+    }
+  }
+  if (input.kind === 'cell') return component?.cell(input.name).set(value)
+  propValues[input.name] = value
+  shownSource = ''
+  showComponent(cell.value)
+}
+
+function chooseSheet() {
+  sendCommand({ type: 'previewStylesheet', path: state.stylesheet })
+}
+
+function resetComponent() {
+  propValues = {}
+  dropComponent()
+  if (cell.value?.open && cell.value.kind === 'component') showComponent(cell.value)
+}
 
 function dropViewer() {
   viewer?.dispose()
@@ -69,8 +189,10 @@ cell.subscribe((next: typeof PREVIEW_DEFAULT | undefined) => {
     shownPath = ''
     loadedSrc = ''
     dropViewer()
+    dropComponent()
     return
   }
+  if (next.kind === 'component') state.stylesheet = next.stylesheet
   if (next.path !== shownPath) {
     shownPath = next.path
     state.kind = next.kind
@@ -79,10 +201,15 @@ cell.subscribe((next: typeof PREVIEW_DEFAULT | undefined) => {
     state.imageWidth = 0
     state.imageHeight = 0
     state.fitted = true
+    propValues = {}
+    dropComponent()
+    state.componentError = ''
     if (next.kind === 'model') showModel(next)
     else dropViewer()
     setTimeout(() => refs.frame?.focus({ preventScroll: true }), 0)
   }
+  // A component follows its draft and its stylesheet while the same file shows.
+  if (next.kind === 'component') showComponent(next)
 })
 
 function close() {
@@ -331,6 +458,93 @@ onMounted(() => {
 .error {
   margin: var(--cat-space-4);
   color: var(--cat-danger);
+}
+
+.component-view {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  cursor: default;
+  background: var(--cat-bg-viewport);
+}
+
+.component-host {
+  flex: 1 1 auto;
+  min-width: 0;
+  position: relative;
+}
+
+.inputs {
+  flex: 0 0 220px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--cat-space-2);
+  padding: var(--cat-space-2) var(--cat-space-3);
+  overflow-y: auto;
+  border-left: 1px solid var(--cat-border);
+  background: var(--cat-bg-panel);
+}
+
+.inputs-title {
+  color: var(--cat-text-tertiary);
+  font-size: var(--cat-text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.input {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cat-space-1);
+}
+
+.input:has(.checkbox) {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.input-name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--cat-space-1-5);
+  min-width: 0;
+  overflow: hidden;
+  color: var(--cat-text-secondary);
+  font-size: var(--cat-text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.input-kind {
+  color: var(--cat-text-tertiary);
+  font-family: var(--cat-font-ui);
+  font-size: var(--cat-text-xs);
+}
+
+.input .json {
+  font-size: var(--cat-text-xs);
+}
+
+.input .json.invalid {
+  border-color: var(--cat-danger);
+}
+
+.component-error {
+  position: absolute;
+  left: var(--cat-space-3);
+  right: 236px;
+  bottom: var(--cat-space-2);
+  margin: 0;
+  padding: var(--cat-space-1-5) var(--cat-space-2);
+  border-radius: var(--cat-radius-sm);
+  background: var(--cat-bg-raised);
+  font-size: var(--cat-text-sm);
+}
+
+.sheet {
+  flex: 0 1 200px;
+  min-width: 0;
 }
 
 .stage.empty {

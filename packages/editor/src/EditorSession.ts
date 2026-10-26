@@ -207,6 +207,7 @@ export type EditorCommand =
   | { type: "addModel"; path: string }
   | { type: "useEnvironment"; path: string }
   | { type: "revealFile"; path: string }
+  | { type: "previewStylesheet"; path: string }
   | { type: "preview"; path: string }
   | { type: "closePreview" }
   | { type: "streamable"; path: string }
@@ -234,7 +235,7 @@ const CODE_FILE = /\.(ts|js|lsp|css)$/i
 const PREVIEWED_CODE = /\.(lsp|css)$/i
 
 /** Files the preview window can show: images, and models it turns over. */
-const PREVIEWED = /\.(png|jpe?g|webp|gif|avif|svg|glb|gltf)$/i
+const PREVIEWED = /\.(png|jpe?g|webp|gif|avif|svg|glb|gltf|lsp)$/i
 const PREVIEWED_MODEL = /\.(glb|gltf)$/i
 
 /** A streamed surface's package, as Iapetus writes it: a folder that stands as one asset. */
@@ -1129,6 +1130,9 @@ export class EditorSession {
       case "preview":
         await this.openPreview(command.path)
         break
+      case "previewStylesheet":
+        await this.previewStylesheet(command.path)
+        break
       case "closePreview":
         this.closePreview()
         break
@@ -1720,6 +1724,7 @@ export class EditorSession {
   private async draftFile(path: string, text: string): Promise<void> {
     if (!PREVIEWED_CODE.test(path) || (this.app.shared("editor:code").value as EditorCells["editor:code"])?.path !== path) return
     this.drafts.set(path, text)
+    this.followInPreview(path, text)
     const status = await this.reloadAndReport(path, "previewing")
     this.set("editor:code", { ...(this.app.shared("editor:code").value as EditorCells["editor:code"]), status })
   }
@@ -1736,7 +1741,9 @@ export class EditorSession {
       error ??= reader.error ?? null
     })
     if (error) return error
-    return readers ? `${ok} ${path}` : `${ok} ${path} · nothing in the scene uses it`
+    const preview = this.app.shared("editor:preview").value as EditorCells["editor:preview"]
+    const previewed = preview?.open && preview.kind === "component" && (preview.path === path || preview.stylesheet === path)
+    return readers || previewed ? `${ok} ${path}` : `${ok} ${path} · nothing in the scene uses it`
   }
 
   /** Unsaved texts back to what is on disk, and what showed them reloaded. */
@@ -1744,6 +1751,7 @@ export class EditorSession {
     if (!this.drafts.size) return
     const paths = [...this.drafts.keys()]
     this.drafts.clear()
+    for (const path of paths) this.followInPreview(path, await this.readDraftOrFile(path))
     await this.reloadUIFiles(paths)
   }
 
@@ -1754,6 +1762,7 @@ export class EditorSession {
     await folder.writeText(path, text)
     this.drafts.delete(path)
     if (PREVIEWED_CODE.test(path)) {
+      this.followInPreview(path, text)
       const status = await this.reloadAndReport(path, "saved")
       await this.publishFiles()
       return this.set("editor:code", { path, text, status })
@@ -2352,6 +2361,14 @@ export class EditorSession {
     const folder = this.folder
     if (!folder || !PREVIEWED.test(path)) return
     try {
+      if (/\.lsp$/i.test(path)) {
+        const stylesheet = this.stylesheetShowing(path)
+        const source = this.drafts.get(path) ?? (await folder.readText(path))
+        const stylesheetText = stylesheet ? await this.readDraftOrFile(stylesheet) : ""
+        this.releasePreview()
+        this.set("editor:preview", { ...PREVIEW_DEFAULT, open: true, path, kind: "component", source, stylesheet, stylesheetText, stylesheets: this.projectFiles.filter((file) => /\.css$/i.test(file)) })
+        return
+      }
       if (PREVIEWED_MODEL.test(path)) {
         this.releasePreview()
         this.set("editor:preview", { ...PREVIEW_DEFAULT, open: true, path, kind: "model", loader: folderLoader(folder) })
@@ -2363,6 +2380,39 @@ export class EditorSession {
     } catch (error) {
       this.set("editor:preview", { ...PREVIEW_DEFAULT, open: true, path, error: `${path} could not be read: ${error instanceof Error ? error.message : error}` })
     }
+  }
+
+  /** The stylesheet of the slate that shows a component in the scene, so its preview is styled as it is there. */
+  private stylesheetShowing(component: string): string {
+    let found = ""
+    this._root?.walk((node) => {
+      if (found || (node as Node3D & { source?: string }).source !== component) return
+      for (let at = node.parent; at; at = at.parent) {
+        if (at instanceof Slate) {
+          found = at.stylesheet
+          return
+        }
+      }
+    })
+    return found
+  }
+
+  private async readDraftOrFile(path: string): Promise<string> {
+    return this.drafts.get(path) ?? (await this.folder?.readText(path).catch(() => "")) ?? ""
+  }
+
+  private async previewStylesheet(path: string): Promise<void> {
+    const preview = this.app.shared("editor:preview").value as EditorCells["editor:preview"]
+    if (!preview?.open || preview.kind !== "component") return
+    this.set("editor:preview", { ...preview, stylesheet: path, stylesheetText: path ? await this.readDraftOrFile(path) : "" })
+  }
+
+  /** A component being previewed, or its stylesheet, follows the code pane's draft or save. */
+  private followInPreview(path: string, text: string): void {
+    const preview = this.app.shared("editor:preview").value as EditorCells["editor:preview"]
+    if (!preview?.open || preview.kind !== "component") return
+    if (preview.path === path) this.set("editor:preview", { ...preview, source: text })
+    else if (preview.stylesheet === path) this.set("editor:preview", { ...preview, stylesheetText: text })
   }
 
   private closePreview(): void {

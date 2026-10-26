@@ -7,6 +7,7 @@
     </select></span>
     <span class="dirty" $if="state.dirty">unsaved</span>
     <span class="status" $class="{ error: state.error }">{{ state.status }}</span>
+    <button class="button small" title="Show it on its own in the preview pane, with its cells and props to set" $if="state.path.endsWith('.lsp')" @click="preview()">Preview</button>
     <button class="button small primary" $disabled="!state.path || !state.dirty" @click="save()">Save</button>
   </div>
   <div class="host" $ref="host"></div>
@@ -65,6 +66,10 @@ function save(): boolean {
   if (!view || !state.path) return false
   sendCommand({ type: 'saveScript', path: state.path, text: view.state.doc.toString() })
   return true
+}
+
+function preview() {
+  if (state.path) sendCommand({ type: 'preview', path: state.path })
 }
 
 function saveAll(): boolean {

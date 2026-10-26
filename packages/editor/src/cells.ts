@@ -27,13 +27,21 @@ export const STREAMABLE_DEFAULT = {
   rebuild: null as { permissive: boolean; partition: boolean; maxTexture: number; maps: { role: string; path: string }[] } | null,
 }
 
-/** The preview window: closed when `open` is false. An image shows from `url`, its object url; a model is read through `loader`, the project's. */
+/**
+ * The preview window: closed when `open` is false. An image shows from `url`, its object url; a model is
+ * read through `loader`, the project's; a component is compiled from `source` (the code pane's draft when
+ * there is one) and styled by the stylesheet `stylesheet` names, whose text is `stylesheetText`.
+ */
 export const PREVIEW_DEFAULT = {
   open: false,
   path: "",
-  kind: "image" as "image" | "model",
+  kind: "image" as "image" | "model" | "component",
   url: "",
   loader: null as Loader | null,
+  source: "",
+  stylesheet: "",
+  stylesheetText: "",
+  stylesheets: [] as string[],
   error: "",
 }
 

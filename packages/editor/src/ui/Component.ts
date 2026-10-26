@@ -20,7 +20,7 @@ let compiled = 0
  * Scripts and components talk through its cells: `componentRuntime(engine).shared("score")`.
  */
 /** The rule Lightspeed adds to the document for `$show`, which hides by an attribute; a slate needs its own copy. */
-const LIGHTSPEED_RULES = "[data-lsp-hidden]{display:none!important}"
+export const LIGHTSPEED_RULES = "[data-lsp-hidden]{display:none!important}"
 
 export const componentRuntime = (engine: Catalyst): LightspeedRuntime => {
   let runtime = runtimes.get(engine)
@@ -34,6 +34,16 @@ const load = async (specifier: string): Promise<Record<string, unknown>> => {
   const module = editorModules[specifier]
   if (!module) throw new Error(`a component may import @lightspeed-js/core or ${Object.keys(editorModules).join(", ")}, not ${specifier}`)
   return module as Record<string, unknown>
+}
+
+type Definition = Awaited<ReturnType<typeof compileComponents>>[string]
+
+/** Compile a `.lsp` file's text into a component definition under a fresh id, as the scene and the preview both do. */
+export const compileComponent = async (source: string): Promise<{ id: string; definition: Definition; css: string }> => {
+  const id = `project-component-${++compiled}`
+  const definitions = await compileComponents([{ id, source }], transpile, load)
+  const definition = definitions[id]
+  return { id, definition, css: [LIGHTSPEED_RULES, definition.style, definition.styleDeferred].filter(Boolean).join("\n") }
 }
 
 /**
@@ -117,13 +127,11 @@ export class Component extends UIElement {
     try {
       const source = await engine.loader.text(url)
       if (generation !== this.generation) return
-      const id = `project-component-${++compiled}`
-      const definitions = await compileComponents([{ id, source }], transpile, load)
+      const { id, definition, css } = await compileComponent(source)
       if (generation !== this.generation) return
-      const definition = definitions[id]
       const runtime = componentRuntime(engine)
       runtime.useComponents({ [id]: async () => definition })
-      this.style.textContent = [LIGHTSPEED_RULES, definition.style, definition.styleDeferred].filter(Boolean).join("\n")
+      this.style.textContent = css
       const mount = await runtime.mount(id, this.mountPoint, { node: this.name })
       if (!mount) throw new Error("it did not mount")
       if (generation !== this.generation) return runtime.unmount(mount)
