@@ -38,7 +38,17 @@
         </select>
       </span>
     </label>
-    <p class="warning" $if="state.shared > 1">{{ state.scriptName }} is on {{ state.shared }} nodes: the connection applies to each of them.</p>
+    <fieldset class="scope" $if="state.hasSourceNode && state.script">
+      <legend>Which nodes with {{ state.scriptName }} hear it</legend>
+      <label class="check">
+        <input type="radio" name="scope" value="node" $checked="state.perNode" @change="state.perNode = true" />
+        <span>Only {{ state.targetName }} <span class="dim">· a <span class="mono">node</span> field on the script names {{ state.sourceName }}, and each node sets its own</span></span>
+      </label>
+      <label class="check">
+        <input type="radio" name="scope" value="all" $checked="!state.perNode" @change="state.perNode = false" />
+        <span>Every node with it <span class="dim">· {{ state.sourceName }} is written into the script{{ state.shared > 1 ? ', for all ' + state.shared : '' }}</span></span>
+      </label>
+    </fieldset>
 
     <label class="dialog-field">Method
       <span class="well large select">
@@ -90,6 +100,9 @@ const state = reactive({
   method: '',
   newMethod: '',
   error: '',
+  perNode: false,
+  hasSourceNode: false,
+  sourceName: '',
 })
 
 let engineSignals: string[] = []
@@ -106,9 +119,19 @@ function suggest() {
   state.newMethod = name || 'onSignal'
 }
 
+// A connection from a node can be the script's for every node it is on, or chosen per node through a field; a script on several nodes leans to the second.
+function scope() {
+  const sourceId = state.mode === 'emit' ? String(shownFor?.source ?? '') : state.source
+  const source = sourceId && sourceId !== 'engine' ? nodeOf(sourceId) : null
+  state.hasSourceNode = source !== null
+  state.sourceName = source ? lastPart(source.label) : ''
+  state.perNode = state.shared > 1
+}
+
 function pickedSource() {
   state.signals = state.source === 'engine' ? engineSignals : nodeOf(state.source)?.signals ?? []
   if (!state.signals.includes(state.signal)) state.signal = state.signals[0] ?? ''
+  scope()
   suggest()
 }
 
@@ -118,6 +141,7 @@ function pickedScript() {
   state.shared = script?.shared ?? 0
   state.methods = script?.methods ?? []
   state.method = ''
+  scope()
 }
 
 function pickedTarget() {
@@ -172,6 +196,7 @@ function submit(event: Event) {
     target: Number(state.target),
     url: state.script || null,
     call: state.method || state.newMethod.trim(),
+    perNode: state.hasSourceNode && Boolean(state.script) && state.perNode,
   })
 }
 
@@ -204,9 +229,29 @@ onMounted(() => {
   font-family: var(--cat-font-mono);
 }
 
-.warning {
+.scope {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cat-space-1-5);
   margin: 0;
-  color: var(--cat-warning);
+  padding: 0;
+  border: 0;
+}
+
+.scope legend {
+  margin-bottom: var(--cat-space-1);
+  color: var(--cat-text-secondary);
+}
+
+.check {
+  display: flex;
+  align-items: baseline;
+  gap: var(--cat-space-2);
+  color: var(--cat-text-primary);
+}
+
+.dim {
+  color: var(--cat-text-tertiary);
 }
 
 .error {

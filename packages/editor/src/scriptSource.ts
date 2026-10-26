@@ -180,10 +180,18 @@ export const addEntry = (s: string, name: string, entry: string, type?: string):
     const separator = multiline ? `\n${indentAt(s, last.start)}` : " "
     return `${s.slice(0, after)}${comma ? "" : ","}${separator}${entry}${comma && multiline ? "," : ""}${s.slice(after)}`
   }
+  return insertMember(s, `static ${name}${type ? `: ${type}` : ""} = [${entry}]`)
+}
+
+/** A field added to the class after its static fields, such as `button = ""`. */
+export const addField = (s: string, declaration: string): string | null => insertMember(s, declaration)
+
+/** A one-line member put after the static fields at the top of the class, or first when there are none. */
+const insertMember = (s: string, member: string): string | null => {
   const body = classBody(s)
   if (!body) return null
   const indent = memberIndent(s, body)
-  const declaration = `${indent}static ${name}${type ? `: ${type}` : ""} = [${entry}]\n`
+  const declaration = `${indent}${member}\n`
   if (!s.slice(body.start, body.end).trim()) return `${s.slice(0, body.start)}\n${declaration}${s.slice(body.end)}`
   // After the last static field at the top of the class, else first.
   let at = s.indexOf("\n", body.start) + 1

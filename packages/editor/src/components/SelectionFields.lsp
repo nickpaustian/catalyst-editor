@@ -75,6 +75,13 @@
                   <option $value="choice" $label="choice" $selected="choice === field.value">{{ choice }}</option>
                 </template>
               </select>
+              <select $else-if="field.type === 'node'" class="well" $aria-label="field.label" $disabled="field.readonly" @change="applyNodeField($event, field)">
+                <option value="" $selected="!field.value">None</option>
+                <option $if="field.value && !(field.choices || []).includes(field.value)" $value="field.value" $label="field.value + ' (not found)'" $selected="true">{{ field.value }}</option>
+                <template $for="choice in field.choices" $key="choice">
+                  <option $value="choice" $label="choice" $selected="choice === field.value">{{ choice }}</option>
+                </template>
+              </select>
               <button $else-if="field.type === 'file'" class="well file-pick" type="button" $class="{ missing: field.missing, droppable: field.droppable, over: field.over }" $aria-label="field.label" $title="field.value || 'None'" $disabled="field.readonly" @click="openFile($event, field)" @dragover="fileOver($event, field)" @dragleave="field.over = false" @drop="dropFile($event, field)">
                 <span class="file-name" $class="{ empty: !field.value }">{{ field.display }}</span>
                 <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"/></svg>
@@ -104,14 +111,15 @@
           <div class="connections" $if="script.built">
             <div class="connections-head">
               <span class="connections-title">Connections</span>
-              <span class="shared" $if="script.shared > 1" $title="'Connections are written in ' + script.url + ', so every node with it hears the same signals'">on {{ script.shared }} nodes: they share these</span>
+              <span class="shared" $if="script.shared > 1 && script.fixed" $title="'A connection with its node written in ' + script.url + ' is heard by every node with the script; one through a node field is chosen on each'">on {{ script.shared }} nodes: fixed ones are shared</span>
               <button class="icon-button small" type="button" title="Call one of its methods from a signal" $aria-label="'Listen to a signal in ' + script.name" @click="listen(script)">
                 <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"/></svg>
               </button>
             </div>
             <div class="wire" $for="row in script.connections" $key="row.index + ':' + row.signal + ':' + row.call" $class="{ broken: row.problem }">
+              <span class="dim mono" $if="row.field" $title="'Each node with ' + script.name + ' chooses this in its ' + row.field + ' field'">{{ row.field }}:</span>
               <button class="link" type="button" $if="row.source !== null && row.from !== '.'" $title="'Select ' + row.from" @click="selectNode(row.source)">{{ row.from }}</button>
-              <span class="dim" $else>{{ row.from === '.' ? 'itself' : row.from === undefined ? 'engine' : row.from }}</span>
+              <span class="dim" $else>{{ row.from === '.' ? 'itself' : row.from === undefined ? 'engine' : row.from || 'not set' }}</span>
               <span class="mono wire-signal">{{ row.signal }}</span>
               <span class="dim" aria-hidden="true">→</span>
               <span class="mono">{{ row.call }}()</span>
@@ -134,6 +142,13 @@
                   <input class="swatch" type="color" $aria-label="field.label" $model="field.hex" @input="applyScriptColour($event, script, field)" />
                   <span class="mono">{{ field.hex }}</span>
                 </label>
+                <select $else-if="field.type === 'node'" class="well" $aria-label="field.label" $disabled="field.readonly" @change="applyScriptNode($event, script, field)">
+                  <option value="" $selected="!field.value">None</option>
+                  <option $if="field.value && !(field.choices || []).includes(field.value)" $value="field.value" $label="field.value + ' (not found)'" $selected="true">{{ field.value }}</option>
+                  <template $for="choice in field.choices" $key="choice">
+                    <option $value="choice" $label="choice" $selected="choice === field.value">{{ choice }}</option>
+                  </template>
+                </select>
                 <button $else-if="field.type === 'file'" class="well file-pick" type="button" $class="{ missing: field.missing, droppable: field.droppable, over: field.over }" $aria-label="field.label" $title="field.value || 'None'" $disabled="field.readonly" @click="openScriptFile($event, script, field)" @dragover="fileOver($event, field)" @dragleave="field.over = false" @drop="dropScriptFile($event, script, field)">
                   <span class="file-name" $class="{ empty: !field.value }">{{ field.display }}</span>
                   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"/></svg>
@@ -180,8 +195,8 @@ const dragging = shared(DRAGGING_FILE_CELL, null)
 // Local copies of the fields, so typing doesn't fight the scene publishing
 // the same values back on every gizmo move
 interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number; options?: string[]; readonly?: boolean; hex?: string; ranged?: boolean; choices?: string[]; display?: string; missing?: boolean; droppable?: boolean; over?: boolean }
-interface Connection { url: string; index: number | null; from?: string; source: number | null; signal: string; call: string; problem: string | null }
-interface ScriptEntry { index: number; url: string; name: string; built: boolean; fields: Field[]; connections: Connection[]; shared: number }
+interface Connection { url: string; index: number | null; from?: string; field?: string; source: number | null; signal: string; call: string; problem: string | null }
+interface ScriptEntry { index: number; url: string; name: string; built: boolean; fields: Field[]; connections: Connection[]; shared: number; fixed: boolean }
 interface SignalsView { listens: Connection[]; scripts: { url: string; shared: number }[] }
 
 const state = reactive({
@@ -227,6 +242,7 @@ selection.subscribe((next: any) => {
 function withConnections(script: ScriptEntry, view: SignalsView | null): ScriptEntry {
   script.connections = view?.listens.filter((row) => row.url === script.url) ?? []
   script.shared = view?.scripts.find((each) => each.url === script.url)?.shared ?? 1
+  script.fixed = script.connections.some((row) => !row.field && row.from !== undefined && row.from !== '.')
   return script
 }
 
@@ -244,6 +260,16 @@ function disconnect(script: ScriptEntry, row: Connection) {
 
 function selectNode(id: number) {
   sendCommand({ type: 'select', id })
+}
+
+function applyNodeField(event: Event, field: Field) {
+  field.value = (event.target as HTMLSelectElement).value
+  applyField(field)
+}
+
+function applyScriptNode(event: Event, script: ScriptEntry, field: Field) {
+  field.value = (event.target as HTMLSelectElement).value
+  applyScriptField(script, field)
 }
 
 function applyScriptField(script: ScriptEntry, field: Field) {

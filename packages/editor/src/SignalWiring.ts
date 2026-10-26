@@ -1,5 +1,5 @@
-import { Node, Node3D, connectableMethods, declaredConnections, declaredSignals, nodesNamed, signalAt, signalsOf, type Catalyst, type Connection, type Script } from "@nickpaustian/catalyst"
-import { addEntry, addMethod, changeEntry, hasMethod, readEntry, staticArray, writeEntry } from "./scriptSource"
+import { Node, Node3D, connectableMethods, declaredConnections, declaredSignals, exposedProperties, nodesNamed, readExposed, signalAt, signalsOf, writeExposed, type Catalyst, type Connection, type ExposedProperty, type Script } from "@nickpaustian/catalyst"
+import { addEntry, addField, addMethod, changeEntry, hasMethod, readEntry, staticArray, writeEntry } from "./scriptSource"
 
 /** A connection as the inspector lists it: who listens, to what, and why it doesn't work, if it doesn't. */
 export interface ConnectionRow {
@@ -9,7 +9,10 @@ export interface ConnectionRow {
   /** The listening node. */
   node: number
   nodeName: string
+  /** The node it hears, as written, or as the script's field holds it for a `$field`. */
   from?: string
+  /** The script's `node` field that names the node, for a connection each node chooses for itself. */
+  field?: string
   /** The node `from` finds, when it finds one. */
   source: number | null
   signal: string
@@ -86,12 +89,29 @@ export interface WiringHost {
   editScript(url: string, edit: (source: string) => string | null): Promise<void>
   /** Make a script for `node` named after it and attach it; gives back its url. */
   newScriptFor(node: Node3D): Promise<string | null>
+  /** Set a field of the script from `url` on `node`, as the inspector would, undoably. */
+  setScriptField(node: Node3D, url: string, key: string, value: unknown): void
 }
+
+/** A `node` field somewhere in the scene and the node it points at, to point it there again once paths change. */
+export interface NodeReference {
+  owner: object
+  property: ExposedProperty
+  target: Node
+}
+
+const camel = (name: string) =>
+  name
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .map((word, i) => (i ? word[0].toUpperCase() + word.slice(1) : word[0].toLowerCase() + word.slice(1)))
+    .join("")
+    .replace(/^[^A-Za-z_$]+/, "") || "source"
 
 const fileName = (url: string) => url.replace(/^.*\//, "")
 
 /** The name a scene node is reached by from scripts, the scene's root left out. */
-const labelOf = (node: Node, root: Node): string => {
+export const labelOf = (node: Node, root: Node): string => {
   const parts: string[] = []
   for (let at: Node | null = node; at && at !== root; at = at.parent) parts.unshift(at.name)
   return parts.join("/")
@@ -122,6 +142,40 @@ export class SignalWiring {
     return parts.join("/")
   }
 
+  /** Whether a connection, for the script it is on, hears `node`. */
+  private hears(entry: { node: Node3D; script: Script; connection: Connection }, node: Node): boolean {
+    const root = this.host.root()
+    const from = entry.script.fromOf(entry.connection)
+    return Boolean(root && from) && nodesNamed(root!, from!, entry.node)[0] === node
+  }
+
+  /** Every `node` field in the scene, on nodes and their scripts, with the node it finds now. */
+  nodeReferences(): NodeReference[] {
+    const root = this.host.root()
+    const out: NodeReference[] = []
+    root?.walk((node) => {
+      for (const owner of [node, ...node.scripts]) {
+        for (const property of exposedProperties(owner)) {
+          if (property.type !== "node") continue
+          const value = readExposed(owner, property)
+          const target = typeof value === "string" && value ? nodesNamed(root, value, node)[0] : undefined
+          if (target) out.push({ owner, property, target })
+        }
+      }
+    })
+    return out
+  }
+
+  /** Point each field at its node again by the node's path now, after a rename or a move. */
+  repoint(references: NodeReference[]): void {
+    const root = this.host.root()
+    if (!root) return
+    for (const { owner, property, target } of references) {
+      const path = labelOf(target, root)
+      if (readExposed(owner, property) !== path) writeExposed(owner, property, path)
+    }
+  }
+
   /** Every connection declared by scripts in the scene, with where it is written. */
   private connections(): { node: Node3D; script: Script; connection: Connection; url: string; index: number | null }[] {
     const root = this.host.root()
@@ -143,23 +197,22 @@ export class SignalWiring {
   private row(entry: { node: Node3D; script: Script; connection: Connection; url: string; index: number | null }): ConnectionRow {
     const { node, script, connection } = entry
     const root = this.host.root()
-    const found = connection.from === undefined || !root ? [] : nodesNamed(root, connection.from, node)
+    const from = script.fromOf(connection)
+    const field = connection.from?.startsWith("$") ? connection.from.slice(1) : undefined
+    const found = !from || !root ? [] : nodesNamed(root, from, node)
     const source = found[0] ?? null
     let problem: string | null = null
     if (typeof (script as unknown as Record<string, unknown>)[connection.call] !== "function") problem = `${fileName(entry.url)} has no method ${connection.call}`
-    else if (connection.from !== undefined && !source) problem = `no node "${connection.from}"`
-    else if (found.length > 1) problem = `${found.length} nodes are named "${connection.from}"; the first is heard`
-    else if (!signalAt(source ? source.signals : this.host.engine.signals, connection.signal)) problem = `no signal ${connection.signal} on ${source ? `"${connection.from}"` : "the engine"}`
-    return { url: entry.url, index: entry.index, node: this.host.idOf(node), nodeName: node.name, from: connection.from, source: source ? this.host.idOf(source) : null, signal: connection.signal, call: connection.call, problem }
+    else if (from === "") problem = `${field} is not set on ${node.name}`
+    else if (from !== undefined && !source) problem = `no node "${from}"`
+    else if (found.length > 1) problem = `${found.length} nodes are named "${from}"; the first is heard`
+    else if (!signalAt(source ? source.signals : this.host.engine.signals, connection.signal)) problem = `no signal ${connection.signal} on ${source ? `"${from}"` : "the engine"}`
+    return { url: entry.url, index: entry.index, node: this.host.idOf(node), nodeName: node.name, from, field, source: source ? this.host.idOf(source) : null, signal: connection.signal, call: connection.call, problem }
   }
 
   view(node: Node3D): SignalsView {
-    const root = this.host.root()
     const all = this.connections()
-    const heard = all.filter((entry) => {
-      if (entry.connection.from === undefined || !root) return false
-      return nodesNamed(root, entry.connection.from, entry.node)[0] === node
-    })
+    const heard = all.filter((entry) => this.hears(entry, node))
     const common = new Set(declaredSignals(Node).map((info) => info.name))
     const type = this.host.engine.registry.typeOf(node) ?? "this node"
     const signals: SignalRow[] = signalsOf(node).map((info) => {
@@ -205,7 +258,7 @@ export class SignalWiring {
       for (const script of node.scripts) {
         const own = Object.prototype.hasOwnProperty.call(script.constructor, "signals") ? ((script.constructor as typeof Script).signals ?? []) : []
         for (const info of own) {
-          const listeners = rows.filter(({ entry, row }) => row.signal === info.name && entry.connection.from !== undefined && nodesNamed(root, entry.connection.from, entry.node)[0] === node).length
+          const listeners = rows.filter(({ entry, row }) => row.signal === info.name && this.hears(entry, node)).length
           declared.push({ node: this.host.idOf(node), nodeName: labelOf(node, root), name: info.name, url: script.url, listeners })
         }
       }
@@ -244,8 +297,12 @@ export class SignalWiring {
       : { open: true, mode, source: null, signal: "", target: id, script, nodes, engine, error: "" }
   }
 
-  /** Write a connection into the listening script: made for the node when it has none, and the method added when it is new. */
-  async connect(choice: { source: number | null; signal: string; target: number; url: string | null; call: string }): Promise<void> {
+  /**
+   * Write a connection into the listening script: made for the node when it has none, and the method added when it is new.
+   * `perNode` names the source through a `node` field on the script instead, set on this node, so each node with the
+   * script can hear a node of its own.
+   */
+  async connect(choice: { source: number | null; signal: string; target: number; url: string | null; call: string; perNode?: boolean }): Promise<void> {
     const target = this.host.nodeById(choice.target)
     if (!target) throw new Error("the listening node is gone")
     const source = choice.source === null ? null : this.host.nodeById(choice.source)
@@ -254,12 +311,32 @@ export class SignalWiring {
     if (!/^[A-Za-z_$][\w$]*$/.test(call)) throw new Error(`"${call}" is not a method name`)
     const url = choice.url ?? (await this.host.newScriptFor(target))
     if (!url) throw new Error("no script could be made for the node")
-    const from = source ? this.fromFor(source, target) : undefined
+    const root = this.host.root()
+    const field = source && choice.perNode ? this.fieldFor(target, url, source) : null
+    const from = source ? (field ? `$${field.key}` : this.fromFor(source, target)) : undefined
     await this.host.editScript(url, (text) => {
-      const connected = addEntry(text, "connections", writeEntry({ from, signal: choice.signal, call }))
-      if (connected === null) return null
+      let next: string | null = text
+      if (field && !field.exists) {
+        next = addEntry(next, "exposed", `{ key: ${JSON.stringify(field.key)}, type: "node" as const }`)
+        next = next && addField(next, `${field.key} = ""`)
+      }
+      const connected = next && addEntry(next, "connections", writeEntry({ from, signal: choice.signal, call }))
+      if (!connected) return null
       return hasMethod(connected, call) ? connected : addMethod(connected, call)
     })
+    if (field && source && root) this.host.setScriptField(target, url, field.key, labelOf(source, root))
+  }
+
+  /** The script's `node` field to hold the source: one already pointing at it, or a new one named after it. */
+  private fieldFor(target: Node3D, url: string, source: Node): { key: string; exists: boolean } {
+    const script = target.scripts.find((each) => each.url === url)
+    const properties = script ? exposedProperties(script) : []
+    const pointing = properties.find((property) => property.type === "node" && script!.nodeNamed(String(readExposed(script!, property) ?? "")) === source)
+    if (pointing) return { key: pointing.key, exists: true }
+    const base = camel(source.name)
+    let key = base
+    for (let n = 2; properties.some((property) => property.key === key) || (script && key in script); n++) key = `${base}${n}`
+    return { key, exists: false }
   }
 
   async disconnect(url: string, index: number): Promise<void> {

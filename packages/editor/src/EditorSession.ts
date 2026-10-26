@@ -12,7 +12,7 @@ import { windowRunnerLink, type RunnerLink } from "./RunnerLink"
 import { AssetFolder } from "./AssetFolder"
 import { accepts } from "./fileField"
 import { SCRIPTS_DIR, ScriptCompiler, plainScriptTemplate, scriptTemplate } from "./ScriptCompiler"
-import { BROWSER_DEFAULT, CONNECT_DEFAULT, SignalWiring, type ConnectDialog, type SignalBrowser, type SignalsView } from "./SignalWiring"
+import { BROWSER_DEFAULT, CONNECT_DEFAULT, SignalWiring, labelOf, type ConnectDialog, type SignalBrowser, type SignalsView } from "./SignalWiring"
 import type { FiredSignal } from "./signalTap"
 import { LEGACY_PROJECT_FILE, PROJECT_EXTENSION, createProject, readProjectImage, readProjectSettings, writeProjectImage, writeProjectSettings, type NewProject, type ProjectSettings } from "./project"
 import { openConfirm } from "./confirm"
@@ -163,7 +163,7 @@ export type EditorCommand =
   | { type: "openConnect"; mode: "emit" | "listen"; signal?: string; url?: string }
   | { type: "closeConnect" }
   | { type: "clearSignalLog" }
-  | { type: "connectSignal"; source: number | null; signal: string; target: number; url: string | null; call: string }
+  | { type: "connectSignal"; source: number | null; signal: string; target: number; url: string | null; call: string; perNode?: boolean }
   | { type: "disconnectSignal"; url: string; index: number }
   | { type: "addSignal"; node: number; url: string | null; name: string }
   | { type: "removeSignal"; url: string; index: number }
@@ -493,6 +493,7 @@ export class EditorSession {
       nodeById: (id) => this.nodesById.get(id) ?? null,
       editScript: (url, edit) => this.editScript(url, edit),
       newScriptFor: (node) => this.newScriptFor(node),
+      setScriptField: (node, url, key, value) => this.setScriptField(node, url, key, value),
     })
     this.history.onChange = () => {
       this.publishHistory()
@@ -827,10 +828,22 @@ export class EditorSession {
     this.set("editor:project", { open: this._root !== null, name: this.settings?.name ?? this.folder?.name ?? null, recipe: this.recipe.name, storage: this.folder?.storage ?? null, status: status ?? (dirty ? "unsaved changes" : ""), supported: this.folders.isSupported, browserStorage: this.folders.hasBrowserStorage, dirty })
   }
 
-  /** A property as the panels show it; a `file` lists the project's files it accepts. */
+  /** Every node in the scene by its path, for a `node` field to choose from; made again when the tree changes. */
+  private nodePaths: string[] | null = null
+
+  /** A property as the panels show it; a `file` lists the project's files it accepts, a `node` the scene's nodes. */
   private field(property: ExposedProperty, value: unknown): SelectionProperty {
     const field: SelectionProperty = { ...property, label: property.label ?? property.key, value }
     if (property.type === "file") field.choices = this.projectFiles.filter((path) => accepts(property.accept, path) && !this.recipe.files?.includes(path))
+    if (property.type === "node") {
+      const root = this._root
+      if (!this.nodePaths && root) {
+        const paths: string[] = []
+        root.walk((node) => void (node !== root && paths.push(labelOf(node, root))))
+        this.nodePaths = paths
+      }
+      field.choices = this.nodePaths ?? []
+    }
     return field
   }
 
@@ -952,6 +965,7 @@ export class EditorSession {
 
   private publishTree(): void {
     this.signalsShown.stale = true
+    this.nodePaths = null
     this.rememberHidden()
     this.set(
       "editor:tree",
@@ -1694,6 +1708,19 @@ export class EditorSession {
     this.publishSelection()
   }
 
+  /** A field of the script from `url` on `node`, set and recorded like an inspector edit. */
+  private setScriptField(node: Node3D, url: string, key: string, value: unknown): void {
+    const index = node.scripts.findIndex((script) => script.url === url)
+    const script = node.scripts[index]
+    const property = script ? exposedProperties(script).find((p) => p.key === key) : undefined
+    if (!script || !property) return
+    const before = readExposed(script, property)
+    writeExposed(script, property, value)
+    this.record(property.label ?? key, () => writeExposed(script, property, before), () => writeExposed(script, property, value), `script:${this.idOf(node)}:${index}:${key}`)
+    this.signalsShown.stale = true
+    if (this.selected === node) this.publishSelection()
+  }
+
   private writeScriptProperty(index: number, key: string, value: unknown): void {
     const node = this.selected
     const script = node?.scripts[index]
@@ -1706,6 +1733,7 @@ export class EditorSession {
     if (JSON.stringify(before) === JSON.stringify(next)) return
     writeExposed(script, property, next)
     this.record(property.label ?? key, () => writeExposed(script, property, before), () => writeExposed(script, property, next), `script:${this.idOf(node)}:${index}:${key}`)
+    if (property.type === "node") this.signalsShown.stale = true
     this.publishSelection()
   }
 
@@ -2346,23 +2374,27 @@ export class EditorSession {
     if (!node || !clean || clean === node.name) return
     const before = node.name
     const references = this.wiring.referencesTo(node)
+    const fields = this.wiring.nodeReferences()
     if (!node.rename(clean)) {
       this.publishProject(`"${clean}" already exists under ${node.parent?.name}`)
       this.publishSelection()
       return
     }
     // Connections that hear the node are written by name, so they follow it, both ways through undo.
-    const follow = () => void this.wiring.retarget(references, node).catch((error: unknown) => this.publishProject(error instanceof Error ? error.message : String(error)))
-    if (references.length) follow()
+    const follow = () => {
+      this.wiring.repoint(fields)
+      if (references.length) void this.wiring.retarget(references, node).catch((error: unknown) => this.publishProject(error instanceof Error ? error.message : String(error)))
+    }
+    follow()
     this.record(
       "rename",
       () => {
         node.rename(before)
-        if (references.length) follow()
+        follow()
       },
       () => {
         node.rename(clean)
-        if (references.length) follow()
+        follow()
       },
     )
     this.publishTree()
@@ -2951,8 +2983,21 @@ export class EditorSession {
         node.transform.setWorldMatrix(world)
       }
     }
+    // `node` fields name nodes by path, which a move changes.
+    const fields = this.wiring.nodeReferences()
     placeAll()
-    this.record(nodes.length > 1 ? `move ${nodes.length} nodes` : `move ${nodes[0].name}`, putBack, placeAll)
+    this.wiring.repoint(fields)
+    this.record(
+      nodes.length > 1 ? `move ${nodes.length} nodes` : `move ${nodes[0].name}`,
+      () => {
+        putBack()
+        this.wiring.repoint(fields)
+      },
+      () => {
+        placeAll()
+        this.wiring.repoint(fields)
+      },
+    )
     if (renamed.length) this.publishProject(`renamed ${renamed.join(", ")}: the name was taken under ${newParent.name}`)
     this.collapsed.delete(newParent)
     this.camera.syncFromTarget()
