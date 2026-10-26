@@ -2276,8 +2276,16 @@ export class EditorSession {
 
   /** The prefab files in the project, offered as kinds to add. */
   private async loadPrefabs(): Promise<void> {
-    const files = this.folder ? await this.folder.list(PREFABS_DIR) : []
-    this.prefabs = files.filter((file) => file.kind === "file" && file.name.endsWith(".json")).map((file) => ({ path: file.path, name: file.name.slice(0, -5) }))
+    const folder = this.folder
+    const found: { path: string; name: string }[] = []
+    const visit = async (dir: string): Promise<void> => {
+      for (const entry of folder ? await folder.list(dir) : []) {
+        if (entry.kind === "directory") await visit(entry.path)
+        else if (entry.name.endsWith(".json")) found.push({ path: entry.path, name: entry.path.slice(PREFABS_DIR.length + 1, -5) })
+      }
+    }
+    await visit(PREFABS_DIR)
+    this.prefabs = found
     this.publishKinds()
   }
 
@@ -3142,7 +3150,8 @@ export class EditorSession {
   private prefabKind(path: string): NodeKind | undefined {
     const prefab = this.prefabs.find((p) => p.path === path)
     if (!prefab) return undefined
-    return { kind: prefab.name, label: prefab.name, cls: Prefab, make: (o) => new Prefab({ ...o, url: path }) }
+    const name = prefab.name.slice(prefab.name.lastIndexOf("/") + 1)
+    return { kind: name, label: name, cls: Prefab, make: (o) => new Prefab({ ...o, url: path }) }
   }
 
   private deleteSelected(): void {
