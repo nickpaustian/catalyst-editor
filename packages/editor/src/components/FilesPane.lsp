@@ -230,7 +230,7 @@ function toggle(event: Event, row: Row) {
 // Two clicks open what can be opened: a script in the code pane, a folder's rows
 function activate(row: Row) {
   if (row.kind === 'directory') return toggle(new Event('click'), row)
-  if (SCRIPT.test(row.name)) sendCommand({ type: 'openFile', path: row.path })
+  if (CODE.test(row.name)) sendCommand({ type: 'openFile', path: row.path })
 }
 
 // ---- rename ----
