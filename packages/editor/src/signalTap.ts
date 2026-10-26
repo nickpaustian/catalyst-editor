@@ -8,7 +8,7 @@ export interface FiredSignal {
   value: string
 }
 
-/** Signals that fire every frame or step, left out of the log so the rest can be read. */
+/** Signals that fire every frame or step, left out of the log unless asked for so the rest can be read. */
 export const FREQUENT_SIGNALS = new Set(["onUpdate", "onIdle", "onRender", "onPostRender", "physics.onStep", "input.onPointerMove", "input.onForceChanged", "input.onActionHold", "onTriggerStay", "onCollisionStay", "onMove"])
 
 const FLUSH_MS = 100
@@ -47,6 +47,8 @@ export class SignalTap {
   private readonly wrapped = new Map<object, unknown>()
   private pending: FiredSignal[] = []
   private readonly timers: ReturnType<typeof setInterval>[] = []
+  /** Whether the every-frame signals are reported too. */
+  frequent = false
 
   constructor(engine: Catalyst, root: Node, send: (fired: FiredSignal[]) => void) {
     this.root = root
@@ -73,12 +75,13 @@ export class SignalTap {
   }
 
   private wrap(signal: { emit(value: unknown): void }, node: Node | null, name: string): void {
-    if (this.wrapped.has(signal) || FREQUENT_SIGNALS.has(name)) return
+    if (this.wrapped.has(signal)) return
     const own = Object.prototype.hasOwnProperty.call(signal, "emit") ? signal.emit : undefined
     const emit = signal.emit
+    const frequent = FREQUENT_SIGNALS.has(name)
     this.wrapped.set(signal, own)
     signal.emit = (value: unknown) => {
-      this.pending.push({ at: (performance.now() - this.started) / 1000, node: node ? labelOf(node, this.root) : null, signal: name, value: describeValue(value) })
+      if (!frequent || this.frequent) this.pending.push({ at: (performance.now() - this.started) / 1000, node: node ? labelOf(node, this.root) : null, signal: name, value: describeValue(value) })
       emit.call(signal, value)
     }
   }

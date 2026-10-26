@@ -24,6 +24,7 @@ export class Runner {
   private linked = true
   private readonly link: RunnerPageLink | null
   private tap: SignalTap | null = null
+  private frequentSignals = false
   /** The stats block over the canvas; the backquote key shows and hides it. */
   readonly debug: DebugOverlay
 
@@ -39,7 +40,16 @@ export class Runner {
     for (const { kind, cls } of recipe.kinds) if (!engine.registry.has(kind) && typeof cls === "function") engine.register({ [kind]: cls as any })
     const link = options.link === null ? null : (options.link ?? windowRunnerPageLink())
     this.link = link
-    this.unsubscribe = link?.onRun((message) => void this.play(message)) ?? (() => undefined)
+    const unsubscribeRun = link?.onRun((message) => void this.play(message)) ?? (() => undefined)
+    const unsubscribeOptions =
+      link?.onOptions?.((options) => {
+        this.frequentSignals = options.frequentSignals
+        if (this.tap) this.tap.frequent = options.frequentSignals
+      }) ?? (() => undefined)
+    this.unsubscribe = () => {
+      unsubscribeRun()
+      unsubscribeOptions()
+    }
     link?.ready()
     this.linked = link !== null
   }
@@ -64,7 +74,10 @@ export class Runner {
     this.root = root
     this.engine.add(root)
     const report = this.link?.report?.bind(this.link)
-    if (report) this.tap = new SignalTap(this.engine, root, (fired) => report({ type: "catalyst:signals", fired }))
+    if (report) {
+      this.tap = new SignalTap(this.engine, root, (fired) => report({ type: "catalyst:signals", fired }))
+      this.tap.frequent = this.frequentSignals
+    }
     this.teardown = await this.recipe.run({ engine: this.engine, root, scene, folder })
     if (this.linked) document.title = `${folder?.name ?? "untitled"} · running`
   }

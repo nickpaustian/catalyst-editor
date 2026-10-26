@@ -150,6 +150,8 @@ export interface EditorCells {
   "editor:signalBrowser": SignalBrowser
   /** The signals that fired in the run window since the run began, oldest first, the last few hundred kept. */
   "editor:signalLog": FiredSignal[]
+  /** Whether the log shows the signals that fire every frame too. */
+  "editor:signalLogFrequent": boolean
 }
 
 export type EditorCommand =
@@ -163,6 +165,7 @@ export type EditorCommand =
   | { type: "openConnect"; mode: "emit" | "listen"; signal?: string; url?: string }
   | { type: "closeConnect" }
   | { type: "clearSignalLog" }
+  | { type: "setFrequentSignals"; on: boolean }
   | { type: "connectSignal"; source: number | null; signal: string; target: number; url: string | null; call: string; perNode?: boolean }
   | { type: "disconnectSignal"; url: string; index: number }
   | { type: "addSignal"; node: number; url: string | null; name: string }
@@ -550,6 +553,7 @@ export class EditorSession {
     this.set("editor:connect", CONNECT_DEFAULT)
     this.set("editor:signalBrowser", BROWSER_DEFAULT)
     this.set("editor:signalLog", [])
+    this.set("editor:signalLogFrequent", false)
     this.set("editor:codeUnsaved", [])
     this.app.shared("editor:codeUnsaved").subscribe(() => this.autosaveSoon())
     this.set("editor:projectDialog", PROJECT_DIALOG_DEFAULT)
@@ -1129,6 +1133,10 @@ export class EditorSession {
       case "clearSignalLog":
         this.set("editor:signalLog", [])
         break
+      case "setFrequentSignals":
+        this.set("editor:signalLogFrequent", command.on)
+        if (this.runner.isOpen) this.runner.send({ type: "catalyst:options", frequentSignals: command.on })
+        break
       case "connectSignal":
         try {
           await this.wiring.connect(command)
@@ -1551,6 +1559,7 @@ export class EditorSession {
   private async sendToRunner(): Promise<void> {
     if (!this.runner.isOpen || !this._root) return
     this.set("editor:signalLog", [])
+    this.runner.send({ type: "catalyst:options", frequentSignals: Boolean(this.app.shared("editor:signalLogFrequent").value) })
     const live = this.recipe.serialise?.(this._root, this.engine) ?? this.engine.serialise(this._root)
     const scene = this.folder ? await this.folder.toPaths(live) : live
     this.runner.send({ type: "catalyst:run", recipe: this.recipe.name, scene, folder: this.folder?.transfer() ?? null })

@@ -10,6 +10,13 @@ export interface RunMessage {
   folder: FolderTransfer | null
 }
 
+/** How the runner should report while it plays, sent with each run and whenever it changes. */
+export interface RunOptions {
+  type: "catalyst:options"
+  /** Report the signals that fire every frame too. */
+  frequentSignals: boolean
+}
+
 /** What the runner tells the editor while a scene plays: the signals that fired since the last report. */
 export interface RunReport {
   type: "catalyst:signals"
@@ -23,7 +30,7 @@ export interface RunnerLink {
   open(url: string): boolean
   focus(): void
   close(): void
-  send(message: RunMessage): void
+  send(message: RunMessage | RunOptions): void
   onReady(listener: () => void): () => void
   /** Hear that the runner window has gone, closed from either side. */
   onClosed(listener: () => void): () => void
@@ -37,6 +44,8 @@ export interface RunnerLink {
 export interface RunnerPageLink {
   ready(): void
   onRun(listener: (message: RunMessage) => void): () => void
+  /** Hear how the editor wants reports made. */
+  onOptions?(listener: (options: RunOptions) => void): () => void
   /** Tell the editor what happened while playing. */
   report?(report: RunReport): void
 }
@@ -103,6 +112,13 @@ export const windowRunnerPageLink = (): RunnerPageLink => ({
   },
   report(report) {
     window.opener?.postMessage(report, location.origin)
+  },
+  onOptions(listener) {
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin === location.origin && event.data?.type === "catalyst:options") listener(event.data as RunOptions)
+    }
+    window.addEventListener("message", onMessage)
+    return () => window.removeEventListener("message", onMessage)
   },
   onRun(listener) {
     const onMessage = (event: MessageEvent) => {

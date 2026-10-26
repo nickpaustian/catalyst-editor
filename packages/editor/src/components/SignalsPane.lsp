@@ -7,6 +7,9 @@
       <button type="button" role="tab" $aria-selected="state.tab === 'log'" $aria-checked="state.tab === 'log'" @click="show('log')">Log</button>
     </div>
     <input class="well filter" type="search" placeholder="Filter" aria-label="Filter signals" $model="state.filter" @input="refilter()" />
+    <label class="frequent" $if="state.tab === 'log'" title="Also log the signals that fire every frame or step, such as onUpdate, physics.onStep and pointer moves; the log keeps the last 500">
+      <input class="checkbox" type="checkbox" $model="state.frequent" @change="frequent()" /> Every frame
+    </label>
     <span class="count mono" $if="state.tab === 'log' && state.log.length">{{ state.log.length }}</span>
     <button class="button small" type="button" $if="state.tab === 'log'" $disabled="!state.log.length" @click="clear()">Clear</button>
   </div>
@@ -53,7 +56,7 @@
     </template>
 
     <template $if="state.tab === 'log'">
-      <p class="hint" $if="!shared['editor:signalLog'].length">Signals show here as they fire while the scene runs (⌘R). Those that fire every frame, such as onUpdate and physics.onStep, are left out.</p>
+      <p class="hint" $if="!shared['editor:signalLog'].length">Signals show here as they fire while the scene runs (⌘R). Those that fire every frame, such as onUpdate and physics.onStep, are left out unless Every frame is on.</p>
       <div class="log-row mono" $for="entry in state.shown" $key="entry.key">
         <span class="time">{{ entry.at.toFixed(2) }}s</span>
         <span class="node" $title="entry.node || 'engine'">{{ entry.node || 'engine' }}</span>
@@ -87,7 +90,10 @@ const state = reactive({
   declared: [] as Browser['declared'],
   engine: [] as Browser['engine'],
   shown: [] as (Fired & { key: number })[],
+  frequent: false,
 })
+
+shared('editor:signalLogFrequent', false).subscribe((on: boolean | undefined) => (state.frequent = Boolean(on)))
 
 const fileName = (url: string) => url.replace(/^.*\//, '')
 const matches = (...parts: (string | null | undefined)[]) => {
@@ -139,6 +145,10 @@ function open(url: string) {
   sendCommand({ type: 'openScript', path: url })
 }
 
+function frequent() {
+  sendCommand({ type: 'setFrequentSignals', on: state.frequent })
+}
+
 function clear() {
   sendCommand({ type: 'clearSignalLog' })
 }
@@ -157,6 +167,7 @@ function clear() {
 
 .bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--cat-space-2);
   padding: var(--cat-space-1) var(--cat-space-2);
@@ -164,12 +175,22 @@ function clear() {
 }
 
 .filter {
-  flex: 1 1 auto;
-  min-width: 0;
+  flex: 1 1 8rem;
+  min-width: 8rem;
 }
 
 .bar .segmented {
   flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.frequent {
+  display: flex;
+  align-items: center;
+  gap: var(--cat-space-1);
+  flex: 0 0 auto;
+  color: var(--cat-text-secondary);
+  font-size: var(--cat-text-xs);
   white-space: nowrap;
 }
 
