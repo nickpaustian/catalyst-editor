@@ -51,6 +51,8 @@ export interface PaneLayoutOptions {
 const MORE_ICON = `<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="3.5" cy="8" r="1.25"/><circle cx="8" cy="8" r="1.25"/><circle cx="12.5" cy="8" r="1.25"/></svg>`
 
 const DRAG_THRESHOLD = 4
+/** How near, in pixels, a dragged gutter comes to a gutter along the same axis before it snaps into line. */
+const GUTTER_SNAP = 8
 const EDGE_FRACTION = 0.3
 /** A floating window's smallest size, and how much of it must stay on the page so its header can be reached. */
 const FLOAT_MIN_WIDTH = 240
@@ -334,17 +336,56 @@ export class PaneLayout {
     const start = horizontal ? event.clientX : event.clientY
     const pair = sizes[index - 1] + sizes[index]
 
-    document.body.classList.add(horizontal ? "pane-resizing-x" : "pane-resizing-y")
-    const move = (moveEvent: PointerEvent) => {
-      const delta = ((horizontal ? moveEvent.clientX : moveEvent.clientY) - start) / span
-      const first = Math.min(pair - MIN_SIZE, Math.max(MIN_SIZE, sizes[index - 1] + delta))
+    // The gutters along the same axis in other splits: the dragged one snaps into line with any it comes near.
+    const centreOf = (element: HTMLElement) => {
+      const box = element.getBoundingClientRect()
+      return horizontal ? box.left + box.width / 2 : box.top + box.height / 2
+    }
+    const lines = [...this.root.querySelectorAll<HTMLElement>(`.pane-split.${horizontal ? "row" : "column"} > .pane-gutter`)]
+      .filter((other) => other.parentElement !== splitElement)
+      .map((other) => ({ gutter: other, at: centreOf(other) }))
+    const offset = start - centreOf(gutter)
+    const clampFirst = (value: number) => Math.min(pair - MIN_SIZE, Math.max(MIN_SIZE, value))
+    const apply = (first: number) => {
       before.style.flexGrow = String(first)
       after.style.flexGrow = String(pair - first)
+    }
+    let snapped: HTMLElement | null = null
+    const showSnap = (line: HTMLElement | null) => {
+      if (line === snapped) return
+      snapped?.classList.remove("pane-gutter-snapped")
+      line?.classList.add("pane-gutter-snapped")
+      gutter.classList.toggle("pane-gutter-snapped", line !== null)
+      snapped = line
+    }
+
+    document.body.classList.add(horizontal ? "pane-resizing-x" : "pane-resizing-y")
+    const move = (moveEvent: PointerEvent) => {
+      const pointer = horizontal ? moveEvent.clientX : moveEvent.clientY
+      // Option (Alt) drags freely.
+      const near = moveEvent.altKey ? null : lines.reduce<(typeof lines)[number] | null>((best, line) => {
+        const distance = Math.abs(line.at - (pointer - offset))
+        return distance <= GUTTER_SNAP && (!best || distance < Math.abs(best.at - (pointer - offset))) ? line : best
+      }, null)
+      const wanted = near ? near.at + offset : pointer
+      let first = clampFirst(sizes[index - 1] + (wanted - start) / span)
+      apply(first)
+      if (near) {
+        // Flex rounds to whole pixels and the gutters take their share, so the landing is measured and corrected once.
+        const missed = near.at - centreOf(gutter)
+        const pixels = horizontal ? before.getBoundingClientRect().width + after.getBoundingClientRect().width : before.getBoundingClientRect().height + after.getBoundingClientRect().height
+        if (Math.abs(missed) > 0.25 && pixels > 0) {
+          first = clampFirst(first + (missed * pair) / pixels)
+          apply(first)
+        }
+      }
+      showSnap(near && Math.abs(near.at - centreOf(gutter)) <= 1 ? near.gutter : null)
     }
     const stop = () => {
       document.removeEventListener("pointermove", move)
       document.removeEventListener("pointerup", stop)
       document.body.classList.remove("pane-resizing-x", "pane-resizing-y")
+      showSnap(null)
       const final = children.map((child) => parseFloat(child.style.flexGrow) || 0)
       this._layout = resize(this._layout, splitId, final)
       this.onChange(this._layout)

@@ -76,6 +76,14 @@ body.pane-resizing-y .pane-split.column > .pane-gutter {
   background: var(--cat-accent);
 }
 
+// A gutter lined up with the one being dragged, and the dragged one, widen while they are in line
+.pane-gutter.pane-gutter-snapped::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  background: var(--cat-accent);
+}
+
 body.pane-resizing-x,
 body.pane-resizing-x * {
   cursor: ew-resize !important;
