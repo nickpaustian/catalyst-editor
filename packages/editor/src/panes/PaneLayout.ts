@@ -320,74 +320,85 @@ export class PaneLayout {
 
   // ---------------- resizing ----------------
 
+  /**
+   * Drag a gutter. Gutters along the same axis already in line with it move with it, each in its
+   * own split, so the line stays straight; Shift leaves them where they are and moves this one
+   * alone. The line snaps to other gutters it comes near; Option (Alt) drags freely.
+   */
   private startGutterDrag(event: PointerEvent, splitId: string, index: number): void {
     event.preventDefault()
     const gutter = event.currentTarget as HTMLElement
-    const splitElement = gutter.parentElement!
-    const horizontal = splitElement.classList.contains("row")
-    const children = [...splitElement.children].filter((child) =>
-      child.classList.contains("pane") || child.classList.contains("pane-split"),
-    ) as HTMLElement[]
-    const before = children[index - 1]
-    const after = children[index]
-    const sizes = children.map((child) => parseFloat(child.style.flexGrow) || 0)
-    const rect = splitElement.getBoundingClientRect()
-    const span = horizontal ? rect.width : rect.height
-    const start = horizontal ? event.clientX : event.clientY
-    const pair = sizes[index - 1] + sizes[index]
-
-    // The gutters along the same axis in other splits: the dragged one snaps into line with any it comes near.
+    const horizontal = gutter.parentElement!.classList.contains("row")
     const centreOf = (element: HTMLElement) => {
       const box = element.getBoundingClientRect()
       return horizontal ? box.left + box.width / 2 : box.top + box.height / 2
     }
-    const lines = [...this.root.querySelectorAll<HTMLElement>(`.pane-split.${horizontal ? "row" : "column"} > .pane-gutter`)]
-      .filter((other) => other.parentElement !== splitElement)
-      .map((other) => ({ gutter: other, at: centreOf(other) }))
-    const offset = start - centreOf(gutter)
-    const clampFirst = (value: number) => Math.min(pair - MIN_SIZE, Math.max(MIN_SIZE, value))
-    const apply = (first: number) => {
-      before.style.flexGrow = String(first)
-      after.style.flexGrow = String(pair - first)
+    const lengthOf = (element: HTMLElement) => (horizontal ? element.getBoundingClientRect().width : element.getBoundingClientRect().height)
+    /** One gutter that moves: the two children either side of it in its split, and their shares when the drag began. */
+    const handleOf = (line: HTMLElement, split: string, at: number) => {
+      const splitElement = line.parentElement!
+      const children = [...splitElement.children].filter((child) => child.classList.contains("pane") || child.classList.contains("pane-split")) as HTMLElement[]
+      const sizes = children.map((child) => parseFloat(child.style.flexGrow) || 0)
+      return { gutter: line, splitId: split, children, before: children[at - 1], after: children[at], sizes, first: sizes[at - 1], pair: sizes[at - 1] + sizes[at], span: lengthOf(splitElement), centre: centreOf(line) }
     }
-    let snapped: HTMLElement | null = null
-    const showSnap = (line: HTMLElement | null) => {
-      if (line === snapped) return
-      snapped?.classList.remove("pane-gutter-snapped")
-      line?.classList.add("pane-gutter-snapped")
-      gutter.classList.toggle("pane-gutter-snapped", line !== null)
-      snapped = line
+    const indexIn = (line: HTMLElement) => [...line.parentElement!.children].filter((child) => child.classList.contains("pane-gutter")).indexOf(line) + 1
+    const primary = handleOf(gutter, splitId, index)
+    const others = [...this.root.querySelectorAll<HTMLElement>(`.pane-split.${horizontal ? "row" : "column"} > .pane-gutter`)].filter((other) => other.parentElement !== gutter.parentElement)
+    // In line when the drag began: they move with it unless Shift is held.
+    const inLine = event.shiftKey ? [] : others.filter((other) => Math.abs(centreOf(other) - primary.centre) <= 1).map((other) => handleOf(other, other.parentElement!.dataset.id!, indexIn(other)))
+    const linked = new Set(inLine.map((handle) => handle.gutter))
+    const targets = others.filter((other) => !linked.has(other)).map((other) => ({ gutter: other, at: centreOf(other) }))
+    const start = horizontal ? event.clientX : event.clientY
+    const offset = start - primary.centre
+
+    const place = (handle: ReturnType<typeof handleOf>, centre: number, exact: boolean) => {
+      const clamp = (value: number) => Math.min(handle.pair - MIN_SIZE, Math.max(MIN_SIZE, value))
+      const apply = (first: number) => {
+        handle.before.style.flexGrow = String(first)
+        handle.after.style.flexGrow = String(handle.pair - first)
+      }
+      let first = clamp(handle.first + (centre - handle.centre) / handle.span)
+      apply(first)
+      if (!exact) return
+      // Flex rounds to whole pixels and the gutters take their share, so the landing is measured and corrected once.
+      const missed = centre - centreOf(handle.gutter)
+      const pixels = lengthOf(handle.before) + lengthOf(handle.after)
+      if (Math.abs(missed) > 0.25 && pixels > 0) apply((first = clamp(first + (missed * handle.pair) / pixels)))
+    }
+    const marked = new Set<HTMLElement>()
+    const mark = (lines: HTMLElement[]) => {
+      for (const line of marked) if (!lines.includes(line)) line.classList.remove("pane-gutter-snapped")
+      for (const line of lines) line.classList.add("pane-gutter-snapped")
+      marked.clear()
+      for (const line of lines) marked.add(line)
     }
 
     document.body.classList.add(horizontal ? "pane-resizing-x" : "pane-resizing-y")
     const move = (moveEvent: PointerEvent) => {
       const pointer = horizontal ? moveEvent.clientX : moveEvent.clientY
-      // Option (Alt) drags freely.
-      const near = moveEvent.altKey ? null : lines.reduce<(typeof lines)[number] | null>((best, line) => {
-        const distance = Math.abs(line.at - (pointer - offset))
-        return distance <= GUTTER_SNAP && (!best || distance < Math.abs(best.at - (pointer - offset))) ? line : best
+      const wanted = pointer - offset
+      const near = moveEvent.altKey ? null : targets.reduce<(typeof targets)[number] | null>((best, line) => {
+        const distance = Math.abs(line.at - wanted)
+        return distance <= GUTTER_SNAP && (!best || distance < Math.abs(best.at - wanted)) ? line : best
       }, null)
-      const wanted = near ? near.at + offset : pointer
-      let first = clampFirst(sizes[index - 1] + (wanted - start) / span)
-      apply(first)
-      if (near) {
-        // Flex rounds to whole pixels and the gutters take their share, so the landing is measured and corrected once.
-        const missed = near.at - centreOf(gutter)
-        const pixels = horizontal ? before.getBoundingClientRect().width + after.getBoundingClientRect().width : before.getBoundingClientRect().height + after.getBoundingClientRect().height
-        if (Math.abs(missed) > 0.25 && pixels > 0) {
-          first = clampFirst(first + (missed * pair) / pixels)
-          apply(first)
-        }
-      }
-      showSnap(near && Math.abs(near.at - centreOf(gutter)) <= 1 ? near.gutter : null)
+      const centre = near ? near.at : wanted
+      // Shift pressed during the drag lets the others go back to where they were.
+      const together = !moveEvent.shiftKey
+      place(primary, centre, Boolean(near) || (together && inLine.length > 0))
+      for (const handle of inLine) place(handle, together ? centreOf(primary.gutter) : handle.centre, together)
+      const lit: HTMLElement[] = []
+      if (near && Math.abs(near.at - centreOf(gutter)) <= 1) lit.push(near.gutter, gutter)
+      if (together && inLine.length) lit.push(gutter, ...inLine.map((handle) => handle.gutter))
+      mark(lit)
     }
     const stop = () => {
       document.removeEventListener("pointermove", move)
       document.removeEventListener("pointerup", stop)
       document.body.classList.remove("pane-resizing-x", "pane-resizing-y")
-      showSnap(null)
-      const final = children.map((child) => parseFloat(child.style.flexGrow) || 0)
-      this._layout = resize(this._layout, splitId, final)
+      mark([])
+      let layout = this._layout
+      for (const handle of [primary, ...inLine]) layout = resize(layout, handle.splitId, handle.children.map((child) => parseFloat(child.style.flexGrow) || 0))
+      this._layout = layout
       this.onChange(this._layout)
     }
     document.addEventListener("pointermove", move)
