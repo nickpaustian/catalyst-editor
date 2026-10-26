@@ -65,7 +65,7 @@
     <span class="how">The project's files are listed here.</span>
   </div>
   <div class="details" $if="shared['editor:fileInfo']">
-    <img class="preview" $if="shared['editor:fileInfo'].preview" $src="shared['editor:fileInfo'].preview" alt="" />
+    <img class="preview" $if="shared['editor:fileInfo'].preview" $src="shared['editor:fileInfo'].preview" alt="" draggable="false" />
     <div class="facts">
       <span class="path mono">{{ shared['editor:fileInfo'].path }}</span>
       <span class="dim">{{ shared['editor:fileInfo'].facts }}</span>

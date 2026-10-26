@@ -47,7 +47,7 @@
           <template $else>
             <button class="open" type="button" @click="openRecent(project)">
               <span class="tile" $class="{ pictured: Boolean(project.image) }">
-                <img $if="project.image" $src="project.image" alt="" />
+                <img $if="project.image" $src="project.image" alt="" draggable="false" />
                 <svg $else viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.5 14 4.75v6.5L8 14.5 2 11.25v-6.5z"/><path d="M2 4.75 8 8l6-3.25M8 8v6.5"/></svg>
               </span>
               <span class="text">

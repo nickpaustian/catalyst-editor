@@ -40,7 +40,7 @@
       <span>Image</span>
       <span class="image-field">
         <span class="cover" $class="{ empty: !state.image }">
-          <img $if="state.image" $src="state.image" alt="" />
+          <img $if="state.image" $src="state.image" alt="" draggable="false" />
           <svg $else viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="m2.5 11 3.5-3.5 2.5 2.5 2-2 3 3"/><circle cx="10.5" cy="6" r="1"/></svg>
         </span>
         <span class="image-actions">
