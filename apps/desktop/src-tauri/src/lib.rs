@@ -1,5 +1,7 @@
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
+#[cfg(target_os = "macos")]
+use tauri::menu::{Menu, MenuItem, MenuItemKind};
 use tauri_plugin_window_state::StateFlags;
 
 mod iapetus;
@@ -10,6 +12,7 @@ mod pointer_lock;
 struct OpenedFiles(Mutex<Vec<String>>);
 
 const PROJECT_EXTENSION: &str = ".catalyst";
+const QUIT_ID: &str = "catalyst-quit";
 
 fn project_files<I: IntoIterator<Item = String>>(candidates: I) -> Vec<String> {
   candidates.into_iter().filter(|path| path.ends_with(PROJECT_EXTENSION)).collect()
@@ -54,12 +57,44 @@ fn reveal_in_file_manager(path: String) -> Result<(), String> {
   spawned.map(|_| ()).map_err(|error| format!("the file manager could not be opened: {error}"))
 }
 
+/// Ask the editor window, which may have unsaved work, to quit; it closes itself when it may go.
+fn request_quit<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+  if app.get_webview_window("main").is_some() {
+    let _ = app.emit_to("main", "catalyst:quit-requested", ());
+  } else {
+    app.exit(0);
+  }
+}
+
+/// The default menu with its Quit swapped for one of ours: the stock item terminates the app outright, before the editor can ask about unsaved work.
+#[cfg(target_os = "macos")]
+fn menu_with_guarded_quit<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Menu<R>> {
+  let menu = Menu::default(app)?;
+  if let Some(MenuItemKind::Submenu(app_menu)) = menu.items()?.into_iter().next() {
+    let items = app_menu.items()?;
+    let stock_quit = items.iter().enumerate().find_map(|(index, item)| match item {
+      MenuItemKind::Predefined(predefined) => predefined.text().ok().filter(|text| text.starts_with("Quit")).map(|text| (index, text)),
+      _ => None,
+    });
+    if let Some((index, text)) = stock_quit {
+      app_menu.remove_at(index)?;
+      app_menu.insert(&MenuItem::with_id(app, QUIT_ID, text, true, Some("CmdOrCtrl+Q"))?, index)?;
+    }
+  }
+  Ok(menu)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   let app = tauri::Builder::default()
     .manage(OpenedFiles(Mutex::new(project_files(std::env::args().skip(1)))))
     .manage(iapetus::Jobs::default())
     .invoke_handler(tauri::generate_handler![init_git, take_opened_files, reveal_in_file_manager, iapetus::iapetus_describe, iapetus::iapetus_streamable, iapetus::iapetus_cancel])
+    .on_menu_event(|app, event| {
+      if event.id() == QUIT_ID {
+        request_quit(app);
+      }
+    })
     .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_dialog::init())
     // The project window comes back at the size, place and maximised state it was left in; the launcher keeps its own.
@@ -76,6 +111,8 @@ pub fn run() {
       let _ = webview;
     })
     .setup(|app| {
+      #[cfg(target_os = "macos")]
+      app.set_menu(menu_with_guarded_quit(app.handle())?)?;
       if cfg!(debug_assertions) {
         app.handle().plugin(
           tauri_plugin_log::Builder::default()
@@ -88,13 +125,6 @@ pub fn run() {
     .build(tauri::generate_context!())
     .expect("error while building tauri application");
   app.run(|app, event| {
-    // Quitting (⌘Q) asks the editor first, which may have unsaved work; it closes its window itself when it may go.
-    if let tauri::RunEvent::ExitRequested { code: None, api, .. } = &event {
-      if app.get_webview_window("main").is_some() {
-        api.prevent_exit();
-        let _ = app.emit_to("main", "catalyst:quit-requested", ());
-      }
-    }
     // A build still running would outlive the app.
     if let tauri::RunEvent::Exit = event {
       app.state::<iapetus::Jobs>().stop_all();
