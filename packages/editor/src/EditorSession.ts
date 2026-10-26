@@ -14,7 +14,7 @@ import { windowRunnerLink, type RunnerLink } from "./RunnerLink"
 import { AssetFolder } from "./AssetFolder"
 import { accepts } from "./fileField"
 import { SCRIPTS_DIR, ScriptCompiler, plainScriptTemplate, scriptTemplate } from "./ScriptCompiler"
-import { BROWSER_DEFAULT, CONNECT_DEFAULT, SignalWiring, labelOf, type ConnectDialog, type SignalBrowser, type SignalsView } from "./SignalWiring"
+import { BROWSER_DEFAULT, CONNECT_DEFAULT, SignalWiring, declaredBy, labelOf, type ConnectDialog, type SignalBrowser, type SignalsView } from "./SignalWiring"
 import type { FiredSignal } from "./signalTap"
 import type { ConsoleEntry } from "./consoleTap"
 import { LEGACY_PROJECT_FILE, PROJECT_EXTENSION, createProject, readProjectImage, readProjectSettings, writeProjectImage, writeProjectSettings, type NewProject, type ProjectSettings } from "./project"
@@ -68,6 +68,8 @@ export interface SelectionProperty extends ExposedProperty {
   choices?: string[]
   /** For a recipe setting: the heading it is listed under. */
   section?: string
+  /** For a script's field: the base class that declares it, when the script's own class doesn't. */
+  origin?: string | null
 }
 
 /** A script on the selected node: built, with its fields, or still named by a file that could not be built. */
@@ -75,6 +77,8 @@ export interface SelectionScript {
   index: number
   url: string
   name: string
+  /** A built script's class, which its fields are listed under when some come from a base class. */
+  className?: string
   built: boolean
   fields: SelectionProperty[]
 }
@@ -1822,8 +1826,9 @@ export class EditorSession {
       index,
       url: script.url,
       name: name(script.url),
+      className: script.constructor.name,
       built: true,
-      fields: exposedProperties(script).map((property) => this.field(property, readExposed(script, property))),
+      fields: exposedProperties(script).map((property) => ({ ...this.field(property, readExposed(script, property)), origin: declaredBy(script, "exposed", (entry: ExposedProperty) => entry.key === property.key) })),
     }))
     const pending = node.pendingScripts.map((json, i) => ({ index: node.scripts.length + i, url: json.url, name: name(json.url), built: false, fields: [] }))
     return [...built, ...pending]

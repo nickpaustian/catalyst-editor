@@ -250,6 +250,10 @@ export class SignalWiring {
   }
 
   view(node: Node3D): SignalsView {
+    const originOf = (script: Script, key: "signals", matches: (entry: { name: string }) => boolean) => {
+      const from = declaredBy(script, key, matches)
+      return from ? `${fileName(script.url)} (from ${from})` : fileName(script.url)
+    }
     const all = this.connections()
     const heard = all.filter((entry) => this.hears(entry, node))
     const common = new Set(declaredSignals(Node).map((info) => info.name))
@@ -265,7 +269,7 @@ export class SignalWiring {
         url: declaring?.url ?? null,
         index: declaring && index >= 0 ? index : null,
         common: common.has(info.name) && !declaring,
-        origin: declaring ? fileName(declaring.url) : common.has(info.name) ? "every node" : type,
+        origin: declaring ? originOf(declaring, "signals", (entry: { name: string }) => entry.name === info.name) : common.has(info.name) ? "every node" : type,
         listeners: heard.filter((entry) => entry.connection.signal === info.name).map((entry) => this.row(entry)),
       }
     })
@@ -506,4 +510,14 @@ export class SignalWiring {
       })
     }
   }
+}
+
+/** The base class of a script's that declares an entry of one of its static lists, by name, or null when the script's own class does. */
+export const declaredBy = <T>(script: object, key: string, matches: (entry: T) => boolean): string | null => {
+  const own = script.constructor
+  for (let cls: any = own; cls && cls !== Function.prototype && cls !== Object; cls = Object.getPrototypeOf(cls)) {
+    if (!Object.prototype.hasOwnProperty.call(cls, key) || !Array.isArray(cls[key]) || !cls[key].some(matches)) continue
+    return cls === own ? null : cls.name || null
+  }
+  return null
 }

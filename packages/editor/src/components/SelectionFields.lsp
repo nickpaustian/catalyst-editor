@@ -174,6 +174,7 @@
           </div>
           <div class="properties">
             <template $for="field in script.fields" $key="field.key">
+              <span class="field-group wide" $if="field.heading">{{ field.heading }}</span>
               <label class="label" $class="{ scrub: field.type === 'number', overridden: field.overridden }" $title="field.label" @pointerdown="scrubScriptField($event, script, field)">{{ field.label }}</label>
               <div class="control">
                 <button class="icon-button small reset" type="button" $if="field.overridden" title="Changed from the base: put back the base's value" aria-label="Reset to the base's value" @click="resetOverride(field.key, script.index)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a5 5 0 1 0 1.5-3.5"/><path d="M3 2.5v3h3"/></svg></button>
@@ -239,9 +240,9 @@ const dragging = shared(DRAGGING_FILE_CELL, null)
 
 // Local copies of the fields, so typing doesn't fight the scene publishing
 // the same values back on every gizmo move
-interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number; options?: string[]; readonly?: boolean; hex?: string; ranged?: boolean; choices?: string[]; display?: string; missing?: boolean; droppable?: boolean; over?: boolean; overridden?: boolean }
+interface Field { key: string; label: string; type: string; value: number | boolean | string | string[] | number[]; min?: number; max?: number; step?: number; options?: string[]; readonly?: boolean; hex?: string; ranged?: boolean; choices?: string[]; display?: string; missing?: boolean; droppable?: boolean; over?: boolean; overridden?: boolean; origin?: string | null; heading?: string }
 interface Connection { url: string; index: number | null; from?: string; field?: string; group: string | null; source: number | null; signal: string; call: string; problem: string | null; note: string | null }
-interface ScriptEntry { index: number; url: string; name: string; built: boolean; inherited?: boolean; fields: Field[]; connections: Connection[]; shared: number; fixed: boolean }
+interface ScriptEntry { index: number; url: string; name: string; className?: string; built: boolean; inherited?: boolean; fields: Field[]; connections: Connection[]; shared: number; fixed: boolean }
 interface SignalsView { listens: Connection[]; scripts: { url: string; shared: number }[] }
 
 const state = reactive({
@@ -283,7 +284,14 @@ selection.subscribe((next: any) => {
   state.fields = (next.properties ?? []).map((field: Field) => ({ ...local(field), overridden: Boolean(variant?.fields.includes(field.key)) }))
   state.scripts = (next.scripts ?? []).map((script: ScriptEntry) => {
     const view = variant?.scripts.find((entry) => entry.index === script.index)
-    return withConnections({ ...script, inherited: Boolean(view?.inherited), fields: script.fields.map((field) => ({ ...local(field), overridden: Boolean(view?.fields.includes(field.key)) })) }, signals.value as SignalsView | null)
+    // A script made from another lists its fields under the class each comes from, base classes first.
+    const grouped = script.fields.some((field) => field.origin)
+    const fields = script.fields.map((field, i) => ({
+      ...local(field),
+      overridden: Boolean(view?.fields.includes(field.key)),
+      heading: grouped && (i === 0 || field.origin !== script.fields[i - 1].origin) ? (field.origin ?? script.className ?? script.name) : '',
+    }))
+    return withConnections({ ...script, inherited: Boolean(view?.inherited), fields }, signals.value as SignalsView | null)
   })
   markAllDroppable(dragging.value ?? null)
 })
@@ -598,6 +606,12 @@ function apply() {
 </logic>
 
 <style>
+.field-group {
+  margin-top: var(--cat-space-1);
+  color: var(--cat-text-tertiary);
+  font-size: var(--cat-text-xs);
+}
+
 .variant-note {
   margin: 0;
   padding: var(--cat-space-1-5) var(--cat-space-3);
