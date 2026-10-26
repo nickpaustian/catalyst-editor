@@ -2174,6 +2174,7 @@ export class EditorSession {
     const path = `${PREFABS_DIR}/${slug(node.name)}.json`
     const { transform: _transform, ...json } = this.engine.serialise(node)
     await folder.writeJSON(path, json)
+    this.engine.prefabs.invalidate(path)
     void this.publishFiles()
     const parent = node.parent as Node3D
     const index = parent.indexOf(node)
@@ -2232,8 +2233,9 @@ export class EditorSession {
     this.select(made)
   }
 
-  /** After a prefab file is written: every instance of it in the scene follows. */
+  /** After a prefab file is written: every instance of it in the scene follows, read again once for all of them. */
   private async reloadInstances(path: string, except?: Prefab): Promise<void> {
+    if (!except) this.engine.prefabs.invalidate(path)
     const reloads: Promise<void>[] = []
     this._root?.walk((node) => {
       if (node instanceof Prefab && node !== except && node.url === path) reloads.push(node.reload())
