@@ -21,6 +21,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   ;(window as any).lightspeed = app
   preferences.init()
 
+  // Closing the preview pane puts the preview away.
+  let previewing = false
+  const closedPreview = () => {
+    if (previewing && !panes.isOpen("preview")) app.shared("editor:command").set({ type: "closePreview", seq: Math.random() })
+  }
+
   const panes = new PaneLayout({
     root: document.getElementById("layout")!,
     kinds: {
@@ -33,6 +39,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       inspector: { title: "Inspector", element: document.getElementById("editor-panel")! },
       environment: { title: "Environment", element: document.getElementById("environment-panel")! },
       code: { title: "Code", element: document.getElementById("code-panel")! },
+      preview: { title: "Preview", element: document.getElementById("preview-panel")! },
       files: {
         title: "Files",
         element: document.getElementById("files-panel")!,
@@ -40,9 +47,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       },
     },
     layout: preferences.layout,
-    onChange: preferences.setLayout,
+    onChange: (layout) => {
+      preferences.setLayout(layout)
+      closedPreview()
+    },
     floating: preferences.floating,
-    onFloatingChange: preferences.setFloating,
+    onFloatingChange: (floating) => {
+      preferences.setFloating(floating)
+      closedPreview()
+    },
   })
   ;(window as any).panes = panes
 
@@ -57,12 +70,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!(await app.mount("contextmenu", "#context-menu"))) throw new Error("ContextMenu did not mount")
   if (!(await app.mount("confirmdialog", "#confirm-dialog"))) throw new Error("ConfirmDialog did not mount")
   if (!(await app.mount("streamabledialog", "#streamable-dialog"))) throw new Error("StreamableDialog did not mount")
-  if (!(await app.mount("previewwindow", "#preview-window"))) throw new Error("PreviewWindow did not mount")
+  if (!(await app.mount("previewpane", "#preview-panel"))) throw new Error("PreviewPane did not mount")
   if (!(await app.mount("filepicker", "#file-picker"))) throw new Error("FilePicker did not mount")
   if (!(await app.mount("viewporttools", "#viewport-tools"))) throw new Error("ViewportTools did not mount")
   app.shared("editor:code").subscribe((code: { path: string | null } | undefined) => {
     if (code?.path) panes.open("code", "viewport")
   })
+  // A preview shows in the preview pane where it is, or in a window of its own when it is not open; put away, a window closes and a docked pane stays, empty.
+  app.shared("editor:preview").subscribe((preview: { open: boolean; path: string } | undefined) => {
+    const open = Boolean(preview?.open)
+    const was = previewing
+    previewing = open
+    if (open && !panes.isOpen("preview")) panes.float("preview")
+    else if (open) panes.open("preview")
+    else if (was && panes.isFloating("preview")) panes.closeFloating("preview")
+  })
+
 
   const recipe = recipes.find((r) => r.name === new URLSearchParams(location.search).get("recipe")) ?? recipes[0]
   const engine = createEngine(recipe, { container: "#app", background: parseInt(tokens.color.bg.viewport.slice(1), 16) })
