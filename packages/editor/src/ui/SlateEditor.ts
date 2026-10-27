@@ -60,8 +60,9 @@ const CLICK_SLOP = 3
 const DRAWN_TAGS = new Set(["IMG", "svg", "CANVAS", "VIDEO", "PICTURE", "BUTTON", "INPUT", "TEXTAREA", "SELECT"])
 
 /**
- * One slate on its own over the viewport: the other slates are hidden and
- * the 3D view is dimmed and takes no input. A click picks the UI node under
+ * One slate on its own over the viewport, shown even when the scene keeps
+ * it hidden: the other slates are hidden and the 3D view is dimmed and
+ * takes no input. A click picks the UI node under
  * it, a drag moves an anchored node, and the handles resize; a drag is
  * written back as the anchor's offsets and the node's size, so the layout
  * stays relative to the anchored edge.
@@ -104,6 +105,7 @@ export class SlateEditor {
     this._slate = slate
     layer.dataset.editing = ""
     slate.host.dataset.edited = ""
+    slate.shownInEditor = true
     this.dim = el("div", "slate-editor-dim")
     container.insertBefore(this.dim, layer)
     this.overlay = el("div", "slate-editor")
@@ -150,6 +152,7 @@ export class SlateEditor {
     const layer = uiLayer(this.options.engine)
     if (layer) delete layer.dataset.editing
     delete slate.host.dataset.edited
+    slate.shownInEditor = false
     this.dim?.remove()
     this.overlay?.remove()
     this.dim = this.overlay = this.frame = this.hoverBox = this.selectionBox = this.outlines = this.scriptsButton = null
