@@ -1,4 +1,4 @@
-import { Button, Camera, Colour, Grid, Html, Sprite, Label, Light, Model, Node3D, Panel, Path, Picture, Slate, Stack, StreamedSurface, Toggle, type AntiAliasing, type Catalyst, type MetadataLink, type NodeJSON, type RenderSettings, type SceneMetadata } from "@nickpaustian/catalyst"
+import { Button, Camera, Colour, Grid, Html, Sprite, Label, Light, Model, Node3D, Panel, Path, Picture, Slate, Stack, StreamedSurface, TextField, Toggle, type AntiAliasing, type Catalyst, type MetadataLink, type NodeJSON, type RenderSettings, type SceneMetadata } from "@nickpaustian/catalyst"
 import { pickFile } from "../ProjectFolder"
 import { Interactable } from "@nickpaustian/catalyst/interaction"
 import { BoxCollider, CapsuleCollider, MeshCollider, SphereCollider } from "@nickpaustian/catalyst/physics"
@@ -237,6 +237,7 @@ export const sceneRecipe: Recipe = {
     { kind: "Button", label: "Button", cls: Button, description: "A button on a slate; scripts hear it through its onPressed signal.", make: (o) => new Button(o) },
     { kind: "Picture", label: "Picture", cls: Picture, description: "An image from the project on a slate.", make: (o) => new Picture(o) },
     { kind: "Toggle", label: "Toggle", cls: Toggle, description: "A checkbox with a label on a slate; scripts hear it through its onChanged signal.", make: (o) => new Toggle({ text: "Toggle", ...o }) },
+    { kind: "TextField", label: "Text field", cls: TextField, description: "A line of text to type on a slate; scripts hear it through its onChanged and onSubmitted signals.", make: (o) => new TextField(o) },
     { kind: "Component", label: "Component", cls: Component, description: "A Lightspeed component from a .lsp file in the project, on a slate.", make: (o) => new Component(o) },
     { kind: "Html", label: "HTML", cls: Html, description: "Markup on a slate, from an .html file or written in place, styled by the slate's stylesheet.", make: (o) => new Html(o) },
     { kind: "Interactable", label: "Interactable", cls: Interactable, description: "Something the pointer or crosshair can land on and click, with focus and interact signals for your code.", make: (o) => new Interactable({ ...o, radius: 0.25 }) },

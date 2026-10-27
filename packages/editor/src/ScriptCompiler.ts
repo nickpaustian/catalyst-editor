@@ -102,9 +102,10 @@ export class ScriptCompiler {
   }
 
   private build(path: string, chain: string[]): Promise<string> {
+    // Before the cache: a file still compiling further up the chain is in it, and waiting on it would never end.
+    if (chain.includes(path)) return Promise.reject(new Error(`${path} imports itself through ${[...chain.slice(chain.indexOf(path)), path].join(" → ")}`))
     let pending = this.built.get(path)
     if (pending) return pending
-    if (chain.includes(path)) return Promise.reject(new Error(`${path} imports itself through ${chain.join(" → ")}`))
     pending = this.compile(path, [...chain, path])
     pending.catch(() => this.built.delete(path))
     this.built.set(path, pending)
