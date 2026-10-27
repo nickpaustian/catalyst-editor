@@ -1,4 +1,4 @@
-import { dataKind, exposedProperties, type Catalyst, type DataClass, type ExposedProperty } from "@nickpaustian/catalyst"
+import { dataKind, exposedProperties, mergeData, type Catalyst, type DataClass, type ExposedProperty } from "@nickpaustian/catalyst"
 import { History } from "./History"
 import type { ProjectFolder } from "./ProjectFolder"
 
@@ -34,6 +34,9 @@ export interface DataRow {
   /** For an entry: whether it can move up or down. */
   first?: boolean
   last?: boolean
+  /** In a file over a base: whether the value comes from the base, or is set here over it. */
+  inherited?: boolean
+  overrides?: boolean
 }
 
 /** The data file open in the inspector: its path, its class, its rows, and what the last edit said. */
@@ -43,6 +46,8 @@ export interface DataView {
   name: string
   type: string
   className: string
+  /** The file this one is read over, when it has one. */
+  base: string
   rows: DataRow[]
   status: string
   /** Whether the status is a mistake in the file rather than news of a save. */
@@ -65,6 +70,17 @@ export const isDataFile = (json: unknown): boolean => {
   return typeof type === "string" && /\.(ts|js)(#[\w$]+)?$/.test(type)
 }
 
+/** A file's class as a data file, through its `base` files when it names none itself; null for anything else, such as a prefab's variant. */
+export const dataTypeOf = async (json: unknown, read: (path: string) => Promise<unknown>): Promise<string | null> => {
+  const seen = new Set<string>()
+  let node = json as Json | null
+  while (node && !isDataFile(node) && typeof node.base === "string" && !seen.has(node.base)) {
+    seen.add(node.base)
+    node = (await read(node.base).catch(() => null)) as Json | null
+  }
+  return isDataFile(node) ? (node!.type as string) : null
+}
+
 const fileName = (path: string): string => path.replace(/^.*\//, "").replace(/\.json$/i, "")
 
 /** A key as words: `listenZones` reads "Listen zones". */
@@ -74,6 +90,27 @@ const words = (key: string): string => {
 }
 
 const at = (json: unknown, path: Path): unknown => path.reduce<unknown>((node, key) => (node as Record<string | number, unknown> | null)?.[key], json)
+
+/** Whether the value at `path` comes from the base: the file leaves it out, and no list of the file's own holds it. */
+const inheritedAt = (own: unknown, under: unknown, path: Path): boolean => {
+  for (const key of path) {
+    if (Array.isArray(own)) return false
+    own = (own as Record<string | number, unknown> | null)?.[key]
+    under = (under as Record<string | number, unknown> | null)?.[key]
+    if (own === undefined) return under !== undefined
+  }
+  return false
+}
+
+/** Whether the file sets the value at `path` itself, where taking it away would show the base's. */
+const overridesAt = (own: unknown, path: Path): boolean => {
+  for (const key of path) {
+    if (Array.isArray(own)) return false
+    own = (own as Record<string | number, unknown> | null)?.[key]
+    if (own === undefined) return false
+  }
+  return true
+}
 
 /** What a new entry of a list starts as. */
 const blank = (of: Described, kind?: string): unknown => {
@@ -97,10 +134,11 @@ const blank = (of: Described, kind?: string): unknown => {
  * Editing a data file in the inspector: its class's exposed fields as rows, nested objects and lists opened out,
  * every change written to the file at once. The file is edited as it is saved (an option's name, a flag's name, a
  * file's path), so what the form shows is what the file says; a field the file leaves out shows the class's own value.
- * Changes have their own undo while the file is open, apart from the scene's.
+ * Changes have their own undo while the file is open, apart from the scene's. A file over a `base` shows the base's
+ * values where it has none of its own, and an edit writes only what it changes.
  */
 export class DataEditing {
-  private file: { path: string; json: Json } | null = null
+  private file: { path: string; json: Json; under: Json | null } | null = null
   private history = new History()
   private status = ""
   private problem = false
@@ -119,7 +157,7 @@ export class DataEditing {
     const folder = this.options.folder()
     if (!folder) return
     const json = JSON.parse(await folder.readText(path)) as Json
-    this.file = { path, json }
+    this.file = { path, json, under: null }
     this.history = new History()
     this.status = ""
     this.problem = false
@@ -144,11 +182,19 @@ export class DataEditing {
   }
 
   set(path: Path, value: unknown): Promise<void> {
-    return this.change(`Set ${path.join(".")}`, (json) => this.put(json, path, value), path.join("."))
+    return this.change(
+      `Set ${path.join(".")}`,
+      (json) => {
+        this.claim(json, path.slice(0, -1))
+        this.put(json, path, value)
+      },
+      path.join("."),
+    )
   }
 
   add(path: Path, kind?: string): Promise<void> {
     return this.change(`Add to ${path.join(".")}`, async (json) => {
+      this.claim(json, path)
       const list = (at(json, path) as unknown[] | undefined) ?? []
       const property = await this.propertyAt(path)
       this.put(json, path, [...list, blank(property?.of ?? { type: "string" }, kind)])
@@ -157,6 +203,7 @@ export class DataEditing {
 
   remove(path: Path): Promise<void> {
     return this.change(`Remove ${path.join(".")}`, (json) => {
+      this.claim(json, path.slice(0, -1))
       const list = at(json, path.slice(0, -1)) as unknown[]
       list.splice(Number(path[path.length - 1]), 1)
     })
@@ -164,6 +211,7 @@ export class DataEditing {
 
   move(path: Path, by: number): Promise<void> {
     return this.change(`Move ${path.join(".")}`, (json) => {
+      this.claim(json, path.slice(0, -1))
       const list = at(json, path.slice(0, -1)) as unknown[]
       const from = Number(path[path.length - 1])
       const to = from + by
@@ -175,8 +223,20 @@ export class DataEditing {
   /** A nested object becomes another kind, keeping what the two kinds share; "" takes it away. */
   setKind(path: Path, kind: string): Promise<void> {
     return this.change(`Change ${path.join(".")}`, (json) => {
+      this.claim(json, path.slice(0, -1))
       const old = (at(json, path) as Json | null) ?? {}
       this.put(json, path, kind ? { ...old, type: kind } : null)
+    })
+  }
+
+  /** In a file over a base: takes a value away, so the base's shows through, and any object it leaves empty. */
+  reset(path: Path): Promise<void> {
+    return this.change(`Reset ${path.join(".")}`, (json) => {
+      for (let end = path.length; end > 0; end--) {
+        const parent = at(json, path.slice(0, end - 1)) as Record<string | number, unknown>
+        delete parent[path[end - 1]]
+        if (end === 1 || Object.keys(parent).length > 0) return
+      }
     })
   }
 
@@ -190,6 +250,27 @@ export class DataEditing {
 
   private async step(move: () => boolean): Promise<void> {
     if (move()) await this.write()
+  }
+
+  /** The file as the form shows it: over its base, when it has one. */
+  private shown(): Json {
+    const file = this.file
+    if (!file?.under) return file?.json ?? {}
+    const { base: _, ...own } = file.json
+    return mergeData(file.under, own)
+  }
+
+  /** Before an edit inside `path` of a file over a base: the file takes what it lacks there from the base, objects as empty ones to fill and lists whole, since a list replaces its base's. */
+  private claim(json: Json, path: Path): void {
+    const shown = this.shown()
+    for (let end = 1; end <= path.length; end++) {
+      const prefix = path.slice(0, end)
+      if (at(json, prefix) !== undefined) continue
+      const value = at(shown, prefix)
+      if (Array.isArray(value)) this.put(json, prefix, structuredClone(value))
+      else if (value && typeof value === "object") this.put(json, prefix, {})
+      else return
+    }
   }
 
   private put(json: Json, path: Path, value: unknown): void {
@@ -234,15 +315,18 @@ export class DataEditing {
     if (!file) return this.options.publish(null)
     let rows: DataRow[] = []
     let className = ""
+    const base = typeof file.json.base === "string" ? file.json.base : ""
     try {
-      const cls = await this.options.engine.data.classOf(file.json.type as string, file.path)
+      file.under = base ? ((await this.options.engine.data.json(base)) as Json) : null
+      const cls = await this.options.engine.data.classOf(this.shown().type as string, file.path)
       className = cls.name
-      rows = await this.rowsOf(cls, file.json, [], 0)
+      rows = await this.rowsOf(cls, this.shown(), [], 0)
+      if (file.under) for (const row of rows) Object.assign(row, { inherited: inheritedAt(file.json, file.under, row.path), overrides: overridesAt(file.json, row.path) })
     } catch (error) {
       this.status = error instanceof Error ? error.message : String(error)
       this.problem = true
     }
-    this.options.publish({ path: file.path, name: fileName(file.path), type: file.json.type as string, className, rows, status: this.status, problem: this.problem, canUndo: this.history.canUndo, canRedo: this.history.canRedo })
+    this.options.publish({ path: file.path, name: fileName(file.path), type: this.shown().type as string, className, base, rows, status: this.status, problem: this.problem, canUndo: this.history.canUndo, canRedo: this.history.canRedo })
   }
 
   /** A class's value for a field, as a file would save it: the form's stand-in for a field the file leaves out. */
@@ -312,8 +396,8 @@ export class DataEditing {
   private async propertyAt(path: Path): Promise<Described | null> {
     const file = this.file
     if (!file) return null
-    let cls = await this.options.engine.data.classOf(file.json.type as string)
-    let json: unknown = file.json
+    let json: unknown = this.shown()
+    let cls = await this.options.engine.data.classOf((json as Json).type as string)
     let property: Described | null = null
     for (const key of path) {
       if (typeof key === "number") {

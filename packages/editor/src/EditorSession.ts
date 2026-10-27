@@ -26,7 +26,7 @@ import { MAP_NAMES, type AssetConverter, type StreamableJob, type StreamableOpti
 import { Previews } from "./previews"
 import type { NodeKind, Recipe } from "./recipe"
 import { SlateEditor, type UILayout } from "./ui/SlateEditor"
-import { DataEditing, isDataFile, type DataView } from "./DataEditing"
+import { DataEditing, dataTypeOf, type DataView } from "./DataEditing"
 
 export interface TreeRow {
   id: number
@@ -232,6 +232,7 @@ export type EditorCommand =
   | { type: "dataRemove"; path: (string | number)[] }
   | { type: "dataMove"; path: (string | number)[]; by: number }
   | { type: "dataKind"; path: (string | number)[]; kind: string }
+  | { type: "dataReset"; path: (string | number)[] }
   | { type: "closeData" }
   | { type: "extrude" }
   | { type: "setSnap"; snap: Partial<SnapSettings> }
@@ -737,6 +738,7 @@ export class EditorSession {
       const json = await folder.readJSON<{ type?: unknown }>(path).catch(() => null)
       if (typeof json?.type !== "string" && !isVariant(json)) return this.publishProject(`${path} isn't a node tree to edit`)
     }
+    if (this.data.path) this.data.close()
     await this.open(folder, { discarding: true, scene: path })
     this.publishProject(path ? `editing ${path}` : "editing the project's scene")
   }
@@ -1009,7 +1011,8 @@ export class EditorSession {
     try {
       json = folder ? JSON.parse(await folder.readText(path)) : null
     } catch {}
-    if (!isDataFile(json)) return this.openScene(path)
+    const read = async (file: string) => JSON.parse(await folder!.readText(file)) as unknown
+    if (!(await dataTypeOf(json, read))) return this.openScene(path)
     this.select(null)
     await this.data.open(path)
   }
@@ -1514,6 +1517,9 @@ export class EditorSession {
         break
       case "dataKind":
         await this.data.setKind(command.path, command.kind)
+        break
+      case "dataReset":
+        await this.data.reset(command.path)
         break
       case "closeData":
         this.data.close()

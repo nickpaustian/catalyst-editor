@@ -7,10 +7,10 @@
     </div>
     <button class="button small" type="button" title="Back to the scene's selection" @click="close">Close</button>
   </div>
-  <p class="data-note">{{ shared['editor:data'].path }} · saved as you edit<span $if="shared['editor:data'].canUndo"> · undo steps back through this file</span></p>
+  <p class="data-note">{{ shared['editor:data'].path }}<span $if="shared['editor:data'].base"> · over {{ shared['editor:data'].base }}</span> · saved as you edit<span $if="shared['editor:data'].canUndo"> · undo steps back through this file</span></p>
   <div class="properties data-rows">
     <template $for="row in shared['editor:data'].rows" $key="row.id">
-      <span class="label" $class="{ head: row.row !== 'field' }" $style="'--depth: ' + row.depth" $title="row.label">{{ row.label }}</span>
+      <span class="label" $class="{ head: row.row !== 'field', inherited: row.inherited }" $style="'--depth: ' + row.depth" $title="row.label">{{ row.label }}</span>
       <div class="control">
         <template $if="row.row === 'list'">
           <span class="count">{{ row.count }} {{ row.count === 1 ? 'entry' : 'entries' }}</span>
@@ -54,6 +54,7 @@
             <button class="icon-button small" type="button" aria-label="Remove" @click="remove(row)">×</button>
           </template>
         </template>
+        <button $if="row.overrides" class="icon-button small" type="button" $aria-label="'Back to the base\'s ' + row.label" title="Back to the base's value" @click="reset(row)">↺</button>
       </div>
     </template>
   </div>
@@ -69,7 +70,7 @@ import { sendCommand } from '../commands.ts'
 // the file and publishes the rows again.
 shared('editor:data', null)
 
-interface Row { id: string; path: (string | number)[]; label: string; row: string; type: string; value?: unknown; kinds?: string[]; kind?: string }
+interface Row { id: string; path: (string | number)[]; label: string; row: string; type: string; value?: unknown; kinds?: string[]; kind?: string; inherited?: boolean; overrides?: boolean }
 
 const state = reactive({ addKinds: {} as Record<string, string> })
 
@@ -123,6 +124,10 @@ function remove(row: Row) {
 function move(row: Row, by: number) {
   sendCommand({ type: 'dataMove', path: row.path, by })
 }
+
+function reset(row: Row) {
+  sendCommand({ type: 'dataReset', path: row.path })
+}
 </logic>
 
 <style>
@@ -174,6 +179,11 @@ function move(row: Row, by: number) {
 .data-rows > .label.head {
   color: var(--cat-text-primary);
   font-weight: 500;
+}
+
+.data-rows > .label.inherited {
+  color: var(--cat-text-tertiary);
+  font-style: italic;
 }
 
 .data-rows .well {
