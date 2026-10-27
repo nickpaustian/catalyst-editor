@@ -26,6 +26,7 @@ import { MAP_NAMES, type AssetConverter, type StreamableJob, type StreamableOpti
 import { Previews } from "./previews"
 import type { NodeKind, Recipe } from "./recipe"
 import { SlateEditor, type UILayout } from "./ui/SlateEditor"
+import { DataEditing, isDataFile, type DataView } from "./DataEditing"
 
 export interface TreeRow {
   id: number
@@ -110,6 +111,8 @@ export interface EditorCells {
   "editor:variantMarks": { inherited: number[]; overridden: number[] } | null
   /** The selected grid's tile types and the paint tool; null when no grid is selected. */
   "editor:grid": GridPanel | null
+  /** The data file open in the inspector, as rows of its class's fields; null when none is. */
+  "editor:data": DataView | null
   "editor:history": { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
   /** The recipe's project-wide settings, or null when it has none. */
   "editor:settings": { title: string; fields: SelectionProperty[] } | null
@@ -224,6 +227,12 @@ export type EditorCommand =
   | { type: "setVertexEdit"; on: boolean }
   | { type: "setEditMode"; mode: EditMode }
   | { type: "editSlate"; on: boolean }
+  | { type: "dataSet"; path: (string | number)[]; value: unknown }
+  | { type: "dataAdd"; path: (string | number)[]; kind?: string }
+  | { type: "dataRemove"; path: (string | number)[] }
+  | { type: "dataMove"; path: (string | number)[]; by: number }
+  | { type: "dataKind"; path: (string | number)[]; kind: string }
+  | { type: "closeData" }
   | { type: "extrude" }
   | { type: "setSnap"; snap: Partial<SnapSettings> }
   | { type: "setStreaming"; preset: StreamingPreset }
@@ -374,6 +383,7 @@ export class EditorSession {
   private readonly camera: EditorCamera
   private readonly grids: GridPainter
   private readonly variants: VariantEditing
+  private readonly data: DataEditing
   private readonly slateEditor: SlateEditor
   private readonly input: EditorInput | null
   private folder: AssetFolder | null = null
@@ -500,6 +510,7 @@ export class EditorSession {
     }
     this.camera = new EditorCamera(this.engine)
     this.variants = new VariantEditing(this.engine)
+    this.data = new DataEditing({ engine: this.engine, folder: () => this.folder, files: () => this.projectFiles, publish: (view) => this.set("editor:data", view) })
     this.grids = new GridPainter({
       camera: this.camera,
       selected: () => this.selected,
@@ -980,12 +991,27 @@ export class EditorSession {
     this.history.push({ label, undo, redo, key })
   }
 
+  /** With a data file open in the inspector, its own changes are what undo steps back through. */
   undo(): void {
-    if (this.history.undo()) this.refresh()
+    if (this.data.path) void this.data.undo()
+    else if (this.history.undo()) this.refresh()
   }
 
   redo(): void {
-    if (this.history.redo()) this.refresh()
+    if (this.data.path) void this.data.redo()
+    else if (this.history.redo()) this.refresh()
+  }
+
+  /** A JSON file from the files pane: a data file opens in the inspector, anything else as a scene. */
+  private async openJSON(path: string): Promise<void> {
+    const folder = this.folder
+    let json: unknown = null
+    try {
+      json = folder ? JSON.parse(await folder.readText(path)) : null
+    } catch {}
+    if (!isDataFile(json)) return this.openScene(path)
+    this.select(null)
+    await this.data.open(path)
   }
 
   /** After a change made by the history rather than a command: the tree, the fields and the gizmo catch up. */
@@ -1472,7 +1498,25 @@ export class EditorSession {
         break
       case "openFile":
         if (CODE_FILE.test(command.path)) await this.openScript(command.path)
-        else if (/\.json$/i.test(command.path)) await this.openScene(command.path)
+        else if (/\.json$/i.test(command.path)) await this.openJSON(command.path)
+        break
+      case "dataSet":
+        await this.data.set(command.path, command.value)
+        break
+      case "dataAdd":
+        await this.data.add(command.path, command.kind)
+        break
+      case "dataRemove":
+        await this.data.remove(command.path)
+        break
+      case "dataMove":
+        await this.data.move(command.path, command.by)
+        break
+      case "dataKind":
+        await this.data.setKind(command.path, command.kind)
+        break
+      case "closeData":
+        this.data.close()
         break
       case "openScene":
         await this.openScene(command.path)
@@ -1627,6 +1671,7 @@ export class EditorSession {
     await this.relinkAssets(folder)
     void this.publishFiles()
     await this.reloadUIFiles(changed)
+    if (this.data.path && changed.includes(this.data.path)) await this.data.reloadFromDisk()
     for (const path of changed.filter((path) => CODE_FILE.test(path))) {
       try {
         this.set("editor:codeFile", { path, text: await folder.readText(path), status: `reloaded ${path} from disk` })
@@ -2523,6 +2568,7 @@ export class EditorSession {
   //=========================
 
   private select(node: Node3D | null, mode: SelectMode = "replace"): void {
+    if (node && this.data.path) this.data.close()
     const root = this._root
     if (node === root && mode !== "replace") return
     if (!node) {

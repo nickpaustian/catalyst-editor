@@ -1,7 +1,10 @@
 <view>
 <aside class="panel">
-  <SelectionFields />
-  <SignalsSection />
+  <DataFields $if="shared['editor:data']" />
+  <template $else>
+    <SelectionFields />
+    <SignalsSection />
+  </template>
 
   <div id="recipe-sections"></div>
 </aside>
@@ -10,8 +13,9 @@
 <logic lang="ts">
 // The inspector: what is selected, and a recipe's own sections, mounted into
 // #recipe-sections by the app. The scene tree (ScenePane) and the project's
-// settings (EnvironmentPane) are panes of their own.
-export {}
+// settings (EnvironmentPane) are panes of their own. A data file opened from
+// the files pane takes the selection's place until it is closed.
+shared('editor:data', null)
 </logic>
 
 <style>
