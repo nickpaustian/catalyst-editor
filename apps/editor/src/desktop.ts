@@ -17,8 +17,10 @@ export interface DesktopShell {
   /** From the start window: closed with nothing open, so the app quits. */
   startClosed(): void
   onStartClosed(listener: () => void): void
-  /** Closing the editor window or quitting the app goes ahead only when `check` agrees. */
+  /** Quitting the app goes ahead only when `check` agrees. */
   guardClose(check: () => Promise<boolean>): void
+  /** The editor window was asked to close (⌘W, its close button): `close` closes the project instead, back to the start window. */
+  onCloseRequested(close: () => void): void
   /** Close this window; with the start window gone too, the app exits. */
   quit(): void
   /** Project files the app was launched with, or opened while it runs, handed over once. */

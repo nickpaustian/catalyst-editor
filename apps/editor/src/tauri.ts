@@ -191,16 +191,22 @@ const converter = (): AssetConverter => ({
 })
 
 let mayClose: () => Promise<boolean> = async () => true
+let closeProject: (() => void) | null = null
 let leaving = false
 
 /**
- * The start window is declared in the Tauri config and only ever shown or hidden; closing the editor
- * window takes it along so the app exits. Closing the window or quitting the app asks `mayClose` first.
+ * The start window is declared in the Tauri config and only ever shown or hidden. Closing the editor window closes
+ * its project, back to the start window, as quitting is what ends the app; quitting asks `mayClose` first, and so
+ * does closing the window when nothing has said how to close the project.
  */
 export const tauriShell = (): DesktopShell => {
   const current = getCurrentWindow()
   if (current.label === MAIN_LABEL) {
     void current.onCloseRequested(async (event) => {
+      if (!leaving && closeProject) {
+        event.preventDefault()
+        return closeProject()
+      }
       if (!leaving && !(await mayClose())) return event.preventDefault()
       leaving = true
       await (await startWindow())?.close()
@@ -245,6 +251,9 @@ const shell = (): DesktopShell => ({
   },
   guardClose(check) {
     mayClose = check
+  },
+  onCloseRequested(close) {
+    closeProject = close
   },
   quit() {
     void (async () => {

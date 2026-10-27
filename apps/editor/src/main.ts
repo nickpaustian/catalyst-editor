@@ -101,6 +101,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const session = new EditorSession({ app, engine, recipe, folders, runner: shell?.runnerLink, converter: shell?.converter, reveal: shell ? { label: shell.revealLabel, run: shell.reveal } : undefined })
   if (shell) {
     shell.guardClose(() => session.leave())
+    shell.onCloseRequested(() => void session.closeProject())
     app.shared("editor:startMode").set("off")
     let shown: boolean | null = null
     app.shared("editor:project").subscribe((project: { open: boolean } | undefined) => {
