@@ -320,6 +320,17 @@ export const sceneRecipe: Recipe = {
     applyEnvironment(engine, (scene as { environment?: Partial<SceneEnvironment> }).environment, true)
     engine.metadata = metadataOf(scene)
     const physics = engine.find(Physics)
+    let current: Camera | null = null
+    root.walk((node) => {
+      if (!current && node instanceof Camera && node.current) current = node
+    })
+    if (current) {
+      engine.camera.target = current
+      if (physics) physics.paused = false
+      return () => {
+        if (physics) physics.paused = true
+      }
+    }
     let orbit: OrbitCamera | null = null
     root.walk((node) => {
       if (!orbit && node instanceof OrbitCamera) orbit = node
