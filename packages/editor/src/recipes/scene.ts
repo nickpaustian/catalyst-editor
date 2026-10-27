@@ -1,4 +1,4 @@
-import { Button, Camera, Colour, Grid, Html, Sprite, Label, Light, Model, Node3D, Panel, Path, Picture, Slate, Stack, StreamedSurface, TextField, Toggle, Line, type AntiAliasing, type Catalyst, type MetadataLink, type NodeJSON, type RenderSettings, type SceneMetadata } from "@nickpaustian/catalyst"
+import { Button, Camera, Colour, Grid, Html, Sprite, Label, Light, Model, Node3D, Panel, Path, Picture, Slate, Stack, UIElement, StreamedSurface, TextField, Toggle, Line, type AntiAliasing, type Catalyst, type MetadataLink, type NodeJSON, type RenderSettings, type SceneMetadata } from "@nickpaustian/catalyst"
 import { pickFile } from "../ProjectFolder"
 import { Interactable } from "@nickpaustian/catalyst/interaction"
 import { BoxCollider, CapsuleCollider, MeshCollider, SphereCollider } from "@nickpaustian/catalyst/physics"
@@ -332,6 +332,18 @@ export const sceneRecipe: Recipe = {
       if (physics) physics.paused = false
       return () => {
         camera.enabled = false
+        if (physics) physics.paused = true
+      }
+    }
+    // A scene of screen UI alone (a card game, a menu) has nothing to walk in, and a walker would take the pointer.
+    let spatial = false
+    root.walk((node) => {
+      if (spatial || node === root || node instanceof Slate || node instanceof UIElement) return
+      if (node instanceof Node3D && node.constructor !== Node3D) spatial = true
+    })
+    if (!spatial) {
+      if (physics) physics.paused = false
+      return () => {
         if (physics) physics.paused = true
       }
     }
