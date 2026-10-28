@@ -24,6 +24,12 @@ const drawnBox = (root: Node3D): { min: Vector3; max: Vector3 } | null => {
     for (const child of node.children.values()) if (child instanceof Node3DClass) visit(child)
   }
   visit(root)
+  // What the engine draws itself, with no visual on this side.
+  const drawn = (root as { drawnBounds?: () => { min: Vector3; max: Vector3 } | null }).drawnBounds?.()
+  if (drawn) {
+    min.set(Math.min(min.x, drawn.min.x), Math.min(min.y, drawn.min.y), Math.min(min.z, drawn.min.z))
+    max.set(Math.max(max.x, drawn.max.x), Math.max(max.y, drawn.max.y), Math.max(max.z, drawn.max.z))
+  }
   return min.x <= max.x ? { min, max } : null
 }
 
