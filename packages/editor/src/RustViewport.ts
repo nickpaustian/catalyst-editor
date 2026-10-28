@@ -1,10 +1,23 @@
-import { Node3D, type Catalyst, type Material, type Node, type Visual } from "@nickpaustian/catalyst"
+import { Node3D, type Catalyst, type ExposedProperty, type Material, type Node, type Visual } from "@nickpaustian/catalyst"
 import { LineSet, type Mesh } from "@nickpaustian/obelisk"
 import type { EditorCamera } from "./EditorCamera"
 
 type RustModule = typeof import("@nickpaustian/catalyst-rs")
 type RustEngine = import("@nickpaustian/catalyst-rs").Engine
 type RustViewportSurface = import("@nickpaustian/catalyst-rs").Viewport
+
+/** A kind as the Rust table describes it: the inspector's metadata on each property, `shownWhen` as a key and the value it must hold. */
+interface KindInfo {
+  base?: string
+  icon?: string
+  properties?: (ExposedProperty & { shownWhen?: { key: string; is: unknown } })[]
+}
+
+/** What the Rust engine says of a node: its kind's exposed properties, the inspector's way, and their values now. */
+export interface RustInspection {
+  properties: ExposedProperty[]
+  values: Record<string, unknown>
+}
 
 let loading: Promise<RustModule | null> | null = null
 
@@ -61,6 +74,7 @@ export class RustViewport {
   private readonly helperMaterials = new Map<string, { slot: number; seen: number }>()
   private frameCount = 0
   private helperRecords = new Float32Array(0)
+  private kinds: Record<string, KindInfo> | null = null
 
   constructor(options: RustViewportOptions) {
     this.options = options
@@ -224,6 +238,31 @@ export class RustViewport {
     return entry.slot
   }
 
+  /**
+   * The exposed properties of a node's kind as the Rust engine declares them, base kinds first, with the values the
+   * Rust node holds; null for a kind the Rust engine does not own, which the TypeScript node then describes itself.
+   */
+  inspect(node: Node): RustInspection | null {
+    if (!this._active || !this.engine || !this.surface) return null
+    if (this.stale) this.rebuild()
+    const id = this.idsByNode.get(node)
+    if (id === undefined) return null
+    this.kinds ??= JSON.parse(this.engine.kind_properties()) as Record<string, KindInfo>
+    const chain: KindInfo[] = []
+    for (let kind = this.engine.node_kind(id); kind && this.kinds[kind]; kind = this.kinds[kind].base) chain.unshift(this.kinds[kind])
+    if (chain.length === 0) return null
+    const values: Record<string, unknown> = {}
+    const properties: ExposedProperty[] = []
+    for (const info of chain) {
+      for (const { shownWhen, ...property } of info.properties ?? []) {
+        if (property.hidden) continue
+        values[property.key] = JSON.parse(this.engine.get_property(id, property.key))
+        properties.push(shownWhen ? { ...property, shownWhen: () => values[shownWhen.key] === shownWhen.is } : property)
+      }
+    }
+    return { properties, values }
+  }
+
   /** The node under a point of the view, by the Rust engine's own picking. */
   pick(x: number, y: number): Node3D | null {
     if (!this._active || !this.engine || !this.surface) return null
@@ -252,6 +291,7 @@ export class RustViewport {
   private rebuild(): void {
     const engine = this.engine!
     this.stale = false
+    this.kinds = null
     if (this.level !== null) {
       engine.free_node(this.level)
       this.level = null

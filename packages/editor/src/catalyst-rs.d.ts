@@ -18,6 +18,8 @@ declare module "@nickpaustian/catalyst-rs" {
     children_of(id: number): Uint32Array
     is_internal(id: number): boolean
     get_property(id: number, key: string): string
+    /** The engine-owned kinds: base, icon, properties with the inspector's metadata, methods, signals. */
+    kind_properties(): string
     set_property(id: number, key: string, json: string): boolean
     serialise(id: number): string
     end_frame(): number

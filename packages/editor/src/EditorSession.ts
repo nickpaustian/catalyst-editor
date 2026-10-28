@@ -981,6 +981,23 @@ export class EditorSession {
   private nodePaths: string[] | null = null
 
   /** A property as the panels show it; a `file` lists the project's files it accepts, a `node` the scene's nodes. */
+  /**
+   * The inspector's fields for a node: its class's exposed properties, read from the node. With the Rust viewport
+   * drawing, a kind the Rust engine owns is described and read through the engine's own table instead, the way the
+   * editor will read everything once it drives the Rust engine; the properties of the base classes the table does
+   * not describe (tags, active, visible) still come from the TypeScript node. Edits go to the TypeScript node, and
+   * reach the Rust one through the mirror.
+   */
+  private selectionFields(node: Node3D): SelectionProperty[] {
+    const own = exposedProperties(node)
+    const rust = this.rust.inspect(node)
+    if (!rust) return own.filter((property) => !property.hidden && (!property.shownWhen || property.shownWhen(node))).map((property) => this.field(property, readExposed(node, property)))
+    const described = new Set(rust.properties.map((property) => property.key))
+    const base = own.filter((property) => !described.has(property.key) && !property.hidden && (!property.shownWhen || property.shownWhen(node))).map((property) => this.field(property, readExposed(node, property)))
+    const kind = rust.properties.filter((property) => !property.shownWhen || property.shownWhen(node)).map((property) => this.field(property, rust.values[property.key]))
+    return [...base, ...kind]
+  }
+
   private field(property: ExposedProperty, value: unknown): SelectionProperty {
     const field: SelectionProperty = { ...property, label: property.label ?? property.key, value }
     if (property.type === "file") field.choices = this.projectFiles.filter((path) => accepts(property.accept, path) && !this.recipe.files?.includes(path))
@@ -1250,10 +1267,7 @@ export class EditorSession {
       onSlate: slateOf(node) !== null,
       position: { x: round(p.x), y: round(p.y), z: round(p.z) },
       rotation: { x: round(degrees(e.x), 2), y: round(degrees(e.y), 2), z: round(degrees(e.z), 2) },
-      properties: exposedProperties(node)
-        .filter((property) => !property.hidden && (!property.shownWhen || property.shownWhen(node)))
-        .map((property) => this.field(property, readExposed(node, property)))
-        .sort((a, b) => Number(LIST_TYPES.includes(a.type)) - Number(LIST_TYPES.includes(b.type))),
+      properties: this.selectionFields(node).sort((a, b) => Number(LIST_TYPES.includes(a.type)) - Number(LIST_TYPES.includes(b.type))),
       variant: this._root ? this.variants.view(node, this._root) : null,
     })
   }
