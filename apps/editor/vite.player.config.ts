@@ -2,6 +2,7 @@ import { readdirSync, statSync, writeFileSync } from "node:fs"
 import { join, relative } from "node:path"
 import { defineConfig, type Plugin } from "vite"
 import { lightspeedPlugin } from "@lightspeed-js/core/vite"
+import { rustEngineAlias } from "./rust-engine.ts"
 
 const OUT = new URL("./public/player/", import.meta.url).pathname
 
@@ -16,12 +17,13 @@ const fileList = (): Plugin => ({
   },
 })
 
-// The published page's runtime, built once into public/ so the editor can copy it in dev and in a build alike.
+// The published page's runtime, built once into public/ so the editor can copy it in dev and in a build alike. The
+// engine is the Rust runtime, as the editor's; its wasm is emitted as an asset of the build.
 export default defineConfig({
   root: new URL("./player/", import.meta.url).pathname,
   base: "./",
   plugins: [lightspeedPlugin({ typescript: true, host: true, componentDirs: ["../../packages/editor/src/components"] }), fileList()],
-  resolve: { dedupe: ["@nickpaustian/obelisk", "@nickpaustian/catalyst"] },
+  resolve: { alias: rustEngineAlias() },
   worker: { format: "es" },
   build: { outDir: OUT, emptyOutDir: true },
 })

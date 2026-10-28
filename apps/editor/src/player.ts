@@ -1,4 +1,4 @@
-import type { SceneMetadata } from "@nickpaustian/catalyst"
+import { boot, type SceneMetadata } from "@nickpaustian/catalyst"
 import { AssetFolder, HttpFolder, Runner, SCENE_FILE, applySceneParams, createEngine, linkCamera, sceneRecipe } from "@nickpaustian/catalyst-editor"
 
 /** The page named after the record, for tabs, links shared elsewhere and screen readers. */
@@ -28,6 +28,7 @@ const addOpenLink = () => {
 /** A published project: the scene and its files beside this page, played as a run plays them. */
 document.addEventListener("DOMContentLoaded", async () => {
   const params = new URLSearchParams(location.search)
+  await boot()
   const engine = createEngine(sceneRecipe, { container: "#app", grid: false })
   engine.start()
   const runner = new Runner(engine, sceneRecipe, { link: null, debug: params.has("debug") })
