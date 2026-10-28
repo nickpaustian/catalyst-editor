@@ -2,6 +2,7 @@
 //! drawing the scene the editor has open, through the Rust engine. One run at a time; a new run
 //! replaces the last.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::Mutex;
@@ -40,14 +41,24 @@ fn binary() -> Result<PathBuf, String> {
     .ok_or_else(|| "The native runner was not found. Install it with `cargo install --path apps/runner` in the catalyst-rs repository, or set CATALYST_RUNNER_BIN to its path.".into())
 }
 
-/// Play `scene` (the scene JSON as the editor has it, its names already paths under `project`) in the native runner.
-/// The scene goes through a file of its own, so unsaved edits play without touching the project.
+/// Play `scene` (the scene JSON as the editor has it, its names already paths under `project`) in the native runner,
+/// with `files` (project paths to their JSON as the editor has it) read in place of the project's own. The scene and
+/// the files go through files of their own, so unsaved edits play without touching the project.
 #[tauri::command]
-pub async fn runner_launch(app: tauri::AppHandle, run: State<'_, Run>, project: String, scene: String) -> Result<(), String> {
-  let file = std::env::temp_dir().join(format!("catalyst-run-{}.json", std::process::id()));
+pub async fn runner_launch(app: tauri::AppHandle, run: State<'_, Run>, project: String, scene: String, files: HashMap<String, String>) -> Result<(), String> {
+  let dir = std::env::temp_dir().join(format!("catalyst-run-{}", std::process::id()));
+  std::fs::create_dir_all(&dir).map_err(|error| format!("the run's files could not be written for the runner: {error}"))?;
+  let file = dir.join("scene.json");
   std::fs::write(&file, scene).map_err(|error| format!("the scene could not be written for the runner: {error}"))?;
+  let mut command = Command::new(binary()?);
+  command.arg(&project).arg("--scene").arg(&file);
+  for (index, (path, json)) in files.iter().enumerate() {
+    let stand_in = dir.join(format!("file-{index}.json"));
+    std::fs::write(&stand_in, json).map_err(|error| format!("{path} could not be written for the runner: {error}"))?;
+    command.arg("--file").arg(format!("{path}={}", stand_in.display()));
+  }
   run.stop();
-  let child = Command::new(binary()?).arg(&project).arg("--scene").arg(&file).spawn().map_err(|error| format!("the native runner could not be run: {error}"))?;
+  let child = command.spawn().map_err(|error| format!("the native runner could not be run: {error}"))?;
   let id = child.id();
   *run.0.lock().unwrap() = Some(child);
   let _ = app.emit_to("main", "runner:started", id);

@@ -193,7 +193,7 @@ const converter = (): AssetConverter => ({
 /** The native runner as the app runs it: one run at a time, replaced by the next; the app says when it has ended. */
 const nativeRun = (): NativeRun => ({
   available: () => invoke<boolean>("runner_available"),
-  launch: (project, scene) => invoke("runner_launch", { project, scene: JSON.stringify(scene) }),
+  launch: (project, scene, files = {}) => invoke("runner_launch", { project, scene: JSON.stringify(scene), files: Object.fromEntries(Object.entries(files).map(([path, json]) => [path, JSON.stringify(json)])) }),
   stop: () => invoke("runner_stop"),
   onExited(listener) {
     const pending = listen("runner:exited", () => listener())

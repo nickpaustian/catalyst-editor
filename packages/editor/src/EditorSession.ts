@@ -1760,18 +1760,29 @@ export class EditorSession {
   }
 
   /**
-   * Play the project in the native runner, the Rust engine in a window of its own: the scene as it is
-   * now, over the project folder on disk. A second run replaces the first.
+   * Play the project in the native runner, the Rust engine in a window of its own, over the project folder on
+   * disk: the scene as it is now, or, with another file open, the game as saved with that file as it is now
+   * (as ▶ Run plays it). A second run replaces the first.
    */
   async runNatively(): Promise<void> {
     if (!this._root || !this.nativeRun) return
     const folder = this.folder
     const transfer = folder?.transfer()
     if (!folder || transfer?.kind !== "path") return this.publishProject("the native runner plays projects on disk: save this project to a folder first")
-    const live = this.recipe.serialise?.(this._root, this.engine) ?? this.engine.serialise(this._root)
-    const scene = await folder.toPaths(live)
+    const sceneFile = this.sceneFile
+    let scene: NodeJSON
+    const files: Record<string, NodeJSON> = {}
+    if (sceneFile && this.recipe.files?.[0]) {
+      scene = await folder.readJSON<NodeJSON>(this.recipe.files[0])
+      const open = this.engine.serialise(this._root)
+      if (!this.sceneFileHasTransform) delete open.transform
+      files[sceneFile] = await folder.toPaths(open)
+    } else {
+      const live = this.recipe.serialise?.(this._root, this.engine) ?? this.engine.serialise(this._root)
+      scene = await folder.toPaths(live)
+    }
     try {
-      await this.nativeRun.launch(transfer.path, scene)
+      await this.nativeRun.launch(transfer.path, scene, files)
       this.set("editor:runningNative", true)
       this.publishProject("running natively")
     } catch (error) {

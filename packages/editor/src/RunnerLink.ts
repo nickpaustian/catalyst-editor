@@ -57,8 +57,8 @@ export interface RunnerPageLink {
 /** The native runner (catalyst-rs's `catalyst-runner`) as a desktop shell runs it: the scene as the editor has it, over the project folder on disk. */
 export interface NativeRun {
   available(): Promise<boolean>
-  /** Play `scene`, its names already paths under the project folder at `project`. */
-  launch(project: string, scene: NodeJSON): Promise<void>
+  /** Play `scene`, its names already paths under the project folder at `project`, with `files` read in place of the project's own. */
+  launch(project: string, scene: NodeJSON, files?: Record<string, NodeJSON>): Promise<void>
   stop(): Promise<void>
   onExited(listener: () => void): () => void
 }
