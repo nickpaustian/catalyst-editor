@@ -97,6 +97,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // The engine is the Rust one, built to wasm; its module loads once before an engine is made.
   await boot()
   const engine = createEngine(recipe, { container: "#app", background: parseInt(tokens.color.bg.viewport.slice(1), 16) })
+  ;(window as any).catalyst = engine
   engine.start()
 
   const shell = await desktop()
