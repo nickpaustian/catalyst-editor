@@ -1,8 +1,7 @@
 import { Catalyst, Model, Node3D, type Loader } from "@nickpaustian/catalyst"
 import { Input } from "@nickpaustian/catalyst/input"
 import { OrbitCamera } from "@nickpaustian/catalyst/prefabs"
-import { Vector3, computeBounds, parseHdr, type Mesh } from "@nickpaustian/obelisk"
-import type { Visual } from "@nickpaustian/catalyst"
+import { parseHdr } from "@nickpaustian/obelisk"
 import { color } from "./tokens/tokens"
 
 const SIZE = 256
@@ -21,34 +20,20 @@ export interface ModelPreview {
 const hex = (css: string): number => parseInt(css.replace("#", ""), 16)
 
 /**
- * Put the orbit about the loaded model's sphere (each placed mesh's box, carried through its
- * placement), with clip planes that follow its size, and frame it. Null when nothing drew.
+ * Put the orbit about the loaded model's sphere (the box around what the engine draws for it), with clip planes
+ * that follow its size, and frame it. Null when nothing drew.
  */
 const frameModel = (model: Model, orbit: OrbitCamera): { meshes: number; triangles: number } | null => {
-  const visuals = (model.meshes as Visual[]).filter((visual) => !visual.isLines)
-  if (!visuals.length) return null
-  const min = new Vector3(Infinity, Infinity, Infinity)
-  const max = new Vector3(-Infinity, -Infinity, -Infinity)
-  const corner = new Vector3()
-  let triangles = 0
-  for (const visual of visuals) {
-    const mesh = visual.geometry as Mesh
-    triangles += mesh.indices.length / 3
-    const box = computeBounds(mesh.vertices)
-    for (let i = 0; i < 8; i++) {
-      corner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z)
-      if (visual.offset) visual.offset.transformPoint(corner, corner)
-      min.set(Math.min(min.x, corner.x), Math.min(min.y, corner.y), Math.min(min.z, corner.z))
-      max.set(Math.max(max.x, corner.x), Math.max(max.y, corner.y), Math.max(max.z, corner.z))
-    }
-  }
+  const box = model.drawnBounds()
+  if (!box) return null
+  const { min, max } = box
   orbit.transform.position.set((min.x + max.x) / 2, (min.y + max.y) / 2, (min.z + max.z) / 2)
   orbit.radius = Math.max(1e-6, Math.hypot(max.x - min.x, max.y - min.y, max.z - min.z) / 2)
   // The clip planes follow the model's size, so a small object is not cut away by the default near plane.
   orbit.camera.near = orbit.radius * 0.01
   orbit.camera.far = orbit.radius * 100
   orbit.fit(true)
-  return { meshes: visuals.length, triangles }
+  return model.stats
 }
 
 const toDataUrl = (rgba: Uint8ClampedArray<ArrayBuffer>, width: number, height: number): string => {
