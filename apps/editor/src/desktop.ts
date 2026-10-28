@@ -1,4 +1,4 @@
-import type { AssetConverter, FolderSource, FolderTransfer, RunnerLink, RunnerPageLink } from "@nickpaustian/catalyst-editor"
+import type { AssetConverter, FolderSource, FolderTransfer, NativeRun, RunnerLink, RunnerPageLink } from "@nickpaustian/catalyst-editor"
 
 export interface DesktopShell {
   folders: FolderSource
@@ -9,6 +9,8 @@ export interface DesktopShell {
   revealLabel: string
   /** Iapetus, run by the app, for making models streamable. */
   converter: AssetConverter
+  /** The native runner from catalyst-rs, run by the app, for playing the scene through the Rust engine. */
+  nativeRun: NativeRun
   /** The editor window: shown while a project is open, hidden behind the start window otherwise. */
   showEditor(open: boolean): void
   /** From the start window: a project chosen; the editor window opens it. */

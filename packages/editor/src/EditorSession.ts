@@ -12,7 +12,7 @@ import { RustViewport } from "./RustViewport"
 import { color } from "./tokens/tokens"
 import { preferences, storage, type SnapSettings, streamingQualityOf, type StreamingPreset, type ViewportEngine } from "./preferences"
 import { browserFolders, folderLoader, pickFile, type FolderSource, type ProjectFolder, type ProjectStorage, type RecentProject } from "./ProjectFolder"
-import { windowRunnerLink, type RunnerLink } from "./RunnerLink"
+import { windowRunnerLink, type NativeRun, type RunnerLink } from "./RunnerLink"
 import { AssetFolder } from "./AssetFolder"
 import { accepts } from "./fileField"
 import { SCRIPTS_DIR, ScriptCompiler, plainScriptTemplate, scriptTemplate } from "./ScriptCompiler"
@@ -94,6 +94,9 @@ export type ViewMode = "orbit"
 export interface EditorCells {
   /** `open` is false until a project is in the viewport; the start screen shows meanwhile. */
   "editor:running": boolean
+  /** The desktop shell can run the native runner (catalyst-rs). */
+  "editor:nativeRun": boolean
+  "editor:runningNative": boolean
   "editor:project": { open: boolean; name: string | null; recipe: string; storage: ProjectStorage | null; status: string; supported: boolean; browserStorage: boolean; dirty: boolean }
   /** Projects opened before, for the start screen. */
   "editor:recent": RecentProject[]
@@ -215,6 +218,8 @@ export type EditorCommand =
   | { type: "download" }
   | { type: "exportSite" }
   | { type: "run" }
+  | { type: "runNative" }
+  | { type: "stopNative" }
   | { type: "stop" }
   | { type: "undo" }
   | { type: "redo" }
@@ -433,6 +438,8 @@ export class EditorSession {
   private unsubscribeBlur: () => void
   private readonly folders: FolderSource
   private readonly runner: RunnerLink
+  private readonly nativeRun: NativeRun | null
+  private unsubscribeNativeRun: () => void = () => undefined
   private readonly converter: AssetConverter | null
   /** The desktop app's way to show a file in Finder or Explorer; null in the browser, which has none. */
   private readonly reveal: { label: string; run: (path: string) => Promise<void> } | null
@@ -485,12 +492,20 @@ export class EditorSession {
     }
   }
 
-  constructor(options: { app: LightspeedRuntime; engine: Catalyst; recipe: Recipe; folders?: FolderSource; runner?: RunnerLink; converter?: AssetConverter; reveal?: { label: string; run: (path: string) => Promise<void> } }) {
+  constructor(options: { app: LightspeedRuntime; engine: Catalyst; recipe: Recipe; folders?: FolderSource; runner?: RunnerLink; converter?: AssetConverter; nativeRun?: NativeRun; reveal?: { label: string; run: (path: string) => Promise<void> } }) {
     this.app = options.app
     this.engine = options.engine
     this.recipe = options.recipe
     this.folders = options.folders ?? browserFolders
     this.runner = options.runner ?? windowRunnerLink()
+    this.nativeRun = options.nativeRun ?? null
+    if (this.nativeRun) {
+      void this.nativeRun.available().then((available) => this.set("editor:nativeRun", available))
+      this.unsubscribeNativeRun = this.nativeRun.onExited(() => {
+        this.set("editor:runningNative", false)
+        if (this.app.shared("editor:project").value?.status === "running natively") this.publishProject("")
+      })
+    }
     this.converter = options.converter ?? null
     this.reveal = options.reveal ?? null
     const unsubscribeReady = this.runner.onReady(() => {
@@ -902,6 +917,7 @@ export class EditorSession {
     this.unsubscribeRunner()
     this.input?.deactivate()
     this.unsubscribeRust()
+    this.unsubscribeNativeRun()
     this.rust.dispose()
     this.camera.dispose()
   }
@@ -1370,6 +1386,12 @@ export class EditorSession {
       case "run":
         await this.run()
         break
+      case "runNative":
+        await this.runNatively()
+        break
+      case "stopNative":
+        await this.nativeRun?.stop()
+        break
       case "stop":
         this.runner.close()
         break
@@ -1758,6 +1780,26 @@ export class EditorSession {
     url.searchParams.set("recipe", this.recipe.name)
     if (!this.runner.open(url.href)) return this.publishProject("the runner window could not be opened")
     this.set("editor:running", true)
+  }
+
+  /**
+   * Play the project in the native runner, the Rust engine in a window of its own: the scene as it is
+   * now, over the project folder on disk. A second run replaces the first.
+   */
+  async runNatively(): Promise<void> {
+    if (!this._root || !this.nativeRun) return
+    const folder = this.folder
+    const transfer = folder?.transfer()
+    if (!folder || transfer?.kind !== "path") return this.publishProject("the native runner plays projects on disk: save this project to a folder first")
+    const live = this.recipe.serialise?.(this._root, this.engine) ?? this.engine.serialise(this._root)
+    const scene = await folder.toPaths(live)
+    try {
+      await this.nativeRun.launch(transfer.path, scene)
+      this.set("editor:runningNative", true)
+      this.publishProject("running natively")
+    } catch (error) {
+      this.publishProject(`the native runner could not start: ${error instanceof Error ? error.message : error}`)
+    }
   }
 
   private runErrorShown = false

@@ -19,6 +19,8 @@
         <button class="menu-item" role="menuitem" @click="run('exportSite')" $disabled="!shared['editor:project'].open">Export site… <span class="dim">a folder any static host can serve</span></button>
         <hr />
         <button class="menu-item" role="menuitem" @click="run('run')">Run <kbd>⌘R</kbd></button>
+        <button class="menu-item" role="menuitem" $if="shared['editor:nativeRun']" @click="run('runNative')">Run natively <span class="dim">the Rust engine, in its own window</span></button>
+        <button class="menu-item" role="menuitem" $if="shared['editor:runningNative']" @click="run('stopNative')">Stop the native run</button>
       </div>
     </div>
 
@@ -116,6 +118,8 @@ shared('editor:view', VIEW_DEFAULT)
 shared('editor:history', HISTORY_DEFAULT)
 shared('editor:selection', null)
 shared('editor:running', false)
+shared('editor:nativeRun', false)
+shared('editor:runningNative', false)
 
 const state = reactive({ open: null as string | null, moveSteps: [0.05, 0.1, 0.25, 0.5, 1], rotateSteps: [5, 15, 45, 90], streamingPresets: ['full', 'balanced', 'fast'] })
 

@@ -98,7 +98,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const shell = await desktop()
   const folders = shell?.folders ?? browserFolders
-  const session = new EditorSession({ app, engine, recipe, folders, runner: shell?.runnerLink, converter: shell?.converter, reveal: shell ? { label: shell.revealLabel, run: shell.reveal } : undefined })
+  const session = new EditorSession({ app, engine, recipe, folders, runner: shell?.runnerLink, converter: shell?.converter, nativeRun: shell?.nativeRun, reveal: shell ? { label: shell.revealLabel, run: shell.reveal } : undefined })
   if (shell) {
     shell.guardClose(() => session.leave())
     shell.onCloseRequested(() => void session.closeProject())

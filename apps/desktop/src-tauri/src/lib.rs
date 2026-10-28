@@ -5,6 +5,7 @@ use tauri::menu::{Menu, MenuItem, MenuItemKind};
 use tauri_plugin_window_state::StateFlags;
 
 mod iapetus;
+mod runner;
 #[cfg(target_os = "macos")]
 mod pointer_lock;
 
@@ -89,7 +90,8 @@ pub fn run() {
   let app = tauri::Builder::default()
     .manage(OpenedFiles(Mutex::new(project_files(std::env::args().skip(1)))))
     .manage(iapetus::Jobs::default())
-    .invoke_handler(tauri::generate_handler![init_git, take_opened_files, reveal_in_file_manager, iapetus::iapetus_describe, iapetus::iapetus_streamable, iapetus::iapetus_cancel])
+    .manage(runner::Run::default())
+    .invoke_handler(tauri::generate_handler![init_git, take_opened_files, reveal_in_file_manager, iapetus::iapetus_describe, iapetus::iapetus_streamable, iapetus::iapetus_cancel, runner::runner_launch, runner::runner_running, runner::runner_stop, runner::runner_available])
     .on_menu_event(|app, event| {
       if event.id() == QUIT_ID {
         request_quit(app);
@@ -128,6 +130,7 @@ pub fn run() {
     // A build still running would outlive the app.
     if let tauri::RunEvent::Exit = event {
       app.state::<iapetus::Jobs>().stop_all();
+      app.state::<runner::Run>().stop();
     }
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     if let tauri::RunEvent::Opened { urls } = event {

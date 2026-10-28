@@ -46,7 +46,8 @@
   "bundle": {
     "active": true,
     "externalBin": [
-      "binaries/iapetus"
+      "binaries/iapetus",
+      "binaries/catalyst-runner"
     ],
     "targets": [
       "app",

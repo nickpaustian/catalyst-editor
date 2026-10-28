@@ -1,4 +1,4 @@
-import { RUN_REPORTS, nativeFolders, type AssetConverter, type FolderTransfer, type NativeFs, type RunMessage, type RunOptions, type RunReport, type RunnerLink, type RunnerPageLink, type StreamableMesh, type StreamableProgress, type StreamableResult } from "@nickpaustian/catalyst-editor"
+import { RUN_REPORTS, nativeFolders, type AssetConverter, type FolderTransfer, type NativeFs, type NativeRun, type RunMessage, type RunOptions, type RunReport, type RunnerLink, type RunnerPageLink, type StreamableMesh, type StreamableProgress, type StreamableResult } from "@nickpaustian/catalyst-editor"
 import { open } from "@tauri-apps/plugin-dialog"
 import { SeekMode, exists, mkdir, open as openFile, readDir, readFile, readTextFile, remove, rename, stat, watch, writeFile, writeTextFile } from "@tauri-apps/plugin-fs"
 import { invoke } from "@tauri-apps/api/core"
@@ -190,6 +190,21 @@ const converter = (): AssetConverter => ({
   },
 })
 
+/** The native runner as the app runs it: one run at a time, replaced by the next; the app says when it has ended. */
+const nativeRun = (): NativeRun => ({
+  available: () => invoke<boolean>("runner_available"),
+  launch: (project, scene) => invoke("runner_launch", { project, scene: JSON.stringify(scene) }),
+  stop: () => invoke("runner_stop"),
+  onExited(listener) {
+    const pending = listen("runner:exited", () => listener())
+    const poll = setInterval(() => void invoke<boolean>("runner_running"), 1000)
+    return () => {
+      clearInterval(poll)
+      void pending.then((unlisten) => unlisten())
+    }
+  },
+})
+
 let mayClose: () => Promise<boolean> = async () => true
 let closeProject: (() => void) | null = null
 let leaving = false
@@ -225,6 +240,7 @@ const shell = (): DesktopShell => ({
   runnerLink: runnerLink(),
   runnerPageLink: runnerPageLink(),
   converter: converter(),
+  nativeRun: nativeRun(),
   reveal: (path) => invoke("reveal_in_file_manager", { path }),
   revealLabel: navigator.userAgent.includes("Mac") ? "Reveal in Finder" : navigator.userAgent.includes("Windows") ? "Show in Explorer" : "Open containing folder",
   showEditor(open) {
