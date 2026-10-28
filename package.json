@@ -18,6 +18,7 @@
     "typecheck": "cd apps/editor && tsc && cd ../player && tsc",
     "tokens": "node scripts/tokens.mjs",
     "link:engine": "npm install --no-save ../catalyst ../obelisk/packages/obelisk",
+    "link:rust": "mkdir -p node_modules/@nickpaustian && ln -sfn ../../../catalyst-rs/dist/catalyst-rs node_modules/@nickpaustian/catalyst-rs",
     "unlink": "npm ci",
     "build:wasm": "cd packages/stelligra/stelligra-wasm && wasm-pack build --target web --release"
   },

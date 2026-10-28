@@ -1,5 +1,6 @@
 import { defineConfig } from "vite"
 import { lightspeedPlugin } from "@lightspeed-js/core/vite"
+import { rustEngineAlias, rustEngineAllow } from "./rust-engine.ts"
 
 const crossOriginIsolation = {
   "Cross-Origin-Embedder-Policy": "require-corp",
@@ -11,8 +12,8 @@ const crossOriginIsolation = {
 // are file links, so the renderer is pinned to one copy (its classes are checked with instanceof).
 export default defineConfig({
   plugins: [lightspeedPlugin({ typescript: true, host: true, componentDirs: ["../../packages/editor/src/components"] })],
-  resolve: { dedupe: ["@nickpaustian/obelisk", "@nickpaustian/catalyst"] },
-  server: { headers: crossOriginIsolation, port: 3100, fs: { allow: ["../.."] } },
+  resolve: { dedupe: ["@nickpaustian/obelisk", "@nickpaustian/catalyst"], alias: rustEngineAlias() },
+  server: { headers: crossOriginIsolation, port: 3100, fs: { allow: ["../..", ...rustEngineAllow()] } },
   preview: { headers: crossOriginIsolation, port: 4174 },
   worker: { format: "es" },
   build: { rollupOptions: { input: { editor: "index.html", play: "play.html", start: "start.html" } } },

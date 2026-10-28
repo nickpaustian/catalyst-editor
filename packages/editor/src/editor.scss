@@ -40,6 +40,21 @@ html.shell-macos #menu-bar .bar {
   height: 100%;
 }
 
+// The Rust engine's canvas under the editor's, which turns clear but keeps the pointer for the camera and the gizmo.
+#app canvas.rust-viewport {
+  position: absolute;
+  inset: 0;
+}
+
+#app canvas.rust-viewport[hidden] {
+  display: none;
+}
+
+#app canvas.behind-rust {
+  position: relative;
+  opacity: 0;
+}
+
 // Editing one slate: the others are hidden, the view behind is dimmed and the overlay takes the pointer
 #app .catalyst-ui[data-editing] > .catalyst-slate:not([data-edited]) {
   display: none !important;

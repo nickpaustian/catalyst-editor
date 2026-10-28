@@ -8,7 +8,9 @@ import { EditorInput } from "./EditorInput"
 import { GridPainter, type GridCommand, type GridPanel } from "./GridPainter"
 import { VariantEditing, type VariantView } from "./VariantEditing"
 import { History } from "./History"
-import { preferences, storage, type SnapSettings, streamingQualityOf, type StreamingPreset } from "./preferences"
+import { RustViewport } from "./RustViewport"
+import { color } from "./tokens/tokens"
+import { preferences, storage, type SnapSettings, streamingQualityOf, type StreamingPreset, type ViewportEngine } from "./preferences"
 import { browserFolders, folderLoader, pickFile, type FolderSource, type ProjectFolder, type ProjectStorage, type RecentProject } from "./ProjectFolder"
 import { windowRunnerLink, type RunnerLink } from "./RunnerLink"
 import { AssetFolder } from "./AssetFolder"
@@ -27,6 +29,8 @@ import { Previews } from "./previews"
 import type { NodeKind, Recipe } from "./recipe"
 import { SlateEditor, type UILayout } from "./ui/SlateEditor"
 import { DataEditing, dataTypeOf, type DataView } from "./DataEditing"
+
+const hexColour = (css: string): number => parseInt(css.replace("#", ""), 16)
 
 export interface TreeRow {
   id: number
@@ -116,7 +120,7 @@ export interface EditorCells {
   "editor:history": { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
   /** The recipe's project-wide settings, or null when it has none. */
   "editor:settings": { title: string; fields: SelectionProperty[] } | null
-  "editor:view": { view: ViewMode; visualised: boolean; gizmo: GizmoMode; tool: DrawTool | null; vertexEdit: boolean; editMode: EditMode; physics: boolean; scripts: boolean; snap: SnapSettings; streaming: StreamingPreset; slateEditing: boolean }
+  "editor:view": { engine: ViewportEngine; view: ViewMode; visualised: boolean; gizmo: GizmoMode; tool: DrawTool | null; vertexEdit: boolean; editMode: EditMode; physics: boolean; scripts: boolean; snap: SnapSettings; streaming: StreamingPreset; slateEditing: boolean }
   "editor:tree": TreeRow[]
   /** Kept apart from the rows so selecting restyles them without rebuilding the tree. */
   "editor:treeSelection": TreeSelection
@@ -219,6 +223,7 @@ export type EditorCommand =
   | { type: "togglePhysics" }
   | { type: "toggleScripts" }
   | { type: "setGizmo"; mode: GizmoMode }
+  | { type: "setViewportEngine"; engine: ViewportEngine }
   | { type: "setTool"; tool: DrawTool | null }
   | { type: "addBoundsCollider" }
   | { type: "addMeshCollider" }
@@ -403,6 +408,8 @@ export class EditorSession {
   /** Every file in the project by path, as the files pane last listed them. */
   private projectFiles: string[] = []
   private readonly history = new History()
+  private readonly rust: RustViewport
+  private readonly unsubscribeRust: () => void
   private readonly wiring: SignalWiring
   private dragStart: { node: Node3D; before: Mat4; size: Vector3 | null }[] | null = null
   private vertexDragStart: { mesh: EditMesh; before: number[] } | null = null
@@ -510,6 +517,7 @@ export class EditorSession {
       unsubscribeReport()
     }
     this.camera = new EditorCamera(this.engine)
+    this.rust = new RustViewport({ engine: this.engine, camera: this.camera, container: this.engine.canvas?.parentElement ?? document.body, background: hexColour(color.bg.viewport), gridColour: hexColour(color.border.default), highlightColour: hexColour(color.accent.default), childrenOf: (node) => node.getChildren().filter((child) => !child.internal) })
     this.variants = new VariantEditing(this.engine)
     this.data = new DataEditing({ engine: this.engine, folder: () => this.folder, files: () => this.projectFiles, publish: (view) => this.set("editor:data", view) })
     this.grids = new GridPainter({
@@ -551,6 +559,7 @@ export class EditorSession {
       sceneFile: () => this.sceneFile,
     })
     this.history.onChange = () => {
+      this.rust.invalidate()
       this.variants.stale()
       this.publishVariantMarks()
       this.publishHistory()
@@ -559,10 +568,12 @@ export class EditorSession {
     }
     this.camera.onDrag = (dragging) => (dragging ? this.beginDrag() : this.endDrag())
     this.unsubscribeGhosts = this.engine.signals.onRender.subscribe(() => this.placeGhosts(), 40)
+    this.unsubscribeRust = this.engine.signals.onRender.subscribe(({ dt }) => this.rust.frame(dt, this.selection), 50)
+    if (preferences.viewportEngine === "rust") void this.setViewportEngine("rust")
     this.camera.onDrawBox = (box) => void this.addDrawnBox(box)
     this.camera.onClick = (x, y, mode) => {
       if (!this._root) return
-      const node = this.camera.pick(x, y, this._root)
+      const node = this.rust.active ? this.rust.pick(x, y) : this.camera.pick(x, y, this._root)
       if (node) this.select(node, mode)
       else if (mode === "replace") this.select(null)
     }
@@ -648,6 +659,7 @@ export class EditorSession {
     const root = await this.loadRoot(folder && recovery ? overlaid(folder, recovery.files) : folder)
     this._root = root
     this.engine.add(root)
+    this.rust.setRoot(root)
     void this.whenScriptsBuilt(root)
     this.setVisualised(this.visualised)
     await this.loadPrefabs()
@@ -867,6 +879,7 @@ export class EditorSession {
     this.select(null)
     this._root?.dispose()
     this._root = null
+    this.rust.setRoot(null)
     this.variants.close()
     this.ids.clear()
     this.nodesById.clear()
@@ -888,6 +901,8 @@ export class EditorSession {
     this.unsubscribeBlur()
     this.unsubscribeRunner()
     this.input?.deactivate()
+    this.unsubscribeRust()
+    this.rust.dispose()
     this.camera.dispose()
   }
 
@@ -981,8 +996,16 @@ export class EditorSession {
     Object.assign(this.engine.streaming, streamingQualityOf(this.streaming))
   }
 
+  /** Which engine draws the viewport: the TypeScript engine's canvas, or the Rust engine's under it. */
+  private async setViewportEngine(engine: ViewportEngine): Promise<void> {
+    const on = await this.rust.setActive(engine === "rust")
+    if (engine === "rust" && !on) this.engine.log("the Rust engine is not linked: run `npm run link:rust` after building it", "editor")
+    preferences.setViewportEngine(on ? "rust" : "ts")
+    this.publishView()
+  }
+
   private publishView(): void {
-    this.set("editor:view", { view: this.view, visualised: this.visualised, gizmo: this.gizmo, tool: this.camera.tool, vertexEdit: this.camera.vertexEdit, editMode: this.camera.editMode, physics: !(this.engine.find(Physics)?.paused ?? true), scripts: this.engine.scripts.running, snap: this.snap, streaming: this.streaming, slateEditing: this.slateEditor.slate !== null })
+    this.set("editor:view", { engine: this.rust.active ? "rust" : "ts", view: this.view, visualised: this.visualised, gizmo: this.gizmo, tool: this.camera.tool, vertexEdit: this.camera.vertexEdit, editMode: this.camera.editMode, physics: !(this.engine.find(Physics)?.paused ?? true), scripts: this.engine.scripts.running, snap: this.snap, streaming: this.streaming, slateEditing: this.slateEditor.slate !== null })
   }
 
   //=========================
@@ -1098,6 +1121,7 @@ export class EditorSession {
   }
 
   private publishTree(): void {
+    this.rust.invalidate()
     this.signalsShown.stale = true
     this.nodePaths = null
     this.rememberHidden()
@@ -1399,6 +1423,9 @@ export class EditorSession {
         break
       case "setGizmo":
         this.setGizmo(command.mode)
+        break
+      case "setViewportEngine":
+        void this.setViewportEngine(command.engine)
         break
       case "setStreaming":
         this.streaming = command.preset

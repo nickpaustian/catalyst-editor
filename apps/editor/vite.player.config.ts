@@ -2,6 +2,7 @@ import { readdirSync, statSync, writeFileSync } from "node:fs"
 import { join, relative } from "node:path"
 import { defineConfig, type Plugin } from "vite"
 import { lightspeedPlugin } from "@lightspeed-js/core/vite"
+import { rustEngineAlias } from "./rust-engine.ts"
 
 const OUT = new URL("./public/player/", import.meta.url).pathname
 
@@ -21,7 +22,7 @@ export default defineConfig({
   root: new URL("./player/", import.meta.url).pathname,
   base: "./",
   plugins: [lightspeedPlugin({ typescript: true, host: true, componentDirs: ["../../packages/editor/src/components"] }), fileList()],
-  resolve: { dedupe: ["@nickpaustian/obelisk", "@nickpaustian/catalyst"] },
+  resolve: { dedupe: ["@nickpaustian/obelisk", "@nickpaustian/catalyst"], alias: rustEngineAlias() },
   worker: { format: "es" },
   build: { outDir: OUT, emptyOutDir: true },
 })
