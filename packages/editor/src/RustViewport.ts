@@ -263,6 +263,29 @@ export class RustViewport {
     return { properties, values }
   }
 
+  /**
+   * An edit landed on the Rust node first, for a property its kind's table describes: true when the engine took it,
+   * and the mirror then needs no rebuild for it; false leaves the edit to the TypeScript node and the next rebuild.
+   */
+  write(node: Node, key: string, value: unknown): boolean {
+    if (!this._active || !this.engine || !this.surface) return false
+    if (this.stale) this.rebuild()
+    const id = this.idsByNode.get(node)
+    if (id === undefined) return false
+    this.kinds ??= JSON.parse(this.engine.kind_properties()) as Record<string, KindInfo>
+    let described = false
+    for (let kind = this.engine.node_kind(id); kind && this.kinds[kind]; kind = this.kinds[kind].base) described ||= (this.kinds[kind].properties ?? []).some((p) => p.key === key)
+    if (!described) return false
+    try {
+      const taken = this.engine.set_property(id, key, JSON.stringify(value ?? null))
+      if (!taken) console.warn(`[editor] the Rust engine did not take ${key} on a ${this.engine.node_kind(id)}`)
+      return taken
+    } catch (error) {
+      console.warn(`[editor] the Rust engine refused ${key}: ${error instanceof Error ? error.message : error}`)
+      return false
+    }
+  }
+
   /** The node under a point of the view, by the Rust engine's own picking. */
   pick(x: number, y: number): Node3D | null {
     if (!this._active || !this.engine || !this.surface) return null

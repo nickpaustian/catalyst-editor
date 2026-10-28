@@ -414,6 +414,8 @@ export class EditorSession {
   private projectFiles: string[] = []
   private readonly history = new History()
   private readonly rust: RustViewport
+  /** The last property edit landed on the Rust engine itself, so the history's change needs no mirror rebuild. */
+  private rustTook = false
   private readonly unsubscribeRust: () => void
   private readonly wiring: SignalWiring
   private dragStart: { node: Node3D; before: Mat4; size: Vector3 | null }[] | null = null
@@ -574,7 +576,8 @@ export class EditorSession {
       sceneFile: () => this.sceneFile,
     })
     this.history.onChange = () => {
-      this.rust.invalidate()
+      if (!this.rustTook) this.rust.invalidate()
+      this.rustTook = false
       this.variants.stale()
       this.publishVariantMarks()
       this.publishHistory()
@@ -2803,6 +2806,8 @@ export class EditorSession {
     }
     const write = (value: unknown) => {
       const wasSpatial = isSpatial(node)
+      // The Rust engine takes the edit first when its viewport draws; the TypeScript node follows, and the mirror leaves it at that.
+      this.rustTook = this.rust.write(node, key, value)
       writeExposed(node, property, value)
       if (isSpatial(node) !== wasSpatial && this.selected === node) this.attachGizmo(node)
     }
