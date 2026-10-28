@@ -4,11 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite build --config vite.player.config.ts --logLevel warn && vite --host",
-    "build": "tsc && vite build --config vite.player.config.ts && vite build",
+    "dev": "vite build --config vite.player.config.ts --logLevel warn && node scripts/build-native-player.mjs && vite --host",
+    "build": "tsc && vite build --config vite.player.config.ts && node scripts/build-native-player.mjs && vite build",
     "preview": "vite preview",
     "typecheck": "tsc",
-    "build:player": "vite build --config vite.player.config.ts"
+    "build:player": "vite build --config vite.player.config.ts",
+    "build:native-player": "node scripts/build-native-player.mjs"
   },
   "dependencies": {
     "@lightspeed-js/core": "^0.4.9",

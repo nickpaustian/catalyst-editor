@@ -190,10 +190,17 @@ const converter = (): AssetConverter => ({
   },
 })
 
+/** The native player bundle beside this page, built by `npm run build:native-player`; the runner plays the project through it. */
+const nativePlayer = async (): Promise<string> => {
+  const response = await fetch(new URL("./native-player/player.js", document.baseURI))
+  if (!response.ok) throw new Error("the native player is not built: run `npm run build:native-player` in apps/editor")
+  return response.text()
+}
+
 /** The native runner as the app runs it: one run at a time, replaced by the next; the app says when it has ended. */
 const nativeRun = (): NativeRun => ({
   available: () => invoke<boolean>("runner_available"),
-  launch: (project, scene, files = {}) => invoke("runner_launch", { project, scene: JSON.stringify(scene), files: Object.fromEntries(Object.entries(files).map(([path, json]) => [path, JSON.stringify(json)])) }),
+  launch: async (project, scene, files = {}) => invoke("runner_launch", { project, scene: JSON.stringify(scene), player: await nativePlayer(), files: Object.fromEntries(Object.entries(files).map(([path, json]) => [path, JSON.stringify(json)])) }),
   stop: () => invoke("runner_stop"),
   onExited(listener) {
     const pending = listen("runner:exited", () => listener())

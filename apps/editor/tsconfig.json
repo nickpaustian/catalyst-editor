@@ -16,6 +16,7 @@
   },
   "include": [
     "src",
+    "native",
     "../../packages/editor/src"
   ]
 }

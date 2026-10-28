@@ -25,3 +25,4 @@ design/
 
 # the published page's runtime, built by apps/editor's build:player
 apps/editor/public/player/
+apps/editor/public/native-player/
