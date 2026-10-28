@@ -107,12 +107,12 @@ export class Component extends UIElement {
     return this.ready
   }
 
-  protected override onEnter(engine: Catalyst): void {
+  override onEnter(engine: Catalyst): void {
     super.onEnter(engine)
     this.loading = this.load(engine)
   }
 
-  protected override onExit(engine: Catalyst): void {
+  override onExit(engine: Catalyst): void {
     super.onExit(engine)
     this.generation++
     this.unmount()

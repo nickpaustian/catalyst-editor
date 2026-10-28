@@ -2,6 +2,7 @@ import { Catalyst, Model, Node3D, type Loader } from "@nickpaustian/catalyst"
 import { Input } from "@nickpaustian/catalyst/input"
 import { OrbitCamera } from "@nickpaustian/catalyst/prefabs"
 import { Vector3, computeBounds, parseHdr, type Mesh } from "@nickpaustian/obelisk"
+import type { Visual } from "@nickpaustian/catalyst"
 import { color } from "./tokens/tokens"
 
 const SIZE = 256
@@ -24,7 +25,7 @@ const hex = (css: string): number => parseInt(css.replace("#", ""), 16)
  * placement), with clip planes that follow its size, and frame it. Null when nothing drew.
  */
 const frameModel = (model: Model, orbit: OrbitCamera): { meshes: number; triangles: number } | null => {
-  const visuals = model.meshes.filter((visual) => !visual.isLines)
+  const visuals = (model.meshes as Visual[]).filter((visual) => !visual.isLines)
   if (!visuals.length) return null
   const min = new Vector3(Infinity, Infinity, Infinity)
   const max = new Vector3(-Infinity, -Infinity, -Infinity)
@@ -32,7 +33,7 @@ const frameModel = (model: Model, orbit: OrbitCamera): { meshes: number; triangl
   let triangles = 0
   for (const visual of visuals) {
     const mesh = visual.geometry as Mesh
-    triangles += mesh.triangleCount
+    triangles += mesh.indices.length / 3
     const box = computeBounds(mesh.vertices)
     for (let i = 0; i < 8; i++) {
       corner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z)

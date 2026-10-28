@@ -2,6 +2,7 @@ import "@nickpaustian/catalyst-editor/styles.scss"
 import { createLightspeedApp } from "@lightspeed-js/core"
 import { components } from "virtual:lightspeed/components"
 import { EditorSession, PaneLayout, browserFolders, createEngine, preferences, projectFolderOfFile, sceneRecipe, tokens, type FolderSource, type Recipe } from "@nickpaustian/catalyst-editor"
+import { boot } from "@nickpaustian/catalyst"
 import { desktop } from "./desktop"
 
 const recipes: Recipe[] = [sceneRecipe]
@@ -93,6 +94,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 
   const recipe = recipes.find((r) => r.name === new URLSearchParams(location.search).get("recipe")) ?? recipes[0]
+  // The engine is the Rust one, built to wasm; its module loads once before an engine is made.
+  await boot()
   const engine = createEngine(recipe, { container: "#app", background: parseInt(tokens.color.bg.viewport.slice(1), 16) })
   engine.start()
 

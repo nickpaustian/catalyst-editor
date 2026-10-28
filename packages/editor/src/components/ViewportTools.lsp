@@ -37,11 +37,6 @@
       <button type="button" role="radio" title="Fill: the run of like cells joined to the one clicked" $aria-checked="shared['editor:grid'].mode === 'fill'" @click="paintMode('fill')">fill</button>
     </div>
   </template>
-  <span class="divider"></span>
-  <div class="segmented modes" role="radiogroup" aria-label="Which engine draws the viewport">
-    <button type="button" role="radio" title="The TypeScript engine draws the viewport" $aria-checked="shared['editor:view'].engine === 'ts'" @click="setEngine('ts')">ts</button>
-    <button type="button" role="radio" title="The Rust engine (wasm) draws the viewport: the scene mirrored, the gizmo still the TypeScript engine's" $aria-checked="shared['editor:view'].engine === 'rust'" @click="setEngine('rust')">rust</button>
-  </div>
   <template $if="shared['editor:selection']?.onSlate || shared['editor:view'].slateEditing">
     <span class="divider"></span>
     <button class="icon-button tool" type="button" title="Edit slate: the slate on its own, to place its UI (Esc returns)" aria-label="Edit slate" $aria-pressed="shared['editor:view'].slateEditing" @click="editSlate(!shared['editor:view'].slateEditing)">
@@ -68,10 +63,6 @@ function paint() {
 
 function paintMode(mode: string) {
   sendCommand({ type: 'gridMode', mode })
-}
-
-function setEngine(engine: string) {
-  sendCommand({ type: 'setViewportEngine', engine })
 }
 
 function setGizmo(mode: string) {

@@ -615,7 +615,7 @@ export class EditorCamera implements ViewPose {
       for (const visual of node.attachedObjects) {
         if (visual.isLines || !visual.visible) continue
         meshes++
-        const hit = pickMesh(visual.geometry as Geometry, visual.matrix, ray)
+        const hit = pickMesh(visual.geometry as ObeliskMesh, visual.matrix, ray)
         if (hit) consider(node, hit.t)
       }
       if (meshes > 0 || node.internal) return

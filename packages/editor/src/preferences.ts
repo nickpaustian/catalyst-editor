@@ -131,19 +131,7 @@ const streaming = new Preference<StreamingPreset>({
   initial: "balanced",
 })
 
-export type ViewportEngine = "ts" | "rust"
-
-const viewportEngine = new Preference<ViewportEngine>({
-  key: "viewportEngine",
-  initial: "ts",
-})
-
 export const preferences = {
-  /** Which engine draws the viewport; the Rust one needs its package linked. */
-  get viewportEngine(): ViewportEngine {
-    return viewportEngine.value === "rust" ? "rust" : "ts"
-  },
-  setViewportEngine: viewportEngine.set,
 
   get snap(): SnapSettings {
     return snap.value
@@ -181,7 +169,6 @@ export const preferences = {
     floating.init()
     snap.init()
     streaming.init()
-    viewportEngine.init()
     publish()
   },
 }

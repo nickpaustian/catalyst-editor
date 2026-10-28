@@ -10,7 +10,7 @@ export class PlayerStart extends Node3D {
     super({ ...opts, name: opts.name ?? "playerStart" })
   }
 
-  protected override createVisualisation(): Visual {
+  override createVisualisation(): Visual {
     return DebugShapes.capsule({ radius: 0.15, height: 1.7, colour: 0x6ad0ff })
   }
 }

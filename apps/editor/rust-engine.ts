@@ -2,13 +2,16 @@ import { existsSync, realpathSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 
 /**
- * The Rust engine's package is linked by hand (`npm run link:rust`), so a build without it
- * points the import at a stub whose loader fails, and the editor keeps to the TypeScript engine.
+ * The editor's engine is the Rust one: `@nickpaustian/catalyst-rs/runtime`, linked by `npm run link:rust`
+ * from a `scripts/build-wasm.sh` build of the catalyst-rs repository. The engine packages' names stay in the
+ * source, so the alias points each of them, and their subpaths, at the runtime.
  */
-export const rustEngineAlias = (): Record<string, string> => {
-  const linked = existsSync(fileURLToPath(new URL("../../node_modules/@nickpaustian/catalyst-rs/package.json", import.meta.url)))
-  return linked ? {} : { "@nickpaustian/catalyst-rs": fileURLToPath(new URL("./src/no-rust-engine.ts", import.meta.url)) }
-}
+export const RUNTIME = "@nickpaustian/catalyst-rs/runtime"
+
+export const rustEngineAlias = (): { find: RegExp; replacement: string }[] => [
+  { find: /^@nickpaustian\/catalyst(\/.*)?$/, replacement: RUNTIME },
+  { find: /^@nickpaustian\/obelisk(\/.*)?$/, replacement: RUNTIME },
+]
 
 /** The linked package's real folder, which the dev server must be allowed to serve the wasm from. */
 export const rustEngineAllow = (): string[] => {

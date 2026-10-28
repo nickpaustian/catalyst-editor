@@ -8,11 +8,11 @@ const crossOriginIsolation = {
 }
 
 // Lightspeed compiles the panel's components, the editor package's and any
-// recipe's; host mode leaves this app's index.html alone. The engine packages
-// are file links, so the renderer is pinned to one copy (its classes are checked with instanceof).
+// recipe's; host mode leaves this app's index.html alone. The engine is the
+// Rust runtime, aliased over the TypeScript engine's package names.
 export default defineConfig({
   plugins: [lightspeedPlugin({ typescript: true, host: true, componentDirs: ["../../packages/editor/src/components"] })],
-  resolve: { dedupe: ["@nickpaustian/obelisk", "@nickpaustian/catalyst"], alias: rustEngineAlias() },
+  resolve: { alias: rustEngineAlias() },
   server: { headers: crossOriginIsolation, port: 3100, fs: { allow: ["../..", ...rustEngineAllow()] } },
   preview: { headers: crossOriginIsolation, port: 4174 },
   worker: { format: "es" },
