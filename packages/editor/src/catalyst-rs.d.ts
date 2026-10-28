@@ -36,6 +36,16 @@ declare module "@nickpaustian/catalyst-rs" {
     set_highlight(ids: Uint32Array | number[]): void
     set_highlight_colour(colour: number): void
     set_host_camera(on: boolean): void
+    upload_mesh(vertices: Float32Array, normals: Float32Array, indices: Uint32Array): number
+    update_mesh(id: number, vertices: Float32Array, normals: Float32Array, indices: Uint32Array): void
+    release_mesh(id: number): void
+    upload_lines(positions: Float32Array, colours: Float32Array, overlay: boolean): number
+    update_lines(id: number, positions: Float32Array, colours: Float32Array, overlay: boolean): void
+    release_lines(id: number): void
+    add_material(engine: Engine, colour: number, opacity: number, unlit: boolean): number
+    release_material(engine: Engine, slot: number): void
+    /** 21 floats a record: kind (0 mesh, 1 lines), geometry id, material slot or -1, overlay, order, the matrix's 16. */
+    set_helpers(records: Float32Array): void
     fit(engine: Engine): void
     orbit(dx: number, dy: number, pan: boolean): void
     zoom(notches: number, u: number, v: number): void

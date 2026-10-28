@@ -532,7 +532,7 @@ export class EditorSession {
       unsubscribeReport()
     }
     this.camera = new EditorCamera(this.engine)
-    this.rust = new RustViewport({ engine: this.engine, camera: this.camera, container: this.engine.canvas?.parentElement ?? document.body, background: hexColour(color.bg.viewport), gridColour: hexColour(color.border.default), highlightColour: hexColour(color.accent.default), childrenOf: (node) => node.getChildren().filter((child) => !child.internal) })
+    this.rust = new RustViewport({ engine: this.engine, camera: this.camera, container: this.engine.canvas?.parentElement ?? document.body, background: hexColour(color.bg.viewport), childrenOf: (node) => node.getChildren().filter((child) => !child.internal) })
     this.variants = new VariantEditing(this.engine)
     this.data = new DataEditing({ engine: this.engine, folder: () => this.folder, files: () => this.projectFiles, publish: (view) => this.set("editor:data", view) })
     this.grids = new GridPainter({
@@ -583,7 +583,7 @@ export class EditorSession {
     }
     this.camera.onDrag = (dragging) => (dragging ? this.beginDrag() : this.endDrag())
     this.unsubscribeGhosts = this.engine.signals.onRender.subscribe(() => this.placeGhosts(), 40)
-    this.unsubscribeRust = this.engine.signals.onRender.subscribe(({ dt }) => this.rust.frame(dt, this.selection), 50)
+    this.unsubscribeRust = this.engine.signals.onRender.subscribe(({ dt }) => this.rust.frame(dt), 50)
     if (preferences.viewportEngine === "rust") void this.setViewportEngine("rust")
     this.camera.onDrawBox = (box) => void this.addDrawnBox(box)
     this.camera.onClick = (x, y, mode) => {

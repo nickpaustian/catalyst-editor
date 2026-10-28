@@ -1,4 +1,5 @@
-import { Node3D, type Catalyst, type Node } from "@nickpaustian/catalyst"
+import { Node3D, type Catalyst, type Material, type Node, type Visual } from "@nickpaustian/catalyst"
+import { LineSet, type Mesh } from "@nickpaustian/obelisk"
 import type { EditorCamera } from "./EditorCamera"
 
 type RustModule = typeof import("@nickpaustian/catalyst-rs")
@@ -27,8 +28,6 @@ export interface RustViewportOptions {
   camera: EditorCamera
   container: HTMLElement
   background: number
-  gridColour: number
-  highlightColour: number
   /** The children a scene file holds, in order: the ones the engine's `serialise` writes. */
   childrenOf: (node: Node) => Node[]
 }
@@ -56,8 +55,12 @@ export class RustViewport {
   private readonly fetching = new Set<string>()
   private readonly failed = new Set<string>()
   private observer: ResizeObserver | null = null
-  private highlighted: number[] = []
   private warnedMismatch = false
+  /** The loose visuals' geometry as uploaded: the TypeScript mesh or line set, its version then, and the last frame it was drawn. */
+  private readonly helperGeometry = new Map<Mesh | LineSet, { id: number; version: number; overlay: boolean; seen: number }>()
+  private readonly helperMaterials = new Map<string, { slot: number; seen: number }>()
+  private frameCount = 0
+  private helperRecords = new Float32Array(0)
 
   constructor(options: RustViewportOptions) {
     this.options = options
@@ -113,8 +116,6 @@ export class RustViewport {
       this.surface = null
       return
     }
-    this.surface.set_grid(40, this.options.gridColour)
-    this.surface.set_highlight_colour(this.options.highlightColour)
     this.surface.set_host_camera(true)
     this.observer = new ResizeObserver(() => this.fit())
     this.observer.observe(this.options.container)
@@ -143,18 +144,12 @@ export class RustViewport {
     this.stale = true
   }
 
-  /** The nodes outlined: the editor's selection. */
-  setHighlight(nodes: Iterable<Node>): void {
-    this.highlighted = [...nodes].map((node) => this.idsByNode.get(node)).filter((id): id is number => id !== undefined)
-    this.surface?.set_highlight(Uint32Array.from(this.highlighted))
-  }
-
   /** Each editor frame: the mirror catches up and draws under the editor camera. */
-  frame(dt: number, selection: Iterable<Node>): void {
+  frame(dt: number): void {
     if (!this._active || !this.engine || !this.surface) return
     if (this.stale) this.rebuild()
     this.syncTransforms()
-    this.setHighlight(selection)
+    this.syncHelpers()
     const camera = this.options.camera
     const pose = JSON.stringify({ position: [camera.position.x, camera.position.y, camera.position.z], rotation: [camera.rotation.x, camera.rotation.y, camera.rotation.z, camera.rotation.w], fov: camera.fov, near: camera.near, far: camera.far })
     try {
@@ -165,6 +160,68 @@ export class RustViewport {
       return
     }
     this.fetchMissing()
+  }
+
+  /**
+   * The editor's helpers, drawn by the Rust side too: every visual in the TypeScript scene list that no node
+   * owns (the gizmo, the grid, ghosts, handles, outlines), its geometry uploaded once and again when its
+   * version moves, placed each frame with its matrix and a flat material in the visual's colour.
+   */
+  private syncHelpers(): void {
+    const engine = this.engine!
+    const surface = this.surface!
+    this.frameCount++
+    const owned = new Set<Visual>()
+    this.root?.walk((node) => {
+      if (node instanceof Node3D) for (const visual of node.attachedObjects) owned.add(visual)
+    })
+    const records: number[] = []
+    for (const visual of this.options.engine.scene.all) {
+      if (!visual.visible || owned.has(visual)) continue
+      const geometry = visual.geometry
+      let entry = this.helperGeometry.get(geometry)
+      const isLines = geometry instanceof LineSet
+      if (!entry) {
+        const id = isLines ? surface.upload_lines(geometry.positions, geometry.colours, geometry.overlay) : surface.upload_mesh(geometry.vertices, geometry.normals, geometry.indices)
+        entry = { id, version: geometry.version, overlay: isLines && geometry.overlay, seen: 0 }
+        this.helperGeometry.set(geometry, entry)
+      } else if (entry.version !== geometry.version || (isLines && entry.overlay !== geometry.overlay)) {
+        if (isLines) surface.update_lines(entry.id, geometry.positions, geometry.colours, geometry.overlay)
+        else surface.update_mesh(entry.id, geometry.vertices, geometry.normals, geometry.indices)
+        entry.version = geometry.version
+        entry.overlay = isLines && geometry.overlay
+      }
+      entry.seen = this.frameCount
+      const material = isLines ? -1 : this.helperMaterial(visual.material)
+      records.push(isLines ? 1 : 0, entry.id, material, visual.overlay ? 1 : 0, visual.order, ...visual.matrix.data)
+    }
+    for (const [geometry, entry] of this.helperGeometry) {
+      if (this.frameCount - entry.seen < 120) continue
+      if (geometry instanceof LineSet) surface.release_lines(entry.id)
+      else surface.release_mesh(entry.id)
+      this.helperGeometry.delete(geometry)
+    }
+    for (const [key, entry] of this.helperMaterials) {
+      if (this.frameCount - entry.seen < 120) continue
+      surface.release_material(engine, entry.slot)
+      this.helperMaterials.delete(key)
+    }
+    if (this.helperRecords.length !== records.length) this.helperRecords = new Float32Array(records.length)
+    this.helperRecords.set(records)
+    surface.set_helpers(this.helperRecords)
+  }
+
+  /** A flat material on the Rust side matching a helper's colour, coverage and lighting; -1 lets the mesh's parts name their own. */
+  private helperMaterial(material: Material | null): number {
+    if (!material) return -1
+    const key = `${material.colour}/${material.opacity}/${material.unlit ? 1 : 0}`
+    let entry = this.helperMaterials.get(key)
+    if (!entry) {
+      entry = { slot: this.surface!.add_material(this.engine!, material.colour, material.opacity, material.unlit), seen: 0 }
+      this.helperMaterials.set(key, entry)
+    }
+    entry.seen = this.frameCount
+    return entry.slot
   }
 
   /** The node under a point of the view, by the Rust engine's own picking. */
