@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite build --config vite.player.config.ts --logLevel warn && node scripts/build-native-player.mjs && vite --host",
+    "dev:rust": "CATALYST_ENGINE=rust vite build --config vite.player.config.ts --logLevel warn && node scripts/build-native-player.mjs && CATALYST_ENGINE=rust vite --host",
     "build": "tsc && vite build --config vite.player.config.ts && node scripts/build-native-player.mjs && vite build",
+    "build:rust": "tsc -p tsconfig.rust.json && CATALYST_ENGINE=rust vite build --config vite.player.config.ts && node scripts/build-native-player.mjs && CATALYST_ENGINE=rust vite build",
     "preview": "vite preview",
-    "typecheck": "tsc",
+    "typecheck": "tsc && tsc -p tsconfig.rust.json",
     "build:player": "vite build --config vite.player.config.ts",
     "build:native-player": "node scripts/build-native-player.mjs"
   },

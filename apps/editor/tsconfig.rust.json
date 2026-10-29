@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@nickpaustian/catalyst": [
+        "../../node_modules/@nickpaustian/catalyst-rs/runtime-types/index.d.ts"
+      ],
+      "@nickpaustian/catalyst/*": [
+        "../../node_modules/@nickpaustian/catalyst-rs/runtime-types/index.d.ts"
+      ],
+      "@nickpaustian/obelisk": [
+        "../../node_modules/@nickpaustian/catalyst-rs/runtime-types/index.d.ts"
+      ]
+    }
+  },
+  "include": [
+    "src",
+    "native",
+    "../../packages/editor/src"
+  ]
+}

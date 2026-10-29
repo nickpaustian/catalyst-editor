@@ -1,5 +1,5 @@
 import { Runner, createEngine, sceneRecipe, type Recipe } from "@nickpaustian/catalyst-editor"
-import { boot } from "@nickpaustian/catalyst"
+import { boot } from "./boot"
 import { desktop } from "./desktop"
 
 const recipes: Recipe[] = [sceneRecipe]

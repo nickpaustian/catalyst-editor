@@ -1,4 +1,5 @@
-import { boot, type SceneMetadata } from "@nickpaustian/catalyst"
+import type { SceneMetadata } from "@nickpaustian/catalyst"
+import { boot } from "./boot"
 import { AssetFolder, HttpFolder, Runner, SCENE_FILE, applySceneParams, createEngine, linkCamera, sceneRecipe } from "@nickpaustian/catalyst-editor"
 
 /** The page named after the record, for tabs, links shared elsewhere and screen readers. */

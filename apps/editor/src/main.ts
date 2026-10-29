@@ -2,7 +2,7 @@ import "@nickpaustian/catalyst-editor/styles.scss"
 import { createLightspeedApp } from "@lightspeed-js/core"
 import { components } from "virtual:lightspeed/components"
 import { EditorSession, PaneLayout, browserFolders, createEngine, preferences, projectFolderOfFile, sceneRecipe, tokens, type FolderSource, type Recipe } from "@nickpaustian/catalyst-editor"
-import { boot } from "@nickpaustian/catalyst"
+import { boot } from "./boot"
 import { desktop } from "./desktop"
 
 const recipes: Recipe[] = [sceneRecipe]
